@@ -41,7 +41,7 @@
 		"js-tiktoken": "^1.0.21",
 		"jszip": "^3.10.1",
 		"lucide-svelte": "^1.0.1",
-		"marked": "^18.0.2",
+		"marked": "^18.0.3",
 		"sharp": "^0.34.5",
 		"tailwind-merge": "^3.5.0",
 		"web-push": "^3.6.7"
