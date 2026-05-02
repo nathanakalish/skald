@@ -124,8 +124,4 @@ export function requireAdmin(event: RequestEvent): { id: number; username: strin
 	return user;
 }
 
-/** True if at least one user exists in the DB. Used by the first-run flow. */
-export function hasAnyUsers(): boolean {
-	const row = db.select({ id: users.id }).from(users).limit(1).get();
-	return !!row;
-}
+

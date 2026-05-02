@@ -2,7 +2,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { db } from '$lib/db/index.js';
 import { users } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createSession, getSessionCookieName, getSessionMaxAge, hasAnyUsers } from '$lib/server/auth.js';
+import { createSession, getSessionCookieName, getSessionMaxAge } from '$lib/server/auth.js';
 import {
 	isOidcEnabled,
 	getOidcConfig,
@@ -79,20 +79,16 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	const config = getOidcConfig();
 	const redirectUri = `${url.origin}/api/auth/oidc/callback`;
 
-	// First-setup = no users in the DB yet.
-	const isFirstSetup = !hasAnyUsers();
-
 	try {
 		// Trade the auth code for tokens.
 		const tokenResponse = await exchangeCode(code, redirectUri, savedVerifier);
 
 		// Pull user claims (verifies id_token signature, issuer, audience, nonce).
 		const claims = await getUserClaims(tokenResponse, savedNonce);
-		const role = isFirstSetup ? 'admin' : roleFromGroups(claims.groups);
+		const role = roleFromGroups(claims.groups);
 
-		// userGroup gate, when configured. First-setup and admins bypass
-		// (admin group implies access).
-		if (!isFirstSetup && config.userGroup && role !== 'admin' && !claims.groups.includes(config.userGroup)) {
+		// userGroup gate, when configured. Admins bypass (admin group implies access).
+		if (config.userGroup && role !== 'admin' && !claims.groups.includes(config.userGroup)) {
 			return popupResponse(false, 'Account not authorized for this app.');
 		}
 
@@ -107,8 +103,8 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 			if (Object.keys(patch).length > 0) {
 				db.update(users).set(patch).where(eq(users.id, user.id)).run();
 			}
-		} else if (isFirstSetup || config.autoCreateUsers) {
-			// First setup → admin. Auto-create → role from groups.
+		} else if (config.autoCreateUsers) {
+			// Auto-create: role comes from group claims.
 			const result = db
 				.insert(users)
 				.values({

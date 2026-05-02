@@ -1,81 +1,129 @@
 # Skald
 
-Skald is a self-hosted AI chat and roleplay app. It runs entirely on your own machine (or server), stores everything in a local SQLite database, and connects to whatever LLM providers you configure. There's no cloud account required, no subscription, and your data stays yours.
+Skald is a self-hosted AI chat and roleplay app. It runs on your own machine or server, stores everything in a local SQLite database, and connects to whatever LLM providers you configure.
 
 ## Getting Started
 
-```sh
-npm install
-npm run dev
-```
-
-The first time you open it, you'll need to sign in via your configured OIDC / SSO provider. The first user to log in is automatically granted admin. See the OIDC environment variables in `docker-compose.yml` for configuration.
-
-## Building
+Docker is the intended deployment method. Copy the `docker-compose.yml` from this repo, configure the environment variables (OIDC at minimum), and run:
 
 ```sh
-npm run build
+docker compose up -d
 ```
+
+Skald will be available at `http://localhost:3000`.
+
+### Authentication
+
+Skald uses OIDC for all authentication. You'll need an identity provider — [Authentik](https://goauthentik.io/), [Keycloak](https://www.keycloak.org/), [Authelia](https://www.authelia.com/), or any other OIDC-compliant IdP works. Configure it via the environment variables in `docker-compose.yml`:
+
+```yaml
+- OIDC_ISSUER_URL=https://auth.example.com
+- OIDC_CLIENT_ID=skald
+- OIDC_CLIENT_SECRET=your-secret
+- OIDC_SCOPES=openid profile groups
+- OIDC_USERNAME_CLAIM=preferred_username
+- OIDC_ADMIN_GROUP=skald_admin
+- OIDC_USER_GROUP=skald_user
+- OIDC_AUTO_CREATE_USERS=true
+```
+Roles are assigned via group claims — `OIDC_ADMIN_GROUP` members get admin, `OIDC_USER_GROUP` members get user access.
+### Persistent Data
+
+Two volumes are created automatically:
+
+| Volume | Container path | Contents |
+|---|---|---|
+| `skald-data` | `/app/data` | SQLite database, backups, image cache |
+| `skald-avatars` | `/app/static/avatars` | Uploaded and imported avatar images |
+
+### Local Providers (Ollama, etc.)
+
+Provider endpoints are checked against a DNS blocklist by default to prevent SSRF. If you're running Ollama or another local LLM on the same machine or network, set:
+
+```yaml
+- ALLOW_LOCAL_PROVIDERS=true
+```
+
+### Other Environment Variables
+
+See the comments in `docker-compose.yml` for the full list, including:
+
+- `BACKUP_ENABLED` / `BACKUP_INTERVAL_HOURS` / `BACKUP_RETENTION` — periodic SQLite backups
+- `BODY_SIZE_LIMIT` — raise for large character card imports
+- `IMAGE_CACHE_MAX_BYTES` — cap on the image cache LRU (default 1 GiB)
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — web push notifications (auto-generated if omitted)
+- `LOG_LEVEL` — trace, debug, info (default), warn, error
 
 ## Features
 
 ### LLM Providers
 
-Skald supports OpenAI (and any OpenAI-compatible API), Anthropic, Ollama, and Google Gemini out of the box. You can add as many provider configurations as you want — useful if you're juggling multiple API keys, different endpoints, or local Ollama models alongside cloud providers. Each provider has its own settings for things like temperature, context size, max tokens, repetition penalties, and so on. You can also test a provider connection from the UI before committing to it.
+Skald supports OpenAI (and any OpenAI-compatible API), Anthropic, Ollama, and Google Gemini. You can add as many provider configurations as you want — useful if you're juggling multiple API keys, different endpoints, or a local Ollama model alongside cloud providers. Each provider has its own generation settings: temperature, top-p, top-k, max tokens, repetition/frequency/presence penalties, and reasoning effort. You can test a provider connection from the UI before using it.
 
-For Anthropic, extended thinking is supported and you can configure the reasoning effort level (off, low, medium, high). OpenAI reasoning models (o1, etc.) are also handled properly.
+Anthropic extended thinking is supported with configurable reasoning effort (off, low, medium, high). OpenAI reasoning models (o1 family, etc.) are handled correctly.
 
 ### Character Cards
 
-Characters are the core of how Skald works. You can import character cards in PNG format (with embedded JSON metadata, the standard SillyTavern V2/V3 format) or as raw JSON files, and export them in either format too. Creating characters from scratch in the UI is also supported.
+Characters are the core of how Skald works. You can import cards in PNG format (embedded JSON metadata — the standard SillyTavern V2/V3 format) or as raw JSON, and export in either format. Creating from scratch is also supported, as is browsing and importing directly from [Chub.ai](https://chub.ai).
 
-Each character card has the usual fields — name, description, personality, scenario, first message, example messages, system prompt, and post-history instructions. Characters can have multiple alternate greetings, which you can pick from when starting a new chat. There's also a built-in greeting reformatter that uses an AI provider to clean up greetings into a consistent style.
+Each character has the usual fields: name, description, personality, scenario, first message, example messages, system prompt, and post-history instructions. Characters support multiple alternate greetings, custom avatar images, background images, color themes, creator metadata, and tags.
 
-Characters can have their own avatar images, custom color themes, background images, creator metadata, and tags.
+There's a built-in AI greeting reformatter that uses a configured provider to clean up imported greetings into a consistent style, and an AI character creator that can generate a full character card from a short description.
 
 ### Conversations
 
-Conversations support branching — if you click the branch button, the current message just becomes a different branch you can go back to. Each message can have multiple regenerations (or "swipes"), and you can flip between them without losing any of them.
+Conversations support branching — any message can become the root of a new branch. Each assistant message can have multiple regenerations ("swipes") that you can flip between without losing any of them.
 
-You can edit any message (user or assistant), delete messages, regenerate the last AI response, or have the LLM impersonate you. There's also a search that lets you find messages within a chat.
+You can edit any message (user or assistant), delete messages, regenerate the last response, or trigger an impersonation (the LLM writes a user message for you). Messages are searchable within a chat.
 
-Chat modes: story mode which is roleplay-focused, and is more like other services. Texting mode can take character greetings and the character info to behave like a text messaging conversation.
+Chat modes: **Story** (standard roleplay, similar to other services) and **Texting** (the LLM responds as if in a text message conversation).
 
-Each chat can have overrides for the provider, model, generation parameters, persona, and various other display settings separate from the global settings.
+Each chat can override the global provider, model, generation parameters, persona, render mode, and compaction settings independently.
 
-Chats can be pinned to the top of the sidebar and reordered by dragging (including on mobile, with a long-press to activate drag). You can also rename chats and export them as JSON or Markdown.
+Chats can be pinned and reordered by drag-and-drop (including long-press drag on mobile), renamed, and exported as JSON or Markdown.
+
+### Context Compaction
+
+When a conversation gets long, Skald can automatically summarize earlier messages to keep the context within the model's window. Compaction can be triggered at a token threshold, after a fixed number of messages, or manually. The summary is stored per-chat and injected at the top of the context window on each generation. Provider, model, and prompt used for compaction are all configurable — globally and per-chat.
 
 ### Lorebooks / World Info
 
-Lorebooks let you inject additional context into prompts based on keyword triggers. When a keyword appears in recent user messages, the associated lorebook entry gets injected into the prompt. Entries can also be set to "constant" to always inject regardless of keywords.
+Lorebooks inject additional context into prompts based on keyword triggers. When a keyword appears in recent messages, the associated entry is injected. Entries can also be set to "constant" to always inject regardless of keywords.
 
-Lorebooks can be global (reusable across characters) or linked to specific characters, and you can also add any lorebook to a specific chat manually. Individual entries can be enabled or disabled, have configurable insertion order, and support case-sensitive matching.
+Lorebooks can be global (reusable across characters) or attached to a specific character, and can be added to individual chats manually. Individual entries can be enabled/disabled per-chat, have configurable insertion order, and support case-sensitive matching.
 
 ### Personas
 
-You can create multiple user personas, each with a name, display name, and description. One persona is set as the default, and its details get injected into the prompt and used for `{{user}}` variable substitution. You can switch personas per-chat if needed.
+Multiple personas per user, each with a name, display name, description, and optional avatar. One is marked as default; its details are injected into the prompt and used for `{{user}}` substitution. Personas can be switched per-chat.
 
 ### Themes and Appearance
 
-Skald has a full theming system with dark and light mode. You can create custom themes by adjusting color variables for backgrounds, text, cards, accents, borders, and dialogue/speech colors. Characters can define their own theme overrides, and there's a setting to automatically apply a character's theme when chatting with them.
+Full theming system with dark and light mode. Custom themes are built by adjusting CSS color variables for backgrounds, text, cards, accents, borders, and speech/thought/narration formatting. Characters can carry their own theme overrides, with a setting to automatically apply a character's theme when chatting with them.
 
-Other appearance settings: font size (small, medium, large), compact mode, reduce motion, and whether to color-code character cards in the sidebar.
+Other appearance settings: font size (small, medium, large), compact mode, reduce motion, color-coded character cards in the sidebar, and per-user customization of how speech, thoughts, narration, and links are rendered (opacity, bold, italic).
 
 ### Notifications
 
-Browser notifications are supported for new messages. You can configure whether notifications show only when the tab is unfocused (the default) or always, whether they include the message content or are generic, and whether a sound plays. Unread message counts are tracked per chat and shown in the sidebar.
+Web Push is supported for new messages when the tab is in the background. Notifications can show message content or be generic. Quiet hours can be configured to suppress notifications during a time window. Unread counts are tracked per chat and shown in the sidebar. You can manage and revoke push subscriptions per device from the Signed-in Devices settings page. You need HTTPS and valid VAPID keys for push to work.
 
-### Multi-User
+### Multi-User and Admin
 
-Multiple people can use the same Skald instance with separate accounts. The first account created is the admin, who can manage users through the admin settings panel. All data (characters, chats, lorebooks, personas, themes, settings) is scoped to each user.
+Multiple users can share one instance with fully separated data. The first user to log in becomes admin. Admins can:
+
+- Create and manage user accounts
+- Configure per-user resource quotas (character count, lorebook count, chat count, storage)
+- Set rate limits for chat, character import, lorebook import, and Chub API calls
+- Toggle character import/export and Chub browsing globally
+- Adjust upload size caps
 
 ### Mobile
 
-The sidebar can be opened and closed with a swipe gesture, and pinned chats support touch drag-to-reorder with haptic feedback. Modals support swipe-to-dismiss and tab-swiping. The app is installable as a PWA.
+Sidebar swipe-to-open/close, long-press drag-to-reorder pinned chats with haptic feedback, swipe-to-dismiss modals, and swipe between modal tabs. Installable as a PWA. Web Push works on iOS (17.4+) and Android.
 
 ## Tech Stack
 
-- SvelteKit + Svelte 5 (runes)
+- SvelteKit 2 + Svelte 5 (runes)
 - Tailwind CSS v4
 - SQLite via better-sqlite3 + Drizzle ORM
 - Server-Sent Events for streaming responses
+- AGPL-3.0-only license
