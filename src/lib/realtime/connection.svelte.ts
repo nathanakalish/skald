@@ -1,0 +1,297 @@
+import { browser } from '$app/environment';
+import { toasts } from '$lib/stores/toast.svelte.js';
+
+/**
+ * The whole long-lived realtime connection layer lives here:
+ *   - SSE to `/api/events` with reconnect + eventual give-up;
+ *   - exposes `connectionState` ('connected' | 'disconnected' | 'failed')
+ *     plus a `manualReconnect()` action for the disconnect modal;
+ *   - revalidates the build version on connect / visibility / pageshow / online
+ *     and reloads the page when the server's shipped a new bundle out from
+ *     under us;
+ *   - reports presence (focus + active chat) to `/api/presence` with a 30s heartbeat;
+ *   - syncs the user's IANA timezone to the server on first connect;
+ *   - listens for service-worker `open-chat` messages and forwards them via `onSwOpenChat`.
+ *
+ * Everything chat-state-y happens inside the caller's `onEvent` callback so
+ * this stays UI-agnostic. SSE messages are JSON-parsed once and handed off;
+ * malformed events get silently dropped (better than a noisy console).
+ *
+ * Lifted out of `+layout.svelte` (~400 lines was getting embarrassing).
+ */
+
+declare const __APP_VERSION__: string;
+
+interface CreateRealtimeConnectionOptions {
+	/** Usually `() => !!data.user` — when false, no SSE / presence calls fire. */
+	getEnabled: () => boolean;
+	sessionId: string;
+	getActiveChatId: () => number | null;
+	/** Fires once per parsed SSE event. */
+	onEvent: (event: any) => void;
+	/** Fires when the service worker sends an `open-chat` message. */
+	onSwOpenChat: (chatId: number) => void;
+	/** User's stored timezone — if it doesn't match `Intl`, we PATCH /api/settings. */
+	getInitialUserTimezone?: () => string | null | undefined;
+}
+
+export function createRealtimeConnection({
+	getEnabled,
+	sessionId,
+	getActiveChatId,
+	onEvent,
+	onSwOpenChat,
+	getInitialUserTimezone
+}: CreateRealtimeConnectionOptions) {
+	let connectionState = $state<'connected' | 'disconnected' | 'failed'>('connected');
+	let manualReconnectFn: (() => void) | null = null;
+
+	function reportPresence(payload: { activeChatId?: number | null; focused?: boolean }) {
+		// Skip if the user isn't logged in. The server returns 401, which Safari
+		// renders as a scary "access control" console error, and there's no point
+		// firing it in the first place.
+		if (!getEnabled()) return;
+		fetch('/api/presence', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ sessionId, ...payload })
+		}).catch(() => { /* best-effort */ });
+	}
+
+	$effect(() => {
+		if (!browser) return;
+		// Same deal as reportPresence — skip the whole circus when nobody's logged in.
+		if (!getEnabled()) return;
+
+		let eventSource: EventSource | null = null;
+		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+		let giveUpTimer: ReturnType<typeof setTimeout> | null = null;
+		let wasConnected = false;
+		// Failed connect attempts since the last successful onopen. We stay quiet on
+		// the first failure because most drops are transient (mobile network handover,
+		// server bounce, dev HMR reload) and recover on the next tick. Only when the
+		// silent retry ALSO fails do we surface a "Disconnected" toast.
+		let failedAttempts = 0;
+		let disconnectToastShown = false;
+		const RECONNECT_INTERVAL = 5000;
+		const GIVE_UP_AFTER = 3 * 60 * 1000;
+
+		let reloadingForUpdate = false;
+		let versionCheckInFlight = false;
+		async function checkVersion() {
+			if (reloadingForUpdate || versionCheckInFlight) return;
+			versionCheckInFlight = true;
+			try {
+				// Cache-bust so the PWA / service-worker fetch handler can't hand us
+				// back a stale /api/version from disk.
+				const res = await fetch('/api/version?t=' + Date.now(), {
+					cache: 'no-store',
+					headers: { 'Cache-Control': 'no-cache' },
+					signal: AbortSignal.timeout(5000)
+				});
+				if (res.ok) {
+					const { current } = await res.json();
+					// Always compare against the build constant baked into THIS bundle.
+					// We used to capture `serverVersion` from the first reply and compare
+					// against that, which left PWAs stuck on stale builds: if the server
+					// already had the new version when an old cached shell loaded, the
+					// first check just stored the new value and never reloaded.
+					if (current && current !== __APP_VERSION__) {
+						reloadingForUpdate = true;
+						toasts.info('New version detected, reloading...', 3000);
+						// Best-effort: poke the service worker to grab the new build
+						// before we reload, so the next page load isn't served from
+						// the previous version's cache.
+						try {
+							const reg = await navigator.serviceWorker?.getRegistration();
+							await reg?.update();
+						} catch { /* non-fatal */ }
+						setTimeout(() => window.location.reload(), 1500);
+					}
+				}
+			} catch { /* version check failed, not the end of the world */ }
+			finally { versionCheckInFlight = false; }
+		}
+
+		function clearTimers() {
+			if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+			if (giveUpTimer) { clearTimeout(giveUpTimer); giveUpTimer = null; }
+		}
+
+		function startGiveUpTimer() {
+			if (giveUpTimer) return;
+			giveUpTimer = setTimeout(() => {
+				clearTimers();
+				eventSource?.close();
+				connectionState = 'failed';
+			}, GIVE_UP_AFTER);
+		}
+
+		function scheduleReconnect() {
+			if (reconnectTimer) return;
+			reconnectTimer = setTimeout(() => {
+				reconnectTimer = null;
+				connect();
+			}, RECONNECT_INTERVAL);
+		}
+
+		function connect() {
+			eventSource?.close();
+			eventSource = new EventSource(`/api/events?sid=${sessionId}`);
+
+			eventSource.onopen = () => {
+				clearTimers();
+				if (wasConnected && disconnectToastShown) {
+					toasts.success('Reconnected to server');
+					checkVersion();
+				} else if (!wasConnected) {
+					checkVersion();
+				}
+				wasConnected = true;
+				failedAttempts = 0;
+				disconnectToastShown = false;
+				connectionState = 'connected';
+			};
+
+			eventSource.onmessage = (e) => {
+				try {
+					const event = JSON.parse(e.data);
+					onEvent(event);
+				} catch {
+					// skip malformed events
+				}
+			};
+
+			eventSource.onerror = () => {
+				eventSource?.close();
+				if (wasConnected) {
+					failedAttempts += 1;
+					// First failure: shut up and just retry. Most drops are transient
+					// (handover, restart, HMR) and recover on the next reconnect tick —
+					// flashing a modal at the user every time would be obnoxious. Once
+					// the silent retry ALSO fails, we surface the modal and start the
+					// give-up countdown.
+					if (failedAttempts >= 2 && !disconnectToastShown) {
+						connectionState = 'disconnected';
+						disconnectToastShown = true;
+						startGiveUpTimer();
+					}
+				}
+				scheduleReconnect();
+			};
+		}
+
+		connect();
+
+		manualReconnectFn = () => {
+			clearTimers();
+			failedAttempts = 0;
+			disconnectToastShown = false;
+			if (connectionState === 'failed') connectionState = 'disconnected';
+			connect();
+		};
+
+		// Push the user's IANA timezone up so the server can evaluate quiet hours for push notifications.
+		try {
+			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			if (tz && tz !== getInitialUserTimezone?.()) {
+				fetch('/api/settings', {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ userTimezone: tz })
+				}).catch(() => { /* best-effort */ });
+			}
+		} catch { /* ignore */ }
+
+		// Service worker pinging us (e.g. user tapped a notification — open that chat).
+		const swMessageHandler = (e: MessageEvent) => {
+			if (e.data?.type === 'open-chat' && e.data.chatId) {
+				onSwOpenChat(e.data.chatId);
+			}
+		};
+		navigator.serviceWorker?.addEventListener('message', swMessageHandler);
+
+		// Hard reconnect every time we come back to the foreground.
+		// Mobile browsers (iOS Safari especially) freeze the page in the background and
+		// the SSE connection goes silently stale: it still claims `readyState === OPEN`
+		// but no events arrive. Forcing a reconnect on every visibility transition
+		// pulls the buffered `complete` event back via Last-Event-ID, which unsticks
+		// any chat that finished generating while we were away.
+		const visibilityHandler = () => {
+			if (!document.hidden) {
+				clearTimers();
+				// ALWAYS revalidate version on foreground. Quick visibility-driven
+				// reconnects used to skip this because `disconnectToastShown` stays
+				// false, leaving long-suspended PWAs running on a stale build forever.
+				checkVersion();
+				connect();
+			}
+			reportPresence({ focused: !document.hidden });
+		};
+		document.addEventListener('visibilitychange', visibilityHandler);
+
+		// Same revalidation on bfcache restore (Safari back/forward) and network-online —
+		// both can drop us back into a long-running app that hasn't checked its version in a while.
+		const pageshowHandler = (e: PageTransitionEvent) => {
+			if (e.persisted) checkVersion();
+		};
+		const onlineHandler = () => { checkVersion(); };
+		window.addEventListener('pageshow', pageshowHandler);
+		window.addEventListener('online', onlineHandler);
+
+		// Background poll every 5 minutes while the tab/PWA is foregrounded — covers the
+		// case where neither visibility nor online ever fire (user keeps the PWA open
+		// across a deploy without backgrounding).
+		const VERSION_POLL_INTERVAL = 5 * 60 * 1000;
+		const versionPollTimer = setInterval(() => {
+			if (!document.hidden) checkVersion();
+		}, VERSION_POLL_INTERVAL);
+		// Immediate check on mount so a cold-loaded stale shell reloads even before
+		// the SSE handshake completes.
+		checkVersion();
+
+		// Window focus/blur is more granular than visibilitychange, hence the second pair.
+		const focusHandler = () => reportPresence({ focused: true });
+		const blurHandler = () => reportPresence({ focused: false });
+		window.addEventListener('focus', focusHandler);
+		window.addEventListener('blur', blurHandler);
+
+		reportPresence({ focused: document.hasFocus() });
+
+		// Heartbeat so the server can evict sessions that died without saying goodbye.
+		const presenceHeartbeat = setInterval(() => {
+			if (document.hasFocus() && !document.hidden) {
+				reportPresence({ focused: true, activeChatId: getActiveChatId() });
+			}
+		}, 30000);
+
+		return () => {
+			manualReconnectFn = null;
+			clearInterval(presenceHeartbeat);
+			clearInterval(versionPollTimer);
+			document.removeEventListener('visibilitychange', visibilityHandler);
+			window.removeEventListener('pageshow', pageshowHandler);
+			window.removeEventListener('online', onlineHandler);
+			window.removeEventListener('focus', focusHandler);
+			window.removeEventListener('blur', blurHandler);
+			navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
+			eventSource?.close();
+			clearTimers();
+		};
+	});
+
+	// Push active-chat changes up so server-side presence knows where the user is.
+	$effect(() => {
+		const chatId = getActiveChatId();
+		reportPresence({ activeChatId: chatId });
+	});
+
+	return {
+		get connectionState() {
+			return connectionState;
+		},
+		manualReconnect() {
+			manualReconnectFn?.();
+		}
+	};
+}

@@ -1,0 +1,25 @@
+node_modules
+.git
+.gitignore
+.svelte-kit
+.vscode
+build
+scripts
+
+# Persistent data — never bake into the image
+data/
+static/avatars/
+*.db
+*.db-shm
+*.db-wal
+
+# TLS certs / keys
+*.key
+*.crt
+*.pem
+
+# Misc
+.DS_Store
+*.md
+.env
+.env.*
