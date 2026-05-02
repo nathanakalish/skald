@@ -23,6 +23,15 @@ function hashToken(token: string): string {
 	return createHash('sha256').update(token).digest('hex');
 }
 
+/**
+ * Public version of hashToken for callers that need to look up a session row
+ * by its cookie token (e.g. /api/push/* tying a push subscription to the
+ * sessions.id FK, which stores the hashed value).
+ */
+export function hashSessionToken(token: string): string {
+	return hashToken(token);
+}
+
 /** Create a new session for a user. Returns the session token (caller stores in cookie). */
 export function createSession(userId: number, userAgent: string | null = null): string {
 	const token = randomBytes(32).toString('hex');

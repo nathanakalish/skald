@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { pushSubscriptions } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
-import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
+import { requireUser, getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 
 /**
  * GET — quick check based on session_id linkage only. Used by callers that
@@ -11,10 +11,13 @@ import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
  */
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
-	const sessionId = event.cookies.get(getSessionCookieName()) ?? null;
-	if (!sessionId) {
+	const rawToken = event.cookies.get(getSessionCookieName()) ?? null;
+	if (!rawToken) {
 		return json({ subscribed: false });
 	}
+	// push_subscriptions.session_id stores the SHA-256 hash of the cookie
+	// token (matches sessions.id, which is also hashed).
+	const sessionId = hashSessionToken(rawToken);
 
 	const row = db
 		.select({ id: pushSubscriptions.id })
@@ -39,7 +42,8 @@ export const GET: RequestHandler = async (event) => {
  */
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
-	const sessionId = event.cookies.get(getSessionCookieName()) ?? null;
+	const rawToken = event.cookies.get(getSessionCookieName()) ?? null;
+	const sessionId = rawToken ? hashSessionToken(rawToken) : null;
 	let body: { endpoint?: unknown } = {};
 	try {
 		body = await event.request.json();

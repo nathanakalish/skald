@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
+import { requireUser, getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 import { saveSubscription } from '$lib/server/webPush.js';
 
 export const POST: RequestHandler = async (event) => {
@@ -18,7 +18,11 @@ export const POST: RequestHandler = async (event) => {
 	// Tag the subscription with the current session so revoking the session
 	// (sign-out / "remove device" / "disable notifications on this device")
 	// can drop just this device's subscription without touching the others.
-	const sessionId = event.cookies.get(getSessionCookieName()) ?? null;
+	// `sessions.id` stores the SHA-256 hash of the cookie token; the FK on
+	// push_subscriptions.session_id points at that, so we must hash before
+	// storing or the INSERT fails with a FK violation.
+	const rawToken = event.cookies.get(getSessionCookieName()) ?? null;
+	const sessionId = rawToken ? hashSessionToken(rawToken) : null;
 	const userAgent = event.request.headers.get('user-agent') ?? null;
 
 	saveSubscription(user.id, {
