@@ -1,0 +1,44 @@
+node_modules
+.vscode
+scripts
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# TLS / Certificates / Keys
+*.key
+*.crt
+*.pem
+*.p12
+*.pfx
+
+# User-uploaded content
+static/avatars/
+
+# Root-level test images
+/*.png
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

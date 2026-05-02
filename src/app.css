@@ -1,0 +1,639 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Default fallback values — overridden by active theme via JS */
+:root {
+	--background: oklch(0.15 0.005 260);
+	--foreground: oklch(0.93 0.005 260);
+	--card: oklch(0.18 0.005 260);
+	--card-foreground: oklch(0.93 0.005 260);
+	--popover: oklch(0.18 0.005 260);
+	--popover-foreground: oklch(0.93 0.005 260);
+	--primary: oklch(0.55 0.18 250);
+	--primary-foreground: oklch(0.98 0.005 260);
+	--secondary: oklch(0.22 0.008 260);
+	--secondary-foreground: oklch(0.93 0.005 260);
+	--muted: oklch(0.22 0.008 260);
+	--muted-foreground: oklch(0.55 0.01 260);
+	--accent: oklch(0.25 0.015 260);
+	--accent-foreground: oklch(0.93 0.005 260);
+	--destructive: oklch(0.55 0.2 25);
+	--destructive-foreground: oklch(0.93 0.005 260);
+	--border: oklch(0.28 0.01 260);
+	--input: oklch(0.28 0.01 260);
+	--ring: oklch(0.55 0.18 250);
+	--radius: 0.5rem;
+
+	--sidebar: oklch(0.13 0.005 260);
+	--sidebar-foreground: oklch(0.93 0.005 260);
+	--sidebar-border: oklch(0.22 0.008 260);
+
+	--speech: oklch(0.8 0.12 200);
+
+	/* Derived bubble colors — auto-detect light vs dark text based on bg.
+	   Uses a clamp() step-function: if bg lightness > threshold, use dark text;
+	   otherwise use light text.  Keeps hue, crushes chroma for neutral tones. */
+	--bubble-user-fg: oklch(from var(--primary) calc(0.97 - 0.83 * clamp(0, (l - 0.65) * 1000, 1)) calc(c * 0.05) h);
+	--bubble-assistant-fg: oklch(from var(--muted) calc(0.92 - 0.78 * clamp(0, (l - 0.55) * 1000, 1)) calc(c * 0.05) h);
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-speech: var(--speech);
+	--color-bubble-user-fg: var(--bubble-user-fg);
+	--color-bubble-assistant-fg: var(--bubble-assistant-fg);
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+}
+
+* {
+	border-color: var(--border);
+}
+
+html, body {
+	overflow: hidden;
+	overscroll-behavior: none;
+	height: 100%;
+	background-color: var(--background);
+}
+
+/* Disable text selection on interactive elements for better drag interactions */
+button,
+a,
+nav,
+aside,
+[role="dialog"],
+[draggable="true"],
+.select-none {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+/* Re-enable selection for text inputs (overrides inherited none from aside/nav) */
+input,
+textarea,
+[contenteditable="true"] {
+	-webkit-user-select: text;
+	user-select: text;
+}
+
+body {
+	background-color: var(--background);
+	color: var(--foreground);
+	font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
+	border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
+}
+/* Firefox */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent) transparent;
+}
+
+/* Font size setting */
+[data-font-size="small"] .message-content { font-size: 0.8125rem; line-height: 1.5; }
+[data-font-size="large"] .message-content { font-size: 1rem; line-height: 1.7; }
+
+/* Compact mode: tighter message spacing */
+[data-compact] .space-y-4 { gap: 0.5rem; }
+[data-compact] .message-content { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+
+/* Reduce motion */
+[data-reduce-motion] *, [data-reduce-motion] *::before, [data-reduce-motion] *::after {
+	animation-duration: 0.01ms !important;
+	transition-duration: 0.01ms !important;
+}
+
+/* Modal entrance animation */
+@keyframes modal-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.95) translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+@keyframes backdrop-enter {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+.modal-enter {
+	animation: modal-enter 0.2s ease-out;
+}
+
+@keyframes modal-exit {
+	from {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.95) translateY(8px);
+	}
+}
+
+@keyframes backdrop-exit {
+	from { opacity: 1; }
+	to { opacity: 0; }
+}
+
+.modal-exit {
+	animation: modal-exit 0.15s ease-in forwards;
+}
+
+.backdrop-exit {
+	animation: backdrop-exit 0.12s ease-in forwards;
+}
+
+.backdrop-enter {
+	animation: backdrop-enter 0.15s ease-out;
+}
+
+/* Mobile: slide modals up from bottom */
+@media (max-width: 639px) {
+	@keyframes modal-slide-up {
+		from {
+			opacity: 0;
+			transform: translateY(100%);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes modal-slide-down {
+		from {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		to {
+			opacity: 0;
+			transform: translateY(100%);
+		}
+	}
+
+	.modal-enter {
+		animation: modal-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	.modal-exit {
+		animation: modal-slide-down 0.2s ease-in forwards;
+	}
+}
+
+/* Tab swipe enter animations */
+@keyframes tab-enter-left {
+	from { transform: translateX(-30%); opacity: 0.5; }
+	to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes tab-enter-right {
+	from { transform: translateX(30%); opacity: 0.5; }
+	to { transform: translateX(0); opacity: 1; }
+}
+
+.tab-enter-from-left {
+	animation: tab-enter-left 200ms ease-out;
+}
+
+.tab-enter-from-right {
+	animation: tab-enter-right 200ms ease-out;
+}
+
+/* Fade-in for lazy-loaded content */
+@keyframes fade-in {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+.fade-in {
+	animation: fade-in 0.15s ease-out;
+}
+
+/* While the viewport crosses a layout breakpoint, suppress entrance
+ * keyframes and SvelteKit transitions so layout reflow stays seamless
+ * instead of replaying mount animations on remounted components.
+ * Sidebar width/sizing transitions are explicitly preserved. */
+html.layout-transitioning *,
+html.layout-transitioning *::before,
+html.layout-transitioning *::after {
+	animation: none !important;
+	transition: none !important;
+}
+html.layout-transitioning [data-mobile-sidebar],
+html.layout-transitioning [data-desktop-rail],
+html.layout-transitioning main {
+	transition-property: width, min-width, max-width, height, min-height, max-height, transform !important;
+	transition-duration: 250ms !important;
+}
+
+/* Popup / context menu entrance */
+@keyframes popup-menu {
+	from {
+		opacity: 0;
+		transform: scale(0.82);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+.popup-menu {
+	-webkit-animation: popup-menu 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+	animation: popup-menu 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+	transform-origin: var(--popup-origin, top left);
+	will-change: transform, opacity;
+}
+
+/* Slide up for list items */
+@keyframes slide-up {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.slide-up {
+	animation: slide-up 0.2s ease-out;
+}
+
+/* Toast spring entrance — snappier than a plain fly */
+@keyframes toast-spring {
+	0%   { opacity: 0; transform: translateY(20px) scale(0.88); }
+	55%  { transform: translateY(-5px) scale(1.03); }
+	80%  { transform: translateY(2px) scale(0.99); }
+	100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast-spring-enter {
+	animation: toast-spring 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Unread badge pop-in */
+@keyframes badge-pop {
+	0%   { transform: scale(0) rotate(-12deg); opacity: 0; }
+	60%  { transform: scale(1.25) rotate(4deg); }
+	100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.badge-pop {
+	animation: badge-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Sidebar nav icon bounce when tab becomes active */
+@keyframes nav-select {
+	0%   { transform: scale(1); }
+	40%  { transform: scale(0.82) translateY(2px); }
+	70%  { transform: scale(1.15) translateY(-2px); }
+	100% { transform: scale(1) translateY(0); }
+}
+
+.nav-icon-select {
+	animation: nav-select 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* In-app chat notification slide-in from top-right */
+@keyframes notif-enter {
+	from { opacity: 0; transform: translateX(24px) scale(0.92); }
+	to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.notif-enter {
+	animation: notif-enter 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.chat-item-stagger {
+	opacity: 0;
+	animation: slide-up 0.25s ease-out forwards;
+	animation-delay: var(--stagger, 0ms);
+}
+
+/* Assistant "thinking" shimmer — used on empty assistant bubbles
+   while waiting for the first streamed token. */
+@keyframes bubble-shimmer {
+	0%   { background-position: -200% 0; }
+	100% { background-position: 200% 0; }
+}
+
+.bubble-shimmer {
+	background: linear-gradient(
+		90deg,
+		color-mix(in oklch, currentColor 10%, transparent) 0%,
+		color-mix(in oklch, currentColor 25%, transparent) 50%,
+		color-mix(in oklch, currentColor 10%, transparent) 100%
+	);
+	background-size: 200% 100%;
+	animation: bubble-shimmer 1.6s linear infinite;
+	border-radius: 0.375rem;
+}
+
+/* Generic skeleton pulse for placeholder rows/cards while data loads. */
+@keyframes skeleton-pulse {
+	0%, 100% { opacity: 0.55; }
+	50%      { opacity: 0.9; }
+}
+
+.skeleton-pulse {
+	background: color-mix(in oklch, var(--muted) 70%, transparent);
+	animation: skeleton-pulse 1.4s ease-in-out infinite;
+	border-radius: 0.5rem;
+}
+
+/* Inline image blur-up: start blurred+scaled, clear on load.
+   Works together with the existing delegated 'load' listener in ChatView
+   that adds a .loaded class to images once decoded. */
+.chat-bubble .message-content :global(img) {
+	transition: filter 0.45s ease, transform 0.45s ease, opacity 0.4s ease;
+}
+
+.chat-bubble .message-content :global(img:not(.loaded)) {
+	filter: blur(10px);
+	transform: scale(1.03);
+}
+
+/* Respect reduce-motion: halt infinite/decorative animations. */
+[data-reduce-motion] .bubble-shimmer,
+[data-reduce-motion] .skeleton-pulse {
+	animation: none !important;
+}
+[data-reduce-motion] .chat-bubble .message-content :global(img:not(.loaded)) {
+	filter: none;
+	transform: none;
+}
+
+/* Skip render/decode for character cards scrolled out of view.
+   Critical for the embedded character list which renders all N characters
+   without virtualization — without this, every avatar <img> is decoded on
+   first paint, blocking the next compositor frame (and thus blocking the
+   visible focus paint when the user clicks the search input). */
+.char-card {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 92px;
+}
+
+/* Block landscape on phone-sized screens */
+@media (max-height: 500px) and (orientation: landscape) {
+	body > div {
+		display: none !important;
+	}
+	body::after {
+		content: 'Please rotate your device to portrait mode';
+		position: fixed;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--background);
+		color: var(--foreground);
+		font-size: 1.125rem;
+		text-align: center;
+		padding: 2rem;
+		z-index: 99999;
+	}
+}
+
+.chat-bubble[data-reformatting] > *:not(.reformatting-overlay) {
+	filter: blur(3px);
+	opacity: 0.55;
+	transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+/* Lucide's Loader2 (and other SVG icons) rotate around their bounding-box
+   center by default, which can drift off-axis when stroke endpoints push
+   the bbox slightly off the viewBox center. transform-box: view-box pins
+   the rotation origin to the SVG viewBox center, eliminating the wobble. */
+.spinner-centered {
+	transform-box: view-box;
+	transform-origin: center;
+}
+
+/* Inside chat bubbles, distinguish RP markup and links via STYLE (weight,
+   italic, opacity) instead of theme color so text always remains readable
+   against any bubble background, regardless of theme. Theme colors are
+   still used in sidebar previews and outside chat bubbles.
+   Weight, style, and opacity for each role are user-configurable via the
+   --rp-{speech,thought,link}-{weight,style,opacity} CSS variables defined
+   on the root layout container. */
+.chat-bubble .rp-speech,
+.chat-bubble .rp-link,
+.chat-bubble .message-content a {
+	color: inherit;
+	text-decoration-color: color-mix(in oklch, currentColor 50%, transparent);
+}
+.chat-bubble .rp-speech {
+	font-weight: var(--rp-speech-weight, 600);
+	font-style: var(--rp-speech-style, normal);
+	opacity: var(--rp-speech-opacity, 1);
+}
+.chat-bubble .rp-link,
+.chat-bubble .message-content a {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	font-weight: var(--rp-link-weight, 400);
+	font-style: var(--rp-link-style, normal);
+	opacity: var(--rp-link-opacity, 1);
+}
+.chat-bubble .rp-link:hover,
+.chat-bubble .message-content a:hover {
+	text-decoration-color: currentColor;
+}
+.chat-bubble .rp-thought {
+	opacity: var(--rp-thought-opacity, 0.75);
+	font-style: var(--rp-thought-style, italic);
+	font-weight: var(--rp-thought-weight, 400);
+}
+.chat-bubble .rp-narration {
+	opacity: var(--rp-narration-opacity, 1);
+	font-style: var(--rp-narration-style, normal);
+	font-weight: var(--rp-narration-weight, 400);
+}
+.chat-bubble .rp-code,
+.chat-bubble .message-content code,
+.chat-bubble .message-content pre {
+	background-color: color-mix(in oklch, currentColor 16%, transparent);
+	border-color: color-mix(in oklch, currentColor 28%, transparent);
+	color: inherit;
+}
+.chat-bubble .message-content blockquote {
+	border-left-color: color-mix(in oklch, currentColor 55%, transparent);
+	opacity: 1;
+}
+.chat-bubble .message-content hr {
+	border-top-color: color-mix(in oklch, currentColor 28%, transparent);
+}
+
+/* Story mode RP formatting (global for sidebar previews + chat bubbles) */
+.rp-thought {
+	font-style: var(--rp-thought-style, italic);
+	font-weight: var(--rp-thought-weight, 400);
+	opacity: var(--rp-thought-opacity, 0.55);
+}
+
+.rp-speech {
+	color: var(--speech);
+	font-weight: var(--rp-speech-weight, 400);
+	font-style: var(--rp-speech-style, normal);
+	opacity: var(--rp-speech-opacity, 1);
+}
+
+.rp-narration {
+	font-weight: var(--rp-narration-weight, 400);
+	font-style: var(--rp-narration-style, normal);
+	opacity: var(--rp-narration-opacity, 1);
+}
+
+.rp-code {
+	display: inline-block;
+	background-color: color-mix(in oklch, var(--background) 85%, var(--foreground));
+	border: 1px solid var(--border);
+	border-radius: 0.375rem;
+	padding: 0.125rem 0.5rem;
+	font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+	font-size: 0.875em;
+	white-space: pre-wrap;
+}
+
+.rp-link {
+	color: var(--primary);
+	text-decoration: underline;
+	text-decoration-color: color-mix(in oklch, var(--primary) 40%, transparent);
+	text-underline-offset: 2px;
+	cursor: pointer;
+	transition: text-decoration-color 0.15s;
+	font-weight: var(--rp-link-weight, 400);
+	font-style: var(--rp-link-style, normal);
+	opacity: var(--rp-link-opacity, 1);
+}
+.rp-link:hover {
+	text-decoration-color: var(--primary);
+}
+
+/* Markdown mode: style rendered markdown inside chat bubbles */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+	font-weight: 600;
+	margin-top: 0.75em;
+	margin-bottom: 0.25em;
+	line-height: 1.3;
+}
+.message-content h1 { font-size: 1.4em; }
+.message-content h2 { font-size: 1.25em; }
+.message-content h3 { font-size: 1.1em; }
+
+.message-content ul,
+.message-content ol {
+	padding-left: 1.5em;
+	margin: 0.4em 0;
+}
+.message-content ul { list-style: disc; }
+.message-content ol { list-style: decimal; }
+.message-content li { margin: 0.15em 0; }
+
+.message-content blockquote {
+	border-left: 3px solid var(--primary);
+	padding-left: 0.75em;
+	margin: 0.5em 0;
+	opacity: 0.85;
+	font-style: italic;
+}
+
+.message-content pre {
+	background-color: color-mix(in oklch, var(--background) 85%, var(--foreground));
+	border: 1px solid var(--border);
+	border-radius: 0.375rem;
+	padding: 0.5rem 0.75rem;
+	overflow-x: auto;
+	margin: 0.5em 0;
+}
+.message-content pre code {
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: 0.875em;
+}
+.message-content code {
+	background-color: color-mix(in oklch, var(--background) 85%, var(--foreground));
+	border: 1px solid var(--border);
+	border-radius: 0.25rem;
+	padding: 0.1em 0.35em;
+	font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+	font-size: 0.875em;
+}
+
+.message-content hr {
+	border: none;
+	border-top: 1px solid var(--border);
+	margin: 0.75em 0;
+}
+
+.message-content strong { font-weight: 700; }
+.message-content em { font-style: italic; }
+.message-content del { text-decoration: line-through; opacity: 0.6; }
+
+.message-content a {
+	color: var(--primary);
+	text-decoration: underline;
+	text-decoration-color: color-mix(in oklch, var(--primary) 40%, transparent);
+	text-underline-offset: 2px;
+}
+.message-content a:hover {
+	text-decoration-color: var(--primary);
+}
+
+.message-content p {
+	margin: 0.3em 0;
+}
+.message-content p:first-child { margin-top: 0; }
+.message-content p:last-child { margin-bottom: 0; }

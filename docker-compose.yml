@@ -1,0 +1,66 @@
+services:
+  skald:
+    build: .
+    image: ghcr.io/nathanakalish/skald:latest
+    container_name: skald
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
+      # Maximum request body size in bytes (default in image: 25 MiB).
+      # Raise this if you import large character cards or lorebooks.
+      # - BODY_SIZE_LIMIT=26214400
+      #
+      # ─── Logging ───
+      # Threshold: trace, debug, info (default), warn, error
+      # - LOG_LEVEL=info
+      #
+      # ─── Image cache ───
+      # Hard cap on data/image-cache/ in bytes (default 1 GiB). LRU evicts oldest
+      # files when exceeded.
+      # - IMAGE_CACHE_MAX_BYTES=1073741824
+      #
+      # ─── Database backups (off by default) ───
+      # Set to true to enable periodic online backups via better-sqlite3's native
+      # backup() API. Backups are written to data/backups/ inside the container.
+      # - BACKUP_ENABLED=true
+      # - BACKUP_INTERVAL_HOURS=24
+      # - BACKUP_RETENTION=7
+      #
+      # ─── Message queue ───
+      # Hard cap on queued (not-yet-running) jobs per provider (default 100).
+      # - MAX_QUEUED_PER_PROVIDER=100
+      #
+      # ─── Web Push Notifications ───
+      # Optional: VAPID keys for web push. Auto-generated and stored in DB if omitted.
+      # Generate with: npx web-push generate-vapid-keys
+      # - VAPID_PUBLIC_KEY=
+      # - VAPID_PRIVATE_KEY=
+      # Optional: VAPID subject (mailto: or https: URL). Defaults to ORIGIN, then
+      # the project GitHub URL. Apple push requires a valid subject.
+      # - VAPID_SUBJECT=mailto:you@example.com
+      #
+      # Optional: set a GitHub personal access token (with read-only repo access)
+      # to enable update checks for private repositories
+      # - GITHUB_TOKEN=ghp_xxxx
+      #
+      # ─── OIDC / SSO Authentication ───
+      # Skald uses OIDC for all authentication. Configure your IdP below.
+      # - OIDC_ISSUER_URL=https://your-idp.example.com/realms/your-realm
+      # - OIDC_CLIENT_ID=skald
+      # - OIDC_CLIENT_SECRET=
+      # - OIDC_SCOPES=openid profile groups
+      # - OIDC_USERNAME_CLAIM=preferred_username
+      # - OIDC_GROUPS_CLAIM=groups
+      # - OIDC_ADMIN_GROUP=skald_admin
+      # - OIDC_USER_GROUP=skald_user
+      # - OIDC_AUTO_CREATE_USERS=true
+    volumes:
+      - skald-data:/app/data
+      - skald-avatars:/app/static/avatars
+
+volumes:
+  skald-data:
+  skald-avatars:

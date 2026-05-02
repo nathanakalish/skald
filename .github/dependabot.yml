@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      dev-deps:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      runtime-patches:
+        dependency-type: production
+        update-types: ["patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      # Only track even-numbered (LTS) Node releases
+      - dependency-name: "node"
+        versions: [">=23, <24", ">=25, <26", ">=27, <28", ">=29, <30"]
