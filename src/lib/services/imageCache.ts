@@ -93,6 +93,23 @@ function evictIfNeeded() {
 	logger.info('image cache evicted', { removed, freedBytes: freed, remainingBytes: remaining, capBytes: MAX_BYTES });
 }
 
+// Each cacheImage call holds a buffer in memory + a Sharp worker thread.
+// Without a cap, importing cards with many inline images fires dozens of concurrent
+// fetch+optimize ops, saturates the libuv thread pool, and starves all other I/O.
+const IMAGE_FETCH_CONCURRENCY = 4;
+let _imageSlots = IMAGE_FETCH_CONCURRENCY;
+const _imageWaiters: Array<() => void> = [];
+
+function acquireImageSlot(): Promise<void> {
+	if (_imageSlots > 0) { _imageSlots--; return Promise.resolve(); }
+	return new Promise<void>((resolve) => _imageWaiters.push(resolve));
+}
+
+function releaseImageSlot(): void {
+	const next = _imageWaiters.shift();
+	if (next) { next(); } else { _imageSlots++; }
+}
+
 /**
  * Download a remote image and cache it locally. Returns the local serving path.
  * If the URL is already a local path (starts with /), it gets returned as-is.
@@ -141,6 +158,7 @@ export async function cacheImage(url: string): Promise<string> {
 		return `/api/images/cache/${existing}`;
 	}
 
+	await acquireImageSlot();
 	try {
 		logger.debug('image cache miss → fetch', { url });
 		const response = await safeFetch(url, {
@@ -216,6 +234,8 @@ export async function cacheImage(url: string): Promise<string> {
 	} catch (err) {
 		logger.warn('image cache: fetch/store failed', { url, err });
 		return url;
+	} finally {
+		releaseImageSlot();
 	}
 }
 

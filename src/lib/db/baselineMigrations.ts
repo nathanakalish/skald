@@ -784,15 +784,19 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		const rows = sqlite.prepare("SELECT id FROM sessions WHERE length(id) = 64 AND id GLOB '[0-9a-f]*'").all() as { id: string }[];
 		if (rows.length > 0) {
 			const upd = sqlite.prepare('UPDATE sessions SET id = ? WHERE id = ?');
-			// node:crypto avoided to keep this file pure DDL — use better-sqlite3's built-in
-			// SHA-256 via SQL `hex(sha256(...))`? SQLite doesn't ship one. Use the JS API.
+			// push_subscriptions.session_id FK references sessions.id with no ON UPDATE,
+			// so we have to fix the FK side before we touch the PK or SQLite blows up.
+			const updPushSubs = sqlite.prepare('UPDATE push_subscriptions SET session_id = ? WHERE session_id = ?');
 			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const { createHash } = require('crypto') as typeof import('crypto');
 			const tx = sqlite.transaction((batch: { id: string }[]) => {
 				for (const r of batch) {
 					const hashed = createHash('sha256').update(r.id).digest('hex');
 					if (hashed !== r.id) {
-						try { upd.run(hashed, r.id); } catch { /* duplicate – drop the orphan */
+						try {
+							updPushSubs.run(hashed, r.id);
+							upd.run(hashed, r.id);
+						} catch { /* duplicate – drop the orphan */
 							sqlite.prepare('DELETE FROM sessions WHERE id = ?').run(r.id);
 						}
 					}
