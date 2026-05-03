@@ -64,6 +64,7 @@
 	import { flip } from 'svelte/animate';
 	import { quintOut } from 'svelte/easing';
 	import { browser } from '$app/environment';
+	import { invalidateAll } from '$app/navigation';
 
 	let { children, data } = $props();
 
@@ -172,6 +173,18 @@
 	let chatListReady = $state(false);
 	onMount(() => {
 		chatListReady = true;
+	});
+
+	// Bfcache restore: macOS Safari Web Apps (and Safari back/forward) restore
+	// the JS heap as-is, so a quit-and-relaunch can drop us back into stale
+	// pre-login UI even when the session cookie is fine. Re-run server loads
+	// to pick up the cookie.
+	onMount(() => {
+		const handler = (e: PageTransitionEvent) => {
+			if (e.persisted) invalidateAll();
+		};
+		window.addEventListener('pageshow', handler);
+		return () => window.removeEventListener('pageshow', handler);
 	});
 
 	// Hydrate the chats store from SSR data so the sidebar paints instantly.

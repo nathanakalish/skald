@@ -541,6 +541,10 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		);
 	`);
 
+	// Drop the leftover handoff table from the brief nonce-based OIDC flow.
+	// Harmless if the table never existed.
+	sqlite.exec('DROP TABLE IF EXISTS pending_oidc_logins');
+
 	// Idempotent ALTER for users.picture_url (existing dev DBs predating the column).
 	{
 		const cols = sqlite.prepare("PRAGMA table_info('users')").all() as { name: string }[];
