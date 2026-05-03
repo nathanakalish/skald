@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from 'crypto';
 import * as jose from 'jose';
+import { logger } from './logger.js';
 
 // ─── OIDC config from env ───
 
@@ -44,16 +45,20 @@ export async function getDiscovery(): Promise<OidcDiscovery> {
 	}
 
 	const issuerUrl = getOidcConfig().issuerUrl.replace(/\/$/, '');
+	logger.debug('oidc: discovery fetch', { issuerUrl });
+	const t0 = Date.now();
 	const res = await fetch(`${issuerUrl}/.well-known/openid-configuration`, {
 		signal: AbortSignal.timeout(10000)
 	});
 
 	if (!res.ok) {
+		logger.error('oidc: discovery failed', { issuerUrl, status: res.status, statusText: res.statusText, durationMs: Date.now() - t0 });
 		throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
 	}
 
 	cachedDiscovery = await res.json();
 	discoveryCacheTime = now;
+	logger.info('oidc: discovery cached', { issuerUrl, durationMs: Date.now() - t0 });
 	return cachedDiscovery!;
 }
 
@@ -113,9 +118,11 @@ export async function exchangeCode(
 
 	if (!res.ok) {
 		const body = await res.text();
+		logger.error('oidc: token exchange failed', { status: res.status, bodySnippet: body.slice(0, 500) });
 		throw new Error(`Token exchange failed: ${res.status} ${body}`);
 	}
 
+	logger.debug('oidc: token exchange ok');
 	return res.json();
 }
 
@@ -149,6 +156,7 @@ async function verifyIdToken(idToken: string, expectedNonce: string | null): Pro
 	});
 	if (expectedNonce) {
 		if (typeof payload.nonce !== 'string' || payload.nonce !== expectedNonce) {
+			logger.warn('oidc: nonce mismatch (possible replay)', { hasNonce: typeof payload.nonce === 'string' });
 			throw new Error('OIDC nonce mismatch');
 		}
 	}
@@ -169,13 +177,17 @@ export async function getUserClaims(tokenResponse: TokenResponse, expectedNonce:
 			headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
 			signal: AbortSignal.timeout(10000),
 		});
-		if (!res.ok) throw new Error(`Userinfo request failed: ${res.status}`);
+		if (!res.ok) {
+			logger.error('oidc: userinfo failed', { status: res.status });
+			throw new Error(`Userinfo request failed: ${res.status}`);
+		}
 		claims = await res.json();
 	}
 
 	// Username
 	const username = claims[config.usernameClaim];
 	if (!username || typeof username !== 'string') {
+		logger.error('oidc: username claim missing or wrong type', { claim: config.usernameClaim, gotType: typeof username });
 		throw new Error(`Username claim '${config.usernameClaim}' not found or not a string in token`);
 	}
 
@@ -199,6 +211,7 @@ export async function getUserClaims(tokenResponse: TokenResponse, expectedNonce:
 /** Map OIDC groups to our internal role. */
 export function roleFromGroups(groups: string[]): 'admin' | 'user' {
 	const config = getOidcConfig();
-	if (groups.includes(config.adminGroup)) return 'admin';
-	return 'user';
+	const role: 'admin' | 'user' = groups.includes(config.adminGroup) ? 'admin' : 'user';
+	logger.info('oidc: role mapped', { role, groupCount: groups.length, adminGroup: config.adminGroup });
+	return role;
 }

@@ -3,6 +3,7 @@ import { db } from '$lib/db/index.js';
 import { users, sessions } from '$lib/db/schema.js';
 import { eq, and, gt, lt } from 'drizzle-orm';
 import { error, type RequestEvent } from '@sveltejs/kit';
+import { logger } from '$lib/server/logger.js';
 
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
 
@@ -39,12 +40,19 @@ export function createSession(userId: number, userAgent: string | null = null): 
 	const expiresAt = sqlNow(days * 24 * 60 * 60 * 1000);
 	const ua = userAgent ? userAgent.slice(0, 512) : null;
 
+	const sessionIdHash = hashToken(token);
 	db.insert(sessions).values({
-		id: hashToken(token),
+		id: sessionIdHash,
 		userId,
 		expiresAt,
 		userAgent: ua
 	}).run();
+	logger.info('session created', {
+		userId,
+		sessionIdPrefix: sessionIdHash.slice(0, 8),
+		durationDays: days,
+		hasUserAgent: !!ua,
+	});
 	return token;
 }
 
@@ -95,13 +103,19 @@ function bumpSessionLastSeen(hashedToken: string): void {
 /** Delete a session (logout). */
 export function deleteSession(token: string): void {
 	const hashed = hashToken(token);
-	db.delete(sessions).where(eq(sessions.id, hashed)).run();
+	const result = db.delete(sessions).where(eq(sessions.id, hashed)).run();
 	lastSeenCache.delete(hashed);
+	if (result.changes > 0) {
+		logger.info('session deleted', { sessionIdPrefix: hashed.slice(0, 8) });
+	}
 }
 
 /** Cleanup pass: delete every expired session row. */
 export function cleanupExpiredSessions(): void {
-	db.delete(sessions).where(lt(sessions.expiresAt, sqlNow())).run();
+	const result = db.delete(sessions).where(lt(sessions.expiresAt, sqlNow())).run();
+	if (result.changes > 0) {
+		logger.info('expired sessions reaped', { count: result.changes });
+	}
 }
 
 /** Cookie name used for the session. */

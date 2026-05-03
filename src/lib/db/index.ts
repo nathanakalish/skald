@@ -24,6 +24,11 @@ sqlite.pragma('temp_store = MEMORY');
 // Memory-map the first 256 MiB so hot reads skip the syscall path.
 sqlite.pragma('mmap_size = 268435456');
 
+logger.info('db: connection opened', {
+	path: join(DATA_DIR, 'skald.db'),
+	journalMode: 'WAL',
+});
+
 // Slow-query log. Wraps better-sqlite3's prepare()/exec() so anything taking
 // longer than SLOW_QUERY_MS lands in the JSON log with the SQL and a sample
 // of the bound params. Threshold is configurable via env (default 50ms).
@@ -43,14 +48,25 @@ function instrumentForSlowLog(db: Database.Database) {
 			const orig = (stmt as any)[method].bind(stmt);
 			(stmt as any)[method] = (...args: unknown[]) => {
 				const t0 = performance.now();
-				const result = orig(...args);
+				let result: unknown;
+				try {
+					result = orig(...args);
+				} catch (err) {
+					logger.error('db query failed', {
+						method,
+						sql: compactSql.slice(0, 300),
+						paramCount: args.length,
+						err,
+					});
+					throw err;
+				}
 				const dt = performance.now() - t0;
 				if (dt > SLOW_QUERY_MS) {
 					logger.warn('slow query', {
 						ms: Math.round(dt),
 						method,
 						sql: compactSql.slice(0, 300),
-						params: args.length === 0 ? undefined : JSON.stringify(args).slice(0, 200)
+						paramCount: args.length,
 					});
 				}
 				return result;
@@ -62,7 +78,13 @@ function instrumentForSlowLog(db: Database.Database) {
 	const origExec = db.exec.bind(db);
 	(db as any).exec = (sql: string) => {
 		const t0 = performance.now();
-		const result = origExec(sql);
+		let result: unknown;
+		try {
+			result = origExec(sql);
+		} catch (err) {
+			logger.error('db exec failed', { sql: sql.slice(0, 300), err });
+			throw err;
+		}
 		const dt = performance.now() - t0;
 		if (dt > SLOW_QUERY_MS) {
 			logger.warn('slow query (exec)', { ms: Math.round(dt), sql: sql.slice(0, 300) });
@@ -83,7 +105,10 @@ runBaselineMigrations(sqlite);
 
 // Graceful shutdown — close the DB connection.
 function shutdown() {
-	try { sqlite.close(); } catch {}
+	try {
+		sqlite.close();
+		logger.info('db: connection closed');
+	} catch {}
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

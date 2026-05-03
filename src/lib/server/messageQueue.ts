@@ -90,16 +90,23 @@ async function executeJob(job: QueueJob) {
 	queuedChats.delete(job.chatId);
 	const controller = new AbortController();
 	abortControllers.set(job.chatId, controller);
+	const startedAt = Date.now();
+	logger.debug('queue: job started', { jobId: job.id, chatId: job.chatId, providerId: job.providerId });
 	try {
 		await processChat(job.options, controller.signal);
+		logger.info('queue: job completed', {
+			jobId: job.id, chatId: job.chatId, providerId: job.providerId,
+			durationMs: Date.now() - startedAt,
+		});
 	} catch (err) {
 		const chat = db.select().from(chats).where(eq(chats.id, job.chatId)).get();
 		const userId = chat?.userId ?? 0;
 		if (controller.signal.aborted) {
+			logger.info('queue: job aborted', { jobId: job.id, chatId: job.chatId, durationMs: Date.now() - startedAt });
 			eventBus.emit({ type: 'complete', chatId: job.chatId, userId, data: { aborted: true } });
 		} else {
 			const message = err instanceof Error ? err.message : 'Unknown error';
-			logger.error('queue job failed', { err, chatId: job.chatId, providerId: job.providerId });
+			logger.error('queue job failed', { err, jobId: job.id, chatId: job.chatId, providerId: job.providerId, durationMs: Date.now() - startedAt });
 			eventBus.emit({ type: 'error', chatId: job.chatId, userId, data: { error: message } });
 		}
 	} finally {
@@ -170,6 +177,10 @@ export function enqueueJob(options: ProcessOptions): number {
 
 	const maxConcurrent = getMaxConcurrent(providerId);
 	if (getRunning(providerId) < maxConcurrent) {
+		logger.info('queue: job enqueued (immediate)', {
+			jobId: job.id, chatId: options.chatId, providerId,
+			regenerate: !!options.regenerate, greeting: !!options.greeting,
+		});
 		executeJob(job);
 	} else {
 		const q = getQueue(providerId);
@@ -179,6 +190,10 @@ export function enqueueJob(options: ProcessOptions): number {
 			throw new Error('Provider queue is full — please wait for current requests to finish.');
 		}
 		q.push(job);
+		logger.info('queue: job enqueued (waiting)', {
+			jobId: job.id, chatId: options.chatId, providerId,
+			position: q.length, running: getRunning(providerId), maxConcurrent,
+		});
 	}
 
 	return job.id;
@@ -197,6 +212,7 @@ export function abortChat(chatId: number): boolean {
 		if (idx >= 0) {
 			q.splice(idx, 1);
 			queuedChats.delete(chatId);
+			logger.info('queue: job removed from waiting list', { chatId });
 			return true;
 		}
 	}
@@ -204,6 +220,7 @@ export function abortChat(chatId: number): boolean {
 	const controller = abortControllers.get(chatId);
 	if (controller) {
 		controller.abort();
+		logger.info('queue: in-flight job abort signalled', { chatId });
 		return true;
 	}
 	return false;

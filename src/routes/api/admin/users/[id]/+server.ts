@@ -7,7 +7,7 @@ import { requireAdmin } from '$lib/server/auth.js';
 
 /** Update a user (admin only) */
 export const PUT: RequestHandler = async (event) => {
-	requireAdmin(event);
+	const admin = requireAdmin(event);
 	const userId = Number(event.params.id);
 	const { username, role } = await event.request.json();
 
@@ -42,6 +42,16 @@ export const PUT: RequestHandler = async (event) => {
 
 	if (Object.keys(updates).length > 0) {
 		db.update(users).set(updates).where(eq(users.id, userId)).run();
+		if (updates.role && updates.role !== user.role) {
+			event.locals.logger.info('admin: user role changed', {
+				actorId: admin.id, targetUserId: userId, fromRole: user.role, toRole: updates.role,
+			});
+		}
+		if (updates.username && updates.username !== user.username) {
+			event.locals.logger.info('admin: user renamed', {
+				actorId: admin.id, targetUserId: userId,
+			});
+		}
 	}
 
 	return json({ ok: true });
@@ -73,6 +83,9 @@ export const DELETE: RequestHandler = async (event) => {
 
 	// CASCADE will handle related data (characters, chats, messages, etc.)
 	db.delete(users).where(eq(users.id, userId)).run();
+	event.locals.logger.warn('admin: user deleted', {
+		actorId: admin.id, targetUserId: userId, targetRole: user.role,
+	});
 
 	return json({ ok: true });
 };

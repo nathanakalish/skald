@@ -6,6 +6,7 @@
 // originating tab are harmless because store mutations are idempotent.
 
 import { eventBus } from './eventBus.js';
+import { logger } from './logger.js';
 import type { RealtimeEvent } from '$lib/realtime/events.js';
 
 /**
@@ -36,6 +37,7 @@ function flush(userId: number) {
 	const slot = pending.get(userId);
 	if (!slot) return;
 	pending.delete(userId);
+	logger.trace('realtime: flush', { userId, eventCount: slot.events.size });
 	for (const event of slot.events.values()) {
 		emit(userId, event);
 	}

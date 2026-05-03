@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types.js';
 import { rawDb } from '$lib/db/index.js';
+import { logger } from '$lib/server/logger.js';
 
 /**
  * Liveness/readiness probe. Returns 200 with { status, db } when the database
@@ -10,8 +11,13 @@ export const GET: RequestHandler = async () => {
 	try {
 		const row = rawDb.prepare('SELECT 1 AS ok').get() as { ok: number } | undefined;
 		dbOk = row?.ok === 1;
-	} catch {
+	} catch (err) {
 		dbOk = false;
+		logger.error('health: db probe failed', { err });
+	}
+
+	if (!dbOk) {
+		logger.error('health: degraded', { db: 'error' });
 	}
 
 	const body = JSON.stringify({

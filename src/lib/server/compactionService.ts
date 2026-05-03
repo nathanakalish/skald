@@ -186,8 +186,21 @@ const inFlight = new Set<number>();
 export async function runCompaction(chatId: number, opts: RunCompactionOptions = {}): Promise<CompactionResult> {
 	if (inFlight.has(chatId)) return { ran: false, reason: 'already-running' };
 	inFlight.add(chatId);
+	const startedAt = Date.now();
+	logger.info('compaction: triggered', { chatId, reason: opts.force ? 'manual' : 'auto_threshold' });
 	try {
-		return await runCompactionInner(chatId, opts);
+		const result = await runCompactionInner(chatId, opts);
+		if (result.ran) {
+			logger.info('compaction: completed', {
+				chatId,
+				durationMs: Date.now() - startedAt,
+				summaryLength: result.summary?.length ?? 0,
+				compactedCount: result.compactedCount ?? 0,
+			});
+		} else {
+			logger.debug('compaction: skipped', { chatId, reason: result.reason, durationMs: Date.now() - startedAt });
+		}
+		return result;
 	} finally {
 		inFlight.delete(chatId);
 	}

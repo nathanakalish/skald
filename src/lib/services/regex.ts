@@ -1,6 +1,7 @@
 import { db } from '$lib/db/index.js';
 import { regexScripts } from '$lib/db/schema.js';
 import { eq, and, asc, isNull, or } from 'drizzle-orm';
+import { logger } from '$lib/server/logger.js';
 
 export type RegexScope = 'user_input' | 'ai_response';
 
@@ -28,10 +29,14 @@ function isSafeRegex(pattern: string): boolean {
 function parseRegex(findRegex: string): RegExp | null {
 	const match = findRegex.match(/^\/(.+)\/([gimsuy]*)$/s);
 	if (match) {
-		if (!isSafeRegex(match[1])) return null;
+		if (!isSafeRegex(match[1])) {
+			logger.warn('regex: rejected as unsafe', { pattern: match[1].slice(0, 200) });
+			return null;
+		}
 		try {
 			return new RegExp(match[1], match[2]);
-		} catch {
+		} catch (err) {
+			logger.warn('regex: parse failed', { pattern: match[1].slice(0, 200), err: String(err) });
 			return null;
 		}
 	}
@@ -68,10 +73,19 @@ export function applyRegexScripts(
 		.all();
 
 	let result = text;
+	let appliedCount = 0;
 	for (const script of scripts) {
 		const regex = parseRegex(script.findRegex);
 		if (!regex) continue;
+		const before = result;
 		result = result.replace(regex, script.replaceString);
+		if (result !== before) appliedCount++;
+	}
+	if (scripts.length > 0) {
+		logger.trace('regex: scripts applied', {
+			userId, scope, characterId: characterId ?? null,
+			scriptCount: scripts.length, appliedCount,
+		});
 	}
 	return result;
 }

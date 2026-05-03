@@ -13,6 +13,7 @@
  * fine; for SaaS, route fetches through an egress proxy.
  */
 import { lookup as dnsLookup } from 'node:dns/promises';
+import { logger } from './logger.js';
 
 export function isPrivateHostname(hostname: string): boolean {
 	return (
@@ -72,17 +73,29 @@ export function isPrivateIP(ip: string): boolean {
 export async function assertPublicHost(hostname: string): Promise<void> {
 	if (process.env.ALLOW_LOCAL_PROVIDERS === 'true') return;
 	if (isPrivateHostname(hostname)) {
+		logger.warn('ssrf: refusing private hostname', {
+			hostname,
+			reason: 'private_hostname',
+			hint: 'set ALLOW_LOCAL_PROVIDERS=true to allow local/LAN endpoints',
+		});
 		throw new Error(`refusing to fetch private host: ${hostname}`);
 	}
 	let addrs: { address: string }[];
 	try {
 		addrs = await dnsLookup(hostname, { all: true });
-	} catch {
+	} catch (err) {
 		// DNS failure — let fetch surface its own error.
+		logger.debug('ssrf: dns lookup failed (allowing fetch to surface)', { hostname, err: String(err) });
 		return;
 	}
 	for (const { address } of addrs) {
 		if (isPrivateIP(address)) {
+			logger.warn('ssrf: dns rebind defence triggered', {
+				hostname,
+				resolvedIp: address,
+				reason: 'resolves_to_private_ip',
+				hint: 'set ALLOW_LOCAL_PROVIDERS=true to allow local/LAN endpoints',
+			});
 			throw new Error(`refusing to fetch ${hostname}: resolves to private IP ${address}`);
 		}
 	}

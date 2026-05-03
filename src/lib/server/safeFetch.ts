@@ -5,6 +5,7 @@
  * `fetch` will follow it.
  */
 import { assertPublicHost } from './ssrf.js';
+import { logger } from './logger.js';
 
 const MAX_REDIRECTS = 5;
 
@@ -39,10 +40,13 @@ export async function safeFetch(initialUrl: string, opts: SafeFetchOptions = {})
 		for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
 			const u = new URL(urlStr);
 			if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+				logger.warn('safeFetch: refusing non-http(s) URL', { protocol: u.protocol, url: urlStr });
 				throw new Error('refusing non-http(s) URL');
 			}
 			await assertPublicHost(u.hostname);
 
+			const t0 = Date.now();
+			logger.trace('safeFetch: request', { url: urlStr, method: opts.method ?? 'GET', hop, timeoutMs: opts.timeoutMs });
 			res = await fetch(urlStr, {
 				method: opts.method,
 				headers,
@@ -50,6 +54,7 @@ export async function safeFetch(initialUrl: string, opts: SafeFetchOptions = {})
 				redirect: 'manual',
 				signal
 			});
+			logger.debug('safeFetch: response', { url: urlStr, status: res.status, durationMs: Date.now() - t0, hop });
 
 			if (res.status < 300 || res.status >= 400) {
 				return res;
@@ -60,6 +65,7 @@ export async function safeFetch(initialUrl: string, opts: SafeFetchOptions = {})
 			const nextUrl = new URL(next, urlStr);
 			urlStr = nextUrl.toString();
 		}
+		logger.warn('safeFetch: too many redirects', { url: initialUrl, max: MAX_REDIRECTS });
 		throw new Error('too many redirects');
 	} finally {
 		if (timeoutId) clearTimeout(timeoutId);

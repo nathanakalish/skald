@@ -137,10 +137,12 @@ export async function cacheImage(url: string): Promise<string> {
 		if (!existing) existing = file;
 	}
 	if (existing) {
+		logger.trace('image cache hit', { url, file: existing });
 		return `/api/images/cache/${existing}`;
 	}
 
 	try {
+		logger.debug('image cache miss → fetch', { url });
 		const response = await safeFetch(url, {
 			headers: { 'User-Agent': 'Skald/1.0' },
 			timeoutMs: 15000
@@ -202,6 +204,13 @@ export async function cacheImage(url: string): Promise<string> {
 
 		// Eviction is opportunistic post-write — bounded work since most calls do nothing.
 		try { evictIfNeeded(); } catch (err) { logger.warn('image cache: evict pass failed', { err }); }
+
+		logger.info('image cached', {
+			url,
+			bytes: buffer.length,
+			optimizedBytes: optimized?.buffer.length,
+			webpUsed: !!optimized,
+		});
 
 		return returnPath;
 	} catch (err) {

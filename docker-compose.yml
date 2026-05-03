@@ -14,8 +14,10 @@ services:
       # - BODY_SIZE_LIMIT=26214400
       #
       # ─── Logging ───
-      # Threshold: trace, debug, info (default), warn, error
-      # - LOG_LEVEL=info
+      # Threshold: trace, debug, info (default), warn, error.
+      # Logs are JSON-per-line on stderr; tail with `docker logs -f skald`.
+      # Each request gets a UUID echoed back as the `x-request-id` header.
+      - LOG_LEVEL=info
       #
       # ─── Image cache ───
       # Hard cap on data/image-cache/ in bytes (default 1 GiB). LRU evicts oldest

@@ -54,6 +54,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	} catch (err) {
 		// Best-effort: try to look up the chat so we know whose error to emit.
 		const fallbackChat = db.select().from(chats).where(eq(chats.id, chatId)).get();
+		logger.warn('chatProcessor: buildChatContext failed', { chatId, err: err instanceof Error ? err.message : String(err) });
 		eventBus.emit({ type: 'error', chatId, userId: fallbackChat?.userId ?? 0, data: { error: humanizeAnyError(err) } });
 		return;
 	}
@@ -112,6 +113,15 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		data: { active: true, isRegenerate: !!regenerate, originalMessageId }
 	});
 
+	const streamStartedAt = Date.now();
+	let chunkCount = 0;
+	logger.debug('chatProcessor: stream start', {
+		chatId, userId: chatUserId,
+		provider: activeProvider.type, model: activeModel,
+		promptTokens: tokenStats.promptTokens, contextSize: tokenStats.contextSize,
+		regenerate: !!regenerate, impersonate: !!impersonate,
+	});
+
 	try {
 		// Token stats first so the UI can render the prompt-size meter.
 		const tokenStatsPayload = {
@@ -150,6 +160,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		});
 
 		for await (const chunk of llm.stream(llmMessages, samplerSettings, signal)) {
+			chunkCount++;
 			if (chunk.type === 'reasoning') {
 				parser.handleReasoningChunk(chunk.text);
 			} else {
@@ -169,10 +180,30 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		}
 	} catch (err) {
 		activeGenerations.clear(chatId);
+		const aborted = signal?.aborted === true;
+		if (aborted) {
+			logger.info('chatProcessor: stream aborted', {
+				chatId, userId: chatUserId, durationMs: Date.now() - streamStartedAt,
+				chunkCount, partialChars: fullResponse.length,
+			});
+		} else {
+			logger.error('chatProcessor: stream failed', {
+				chatId, userId: chatUserId, provider: activeProvider.type, model: activeModel,
+				durationMs: Date.now() - streamStartedAt, chunkCount, err,
+			});
+		}
 		eventBus.emit({ type: 'error', chatId, userId: chatUserId, data: { error: humanizeAnyError(err) } });
 		eventBus.emit({ type: 'streaming', chatId, userId: chatUserId, data: { active: false } });
 		return;
 	}
+
+	logger.debug('chatProcessor: stream finished', {
+		chatId, userId: chatUserId,
+		durationMs: Date.now() - streamStartedAt,
+		chunkCount,
+		contentChars: fullResponse.length,
+		reasoningChars: fullReasoning.length,
+	});
 
 	// Persist to DB (skipped for impersonation — nothing to save).
 	if ((fullResponse || fullReasoning) && !impersonate) {

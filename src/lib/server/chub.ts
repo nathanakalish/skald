@@ -186,6 +186,8 @@ export async function chubSearch(opts: ChubSearchOptions): Promise<ChubSearchRes
 	if (opts.min_tokens != null) params.set('min_tokens', String(opts.min_tokens));
 
 	const url = `${CHUB_API_BASE}/search?${params.toString()}`;
+	const startedAt = Date.now();
+	logger.debug('chub: search', { namespace: opts.namespace, page, first, sort: opts.sort, hasQuery: !!opts.search?.trim() });
 	const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
 	try {
 		const res = await chubFetch(url, {
@@ -210,6 +212,7 @@ export async function chubSearch(opts: ChubSearchOptions): Promise<ChubSearchRes
 		const nodes = rawNodes
 			.map((n) => normaliseNode(n))
 			.filter((n): n is ChubCard => n !== null);
+		logger.debug('chub: search complete', { count, returned: nodes.length, durationMs: Date.now() - startedAt });
 		return { nodes, count, page, first };
 	} finally {
 		cancel();
@@ -379,6 +382,8 @@ export async function chubDownload(opts: {
 	fullPath: string;
 }): Promise<{ buffer: Buffer; contentType: string; filename: string }> {
 	const { creator, slug, safeSlug } = parseFullPath(opts.fullPath);
+	const startedAt = Date.now();
+	logger.debug('chub: download', { fullPath: opts.fullPath, type: opts.type });
 
 	const { signal, cancel } = withTimeout(DOWNLOAD_TIMEOUT_MS);
 	try {
@@ -395,6 +400,9 @@ export async function chubDownload(opts: {
 				throw new Error(`CHUB download failed (${res.status}): ${text.slice(0, 200)}`);
 			}
 			const buffer = Buffer.from(await res.arrayBuffer());
+			logger.info('chub: download complete', {
+				fullPath: opts.fullPath, type: 'character', bytes: buffer.length, durationMs: Date.now() - startedAt,
+			});
 			return {
 				buffer,
 				contentType: res.headers.get('content-type') || 'image/png',
@@ -435,6 +443,9 @@ export async function chubDownload(opts: {
 		const projectName = pickString((node as Record<string, unknown>)?.name) || slug;
 		const wrapped = { ...((book as Record<string, unknown>) ?? {}), name: projectName };
 		const buffer = Buffer.from(JSON.stringify(wrapped), 'utf-8');
+		logger.info('chub: download complete', {
+			fullPath: opts.fullPath, type: 'lorebook', bytes: buffer.length, durationMs: Date.now() - startedAt,
+		});
 		return { buffer, contentType: 'application/json', filename: `${safeSlug}.json` };
 	} finally {
 		cancel();

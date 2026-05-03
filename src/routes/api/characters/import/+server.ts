@@ -31,6 +31,7 @@ function isPng(buf: Buffer): boolean {
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
+	const startedAt = Date.now();
 
 	if (!getAdminSettingBool('allowCharacterImport') && user.role !== 'admin') {
 		return json({ error: 'Character import is disabled by the administrator' }, { status: 403 });
@@ -252,6 +253,14 @@ export const POST: RequestHandler = async (event) => {
 			});
 		}
 	}
+
+	event.locals.logger.info('import: character complete', {
+		userId: user.id,
+		characterId: character?.id,
+		durationMs: Date.now() - startedAt,
+		hasLorebook: !!result?.importedLorebook,
+		lorebookIsNew: result?.importedLorebookIsNew ?? false,
+	});
 
 	return json({ ...(character ?? {}), light });
 };

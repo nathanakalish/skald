@@ -1,6 +1,7 @@
 import { db } from '$lib/db/index.js';
 import { lorebooks, lorebookEntries, chatLorebooks, chatLorebookEntryOverrides } from '$lib/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
+import { logger } from '$lib/server/logger.js';
 
 export interface MatchedLorebookEntry {
 	content: string;
@@ -115,5 +116,11 @@ export function matchLorebookEntries(
 		}
 	}
 
+	logger.debug('lorebook: context built', {
+		characterId, chatId,
+		bookCount: relevantBooks.length,
+		totalEntries: allEntries.length,
+		matchedCount: matched.length,
+	});
 	return matched;
 }

@@ -3,6 +3,7 @@ import { eventBus } from '$lib/server/eventBus.js';
 import { requireUser } from '$lib/server/auth.js';
 import { presence } from '$lib/server/presence.js';
 import { activeGenerations } from '$lib/server/activeGenerations.js';
+import { logger } from '$lib/server/logger.js';
 
 /**
  * Per-user SSE endpoint. Client opens one EventSource for chat events
@@ -18,11 +19,16 @@ export const GET: RequestHandler = (requestEvent) => {
 
 	// Register presence for this connection.
 	const registeredAt = presence.register(user.id, sessionId);
+	const connectedAt = Date.now();
+	logger.debug('sse: client connected', { userId: user.id, sessionId, lastEventId });
 
 	function cleanup() {
 		if (unsubscribe) { unsubscribe(); unsubscribe = null; }
 		if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = null; }
 		presence.unregister(user.id, sessionId, registeredAt);
+		logger.debug('sse: client disconnected', {
+			userId: user.id, sessionId, durationMs: Date.now() - connectedAt,
+		});
 	}
 
 	const stream = new ReadableStream({

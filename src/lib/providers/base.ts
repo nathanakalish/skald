@@ -54,8 +54,23 @@ export abstract class LLMProvider {
 	 */
 	protected async guardEndpoint(): Promise<void> {
 		const { assertPublicHost } = await import('../server/ssrf.js');
+		const { logger } = await import('../server/logger.js');
 		const { hostname } = new URL(this.config.endpoint);
-		await assertPublicHost(hostname);
+		logger.debug('provider request', {
+			provider: this.type,
+			model: this.config.model,
+			endpoint: this.config.endpoint,
+		});
+		try {
+			await assertPublicHost(hostname);
+		} catch (err) {
+			// Re-throw a friendlier error so the UI surfaces actionable text.
+			const msg = err instanceof Error ? err.message : String(err);
+			throw new Error(
+				`Refusing to call provider — endpoint ${hostname} is private/internal. ` +
+				`Set ALLOW_LOCAL_PROVIDERS=true in your env to allow local providers. (${msg})`
+			);
+		}
 	}
 
 	/**
@@ -70,6 +85,8 @@ export abstract class LLMProvider {
 		const { logger } = await import('../server/logger.js');
 		logger.warn('upstream provider error', {
 			provider: providerName,
+			endpoint: this.config.endpoint,
+			model: this.config.model,
 			status: response.status,
 			body
 		});

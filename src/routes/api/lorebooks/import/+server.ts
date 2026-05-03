@@ -11,6 +11,7 @@ const MAX_LOREBOOK_ENTRIES = 5_000;
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
+	const startedAt = Date.now();
 
 	const limitResponse = enforceCreate('lorebooks', user.id);
 	if (limitResponse) return limitResponse;
@@ -103,6 +104,13 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		return book;
+	});
+
+	event.locals.logger.info('import: lorebook complete', {
+		userId: user.id,
+		lorebookId: result.id,
+		entryCount: parsed.entries.length,
+		durationMs: Date.now() - startedAt,
 	});
 
 	return json({ id: result.id, name: result.name, entryCount: parsed.entries.length, lorebook: result });

@@ -156,11 +156,19 @@ export function saveSubscription(
 			}
 		})
 		.run();
+	let endpointHost = '';
+	try { endpointHost = new URL(subscription.endpoint).host; } catch { /* ignore */ }
+	logger.info('push subscription saved', { userId, endpointHost });
 }
 
 /** Remove a push subscription. */
 export function removeSubscription(userId: number, endpoint: string): void {
-	db.delete(pushSubscriptions)
+	const result = db.delete(pushSubscriptions)
 		.where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
 		.run();
+	if (result.changes > 0) {
+		let endpointHost = '';
+		try { endpointHost = new URL(endpoint).host; } catch { /* ignore */ }
+		logger.info('push subscription removed', { userId, endpointHost });
+	}
 }

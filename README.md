@@ -54,6 +54,27 @@ See the comments in `docker-compose.yml` for the full list, including:
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — web push notifications (auto-generated if omitted)
 - `LOG_LEVEL` — trace, debug, info (default), warn, error
 
+### Logs
+
+Logs are written as one JSON object per line to **stderr**. Each HTTP request is assigned a UUID, exposed both in every log line for that request and as the `x-request-id` response header, so users can quote it in bug reports.
+
+```
+LOG_LEVEL=info     # default — quiet, lifecycle events only
+LOG_LEVEL=debug    # investigating — adds decisions, cache hits, queue moves
+LOG_LEVEL=trace    # deep dive — per-token streaming, per-event SSE, per-query DB
+LOG_LEVEL=warn     # only handled failures and security guard rejections
+LOG_LEVEL=error    # only fatal/unhandled errors
+```
+
+Filter live with `jq`:
+
+```bash
+docker logs -f skald 2>&1 | jq 'select(.level=="warn" or .level=="error")'
+docker logs skald 2>&1 | jq 'select(.requestId=="<paste-from-x-request-id-header>")'
+```
+
+Sensitive fields (`password`, `apiKey`, `authorization`, `cookie`, OIDC tokens, push subscription keys, …) are auto-redacted from log output regardless of the level.
+
 ## Features
 
 ### LLM Providers

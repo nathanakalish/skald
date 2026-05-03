@@ -1,4 +1,5 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
+import { randomUUID } from 'node:crypto';
 import { db } from '$lib/db/index.js';
 import { themes, userSettings } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
@@ -8,10 +9,28 @@ import { startBackupSchedule } from '$lib/server/backup.js';
 import { checkRateLimit } from '$lib/server/rateLimit.js';
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
 import * as themeCache from '$lib/server/themeCache.js';
+import { isOidcEnabled } from '$lib/server/oidc.js';
+
+// One-shot boot banner so operators can immediately see the build, runtime,
+// and which subsystems are wired up.
+logger.info('skald server starting', {
+	version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown',
+	nodeVersion: process.version,
+	logLevel: process.env.LOG_LEVEL || 'info',
+	oidcEnabled: isOidcEnabled(),
+	allowLocalProviders: process.env.ALLOW_LOCAL_PROVIDERS === 'true',
+	devAuthEnabled: process.env.DEV_AUTH_ENABLED === 'true',
+	slowQueryMs: Number(process.env.SLOW_QUERY_MS ?? '50'),
+});
 
 // Reap expired sessions on boot, then again every hour. unref() so this doesn't keep the process alive.
 cleanupExpiredSessions();
 setInterval(() => cleanupExpiredSessions(), 60 * 60 * 1000).unref();
+
+// Graceful shutdown signal logging — the actual DB close lives in src/lib/db/index.ts.
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+	process.on(sig, () => logger.info('shutdown signal received', { signal: sig }));
+}
 
 // Last line of defence — if something escapes all our try/catches, at least it ends up in the logs.
 process.on('uncaughtException', (err) => {
@@ -23,6 +42,13 @@ process.on('unhandledRejection', (reason) => {
 
 // Periodic DB backup, off unless BACKUP_* env vars are set.
 startBackupSchedule();
+
+/** Suppress per-request access logs for these (they fire too often / too noisy). */
+const ACCESS_LOG_SKIP_PREFIXES = ['/api/health', '/api/events', '/_app/immutable/', '/api/images/cache/'];
+
+/** Sessions we've already seen this run — used to log userAgent only on first request. */
+const loggedSessions = new Set<number>();
+const LOGGED_SESSIONS_MAX = 5000;
 
 /** Anything that could change state — require Origin == Host for CSRF. */
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -52,14 +78,42 @@ const AUTH_RATE_LIMITED_PREFIXES: Array<{ prefix: string; max: number }> = [
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const startedAt = Date.now();
+	const requestId = event.request.headers.get('x-request-id') || randomUUID();
+	event.locals.requestId = requestId;
+	event.locals.logger = logger.child({ requestId });
+
 	const sessionToken = event.cookies.get(getSessionCookieName());
 	const user = sessionToken ? validateSession(sessionToken) : null;
 	event.locals.user = user;
+	if (user) {
+		event.locals.logger = event.locals.logger.child({ userId: user.id });
+	}
 
 	const path = event.url.pathname;
 	const isAuthRoute = path.startsWith('/api/auth/');
 	const isStaticAsset = path.startsWith('/avatars/') || path.startsWith('/api/images/');
 	const isHealth = path === '/api/health';
+
+	// Per-request entry log (debug). Includes userAgent only on the first request
+	// of each session so we don't spam it on every page load.
+	const skipAccessLog = ACCESS_LOG_SKIP_PREFIXES.some((p) => path.startsWith(p));
+	if (!skipAccessLog) {
+		let ua: string | undefined;
+		if (user) {
+			if (!loggedSessions.has(user.id)) {
+				if (loggedSessions.size >= LOGGED_SESSIONS_MAX) loggedSessions.clear();
+				loggedSessions.add(user.id);
+				ua = event.request.headers.get('user-agent') ?? undefined;
+			}
+		} else {
+			ua = event.request.headers.get('user-agent') ?? undefined;
+		}
+		event.locals.logger.debug('http request', {
+			method: event.request.method,
+			path,
+			...(ua ? { userAgent: ua } : {}),
+		});
+	}
 
 	// IP rate limit on the auth/setup endpoints. Runs before CSRF so a bot mash
 	// gets the cheapest possible 429 reply.
@@ -70,7 +124,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				try { ip = event.getClientAddress(); } catch { /* SSR pre-bind */ }
 				const result = checkRateLimit(`ip:${ip}:${rule.prefix}`, rule.max, 60_000);
 				if (!result.allowed) {
-					logger.warn('auth rate limit exceeded', { path, ip });
+					event.locals.logger.warn('auth rate limit exceeded', { path, ip });
 					return new Response(
 						JSON.stringify({ error: 'Too many attempts — please slow down.' }),
 						{
@@ -98,7 +152,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			let originHost: string | null = null;
 			try { originHost = new URL(origin).host; } catch { /* malformed */ }
 			if (!originHost || originHost !== host) {
-				logger.warn('csrf origin mismatch', { path, origin, host });
+				event.locals.logger.warn('csrf origin mismatch', { path, origin, host });
 				return new Response(JSON.stringify({ error: 'Cross-origin request blocked' }), {
 					status: 403,
 					headers: { 'Content-Type': 'application/json' }
@@ -111,7 +165,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				let refererHost: string | null = null;
 				try { refererHost = new URL(referer).host; } catch { /* malformed */ }
 				if (!refererHost || refererHost !== host) {
-					logger.warn('csrf referer mismatch', { path, referer, host });
+					event.locals.logger.warn('csrf referer mismatch', { path, referer, host });
 					return new Response(JSON.stringify({ error: 'Cross-origin request blocked' }), {
 						status: 403,
 						headers: { 'Content-Type': 'application/json' }
@@ -139,6 +193,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				const max = getAdminSettingNumber(rule.settingKey) || 30;
 				const result = checkRateLimit(`u:${user.id}:${rule.prefix}`, max, 60_000);
 				if (!result.allowed) {
+					event.locals.logger.warn('user rate limit exceeded', { path, max });
 					return new Response(
 						JSON.stringify({ error: 'Rate limit exceeded — slow down a moment.' }),
 						{
@@ -209,7 +264,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			} catch (err) {
 				// Corrupt theme JSON shouldn't take down the request. Skip the inline colours
 				// and let the default CSS variables win (this is the M15 fix).
-				logger.warn('theme colors parse failed', { themeId: activeTheme.id, err: String(err) });
+				event.locals.logger.warn('theme colors parse failed', { themeId: activeTheme.id, err: String(err) });
 				colors = {};
 			}
 			// Allow-list for CSS values so a malicious theme can't sneak `expression()`
@@ -236,15 +291,27 @@ export const handle: Handle = async ({ event, resolve }) => {
 			html.replace('%sveltekit.html-attributes%', attrs)
 	});
 
+	// Echo request id so users can quote it in bug reports.
+	response.headers.set('x-request-id', requestId);
+
 	// Surface slow requests so we can find perf regressions before users do.
 	const elapsed = Date.now() - startedAt;
+	const bytesOut = Number(response.headers.get('content-length') || '0') || undefined;
 	if (elapsed > 1000) {
-		logger.warn('slow request', {
+		event.locals.logger.warn('slow request', {
 			path,
 			method: event.request.method,
-			ms: elapsed,
-			userId: user?.id ?? null,
-			status: response.status
+			durationMs: elapsed,
+			status: response.status,
+			...(bytesOut !== undefined ? { bytesOut } : {}),
+		});
+	} else if (!skipAccessLog) {
+		event.locals.logger.info('http response', {
+			method: event.request.method,
+			path,
+			status: response.status,
+			durationMs: elapsed,
+			...(bytesOut !== undefined ? { bytesOut } : {}),
 		});
 	}
 
@@ -294,7 +361,8 @@ export const handleError: HandleServerError = ({ error, event, status, message }
 	if (status >= 400 && status < 500) {
 		return { message: message || 'Not Found' };
 	}
-	logger.error('unhandled server error', {
+	const log = event.locals.logger ?? logger;
+	log.error('unhandled server error', {
 		err: error,
 		path: event.url.pathname,
 		method: event.request.method,

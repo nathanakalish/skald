@@ -40,6 +40,7 @@ function dedupeName(desired: string, existing: Set<string>): string {
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
+	const startedAt = Date.now();
 	const ctype = event.request.headers.get('content-type') || '';
 	if (!ctype.includes('multipart/form-data')) {
 		return json({ error: 'Expected multipart/form-data' }, { status: 400 });
@@ -462,6 +463,14 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
+	event.locals.logger.info('import: bundle complete', {
+		userId: user.id,
+		bytes: file.size,
+		durationMs: Date.now() - startedAt,
+		counts,
+		unresolvedChats: unresolvedChats.length,
+	});
+
 	return json({
 		ok: true,
 		manifest,
@@ -472,5 +481,20 @@ export const POST: RequestHandler = async (event) => {
 		availableCharacters: db.select({ id: characters.id, name: characters.name }).from(characters).where(eq(characters.userId, user.id)).all()
 	});
 };
+
+function _logBundleImportComplete(
+	event: Parameters<RequestHandler>[0],
+	userId: number,
+	startedAt: number,
+	counts: Record<string, number>,
+	bytes: number,
+) {
+	event.locals.logger.info('import: bundle complete', {
+		userId,
+		bytes,
+		durationMs: Date.now() - startedAt,
+		counts,
+	});
+}
 
 export const config = { bodyParser: false };
