@@ -784,9 +784,10 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		const rows = sqlite.prepare("SELECT id FROM sessions WHERE length(id) = 64 AND id GLOB '[0-9a-f]*'").all() as { id: string }[];
 		if (rows.length > 0) {
 			const upd = sqlite.prepare('UPDATE sessions SET id = ? WHERE id = ?');
-			// push_subscriptions.session_id FK references sessions.id with no ON UPDATE,
-			// so we have to fix the FK side before we touch the PK or SQLite blows up.
-			const updPushSubs = sqlite.prepare('UPDATE push_subscriptions SET session_id = ? WHERE session_id = ?');
+			// Null out the FK before touching the PK. Setting it to the new hash
+			// would fail too (new hash isn't in sessions yet). Nulling is fine —
+			// it's the same thing ON DELETE SET NULL would do.
+			const nullPushSubs = sqlite.prepare('UPDATE push_subscriptions SET session_id = NULL WHERE session_id = ?');
 			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const { createHash } = require('crypto') as typeof import('crypto');
 			const tx = sqlite.transaction((batch: { id: string }[]) => {
@@ -794,7 +795,7 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 					const hashed = createHash('sha256').update(r.id).digest('hex');
 					if (hashed !== r.id) {
 						try {
-							updPushSubs.run(hashed, r.id);
+							nullPushSubs.run(r.id);
 							upd.run(hashed, r.id);
 						} catch { /* duplicate – drop the orphan */
 							sqlite.prepare('DELETE FROM sessions WHERE id = ?').run(r.id);
