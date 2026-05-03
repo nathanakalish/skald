@@ -26,7 +26,19 @@ export function createOidcPopup() {
 		);
 		if (!popup || popup.closed) {
 			error = 'Popup was blocked. Please allow popups for this site and try again.';
+			return;
 		}
+		// macOS Safari Web Apps eat postMessage across the PWA <-> popup boundary
+		// (the popup is in a different webkit instance), but cookies still land
+		// in the shared jar. So instead of trusting postMessage, just poll for
+		// the popup to close and then refresh server data — invalidateAll picks
+		// up the new session cookie without navigating the main window.
+		const interval = setInterval(() => {
+			if (popup.closed) {
+				clearInterval(interval);
+				invalidateAll();
+			}
+		}, 400);
 	}
 
 	/** Dev-only auth bypass — gated server-side by SKALD_DEV_AUTH_BYPASS=1. */

@@ -175,16 +175,24 @@
 		chatListReady = true;
 	});
 
-	// Bfcache restore: macOS Safari Web Apps (and Safari back/forward) restore
-	// the JS heap as-is, so a quit-and-relaunch can drop us back into stale
-	// pre-login UI even when the session cookie is fine. Re-run server loads
-	// to pick up the cookie.
+	// Bfcache + PWA relaunch: macOS Safari Web Apps restore stale JS state on
+	// relaunch, and pageshow.persisted isn't always set in standalone mode.
+	// visibilitychange fires reliably whenever the PWA window comes back into
+	// view (relaunch from dock, tab refocus, OS wake), so use it as the catch-
+	// all to re-run server loads and pick up any new session cookie.
 	onMount(() => {
-		const handler = (e: PageTransitionEvent) => {
+		const onShow = (e: PageTransitionEvent) => {
 			if (e.persisted) invalidateAll();
 		};
-		window.addEventListener('pageshow', handler);
-		return () => window.removeEventListener('pageshow', handler);
+		const onVisible = () => {
+			if (document.visibilityState === 'visible') invalidateAll();
+		};
+		window.addEventListener('pageshow', onShow);
+		document.addEventListener('visibilitychange', onVisible);
+		return () => {
+			window.removeEventListener('pageshow', onShow);
+			document.removeEventListener('visibilitychange', onVisible);
+		};
 	});
 
 	// Hydrate the chats store from SSR data so the sidebar paints instantly.
