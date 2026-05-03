@@ -176,21 +176,28 @@
 	});
 
 	// Bfcache + PWA relaunch: macOS Safari Web Apps restore stale JS state on
-	// relaunch, and pageshow.persisted isn't always set in standalone mode.
-	// visibilitychange fires reliably whenever the PWA window comes back into
-	// view (relaunch from dock, tab refocus, OS wake), so use it as the catch-
-	// all to re-run server loads and pick up any new session cookie.
+	// relaunch, often without firing pageshow.persisted=true or even
+	// visibilitychange (the window can already be 'visible' when the PWA
+	// resumes from a suspended snapshot). So we hit it from every angle:
+	// pageshow (any), visibilitychange, focus, and a one-shot check on mount
+	// that re-validates if the restored snapshot shows no user but a cookie
+	// might exist.
 	onMount(() => {
-		const onShow = (e: PageTransitionEvent) => {
-			if (e.persisted) invalidateAll();
-		};
+		const refresh = () => invalidateAll();
+		const onShow = () => refresh();
 		const onVisible = () => {
-			if (document.visibilityState === 'visible') invalidateAll();
+			if (document.visibilityState === 'visible') refresh();
 		};
 		window.addEventListener('pageshow', onShow);
+		window.addEventListener('focus', refresh);
 		document.addEventListener('visibilitychange', onVisible);
+		// On bfcache restore the snapshot may show !user even though the cookie
+		// is still valid. Force one fresh load so we don't strand the user on
+		// the login form.
+		if (!data.user) refresh();
 		return () => {
 			window.removeEventListener('pageshow', onShow);
+			window.removeEventListener('focus', refresh);
 			document.removeEventListener('visibilitychange', onVisible);
 		};
 	});
