@@ -775,35 +775,40 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		`);
 	}
 
-	// Hash any plaintext session ids in place (one-time, idempotent).
-	// Pre-1.45 stored the raw 64-hex token in sessions.id. The cookie still
-	// carries the raw token; validateSession now hashes it before lookup.
-	// Any row whose id is 64 lowercase hex chars and isn't already SHA-256
-	// of itself is rewritten to its SHA-256.
+	// Hash any plaintext session ids in place (one-time, NOT idempotent by content alone).
+	// Pre-1.45 stored the raw 64-hex token in sessions.id. Post-1.45 stores SHA-256(token).
+	// Both are 64 lowercase hex chars, so we can't tell them apart by value — we use an
+	// admin_settings flag to make sure this only ever runs once.
 	{
-		const rows = sqlite.prepare("SELECT id FROM sessions WHERE length(id) = 64 AND id GLOB '[0-9a-f]*'").all() as { id: string }[];
-		if (rows.length > 0) {
-			const upd = sqlite.prepare('UPDATE sessions SET id = ? WHERE id = ?');
-			// Null out the FK before touching the PK. Setting it to the new hash
-			// would fail too (new hash isn't in sessions yet). Nulling is fine —
-			// it's the same thing ON DELETE SET NULL would do.
-			const nullPushSubs = sqlite.prepare('UPDATE push_subscriptions SET session_id = NULL WHERE session_id = ?');
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { createHash } = require('crypto') as typeof import('crypto');
-			const tx = sqlite.transaction((batch: { id: string }[]) => {
-				for (const r of batch) {
-					const hashed = createHash('sha256').update(r.id).digest('hex');
-					if (hashed !== r.id) {
-						try {
-							nullPushSubs.run(r.id);
-							upd.run(hashed, r.id);
-						} catch { /* duplicate – drop the orphan */
-							sqlite.prepare('DELETE FROM sessions WHERE id = ?').run(r.id);
+		const alreadyDone = (sqlite.prepare("SELECT value FROM admin_settings WHERE key = 'session_ids_hashed'").get() as { value: string } | undefined)?.value === '1';
+		if (!alreadyDone) {
+			const rows = sqlite.prepare("SELECT id FROM sessions WHERE length(id) = 64 AND id GLOB '[0-9a-f]*'").all() as { id: string }[];
+			if (rows.length > 0) {
+				const upd = sqlite.prepare('UPDATE sessions SET id = ? WHERE id = ?');
+				// Null out the FK before touching the PK. Setting it to the new hash
+				// would fail too (new hash isn't in sessions yet). Nulling is fine —
+				// it's the same thing ON DELETE SET NULL would do.
+				const nullPushSubs = sqlite.prepare('UPDATE push_subscriptions SET session_id = NULL WHERE session_id = ?');
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
+				const { createHash } = require('crypto') as typeof import('crypto');
+				const tx = sqlite.transaction((batch: { id: string }[]) => {
+					for (const r of batch) {
+						const hashed = createHash('sha256').update(r.id).digest('hex');
+						if (hashed !== r.id) {
+							try {
+								nullPushSubs.run(r.id);
+								upd.run(hashed, r.id);
+							} catch { /* duplicate – drop the orphan */
+								sqlite.prepare('DELETE FROM sessions WHERE id = ?').run(r.id);
+							}
 						}
 					}
-				}
-			});
-			tx(rows);
+				});
+				tx(rows);
+			}
+			// Mark done regardless of whether there were rows — the schema is now
+			// always hashed-at-creation, so this never needs to run again.
+			sqlite.prepare("INSERT OR REPLACE INTO admin_settings (key, value) VALUES ('session_ids_hashed', '1')").run();
 		}
 	}
 }
