@@ -14,6 +14,7 @@ export interface GenerationState {
 	accumulated: string;
 	accumulatedReasoning: string;
 	isRegenerate: boolean;
+	isImpersonation: boolean;
 	originalMessageId: number | null;
 	startedAt: number;
 	lastEventAt: number;
@@ -37,6 +38,7 @@ function ensureStreamingState(chatId: number): GenerationState {
 			accumulated: '',
 			accumulatedReasoning: '',
 			isRegenerate: false,
+			isImpersonation: false,
 			originalMessageId: null,
 			startedAt: Date.now(),
 			lastEventAt: Date.now(),
@@ -61,7 +63,7 @@ export const generationsStore = {
 	isStreaming(chatId: number): boolean {
 		return _generations.get(chatId)?.status === 'streaming';
 	},
-	start(chatId: number, opts: { isRegenerate?: boolean; originalMessageId?: number | null } = {}) {
+	start(chatId: number, opts: { isRegenerate?: boolean; isImpersonation?: boolean; originalMessageId?: number | null } = {}) {
 		const existing = _generations.get(chatId);
 		if (existing && existing.status === 'streaming') return;
 		_generations.set(chatId, {
@@ -70,6 +72,7 @@ export const generationsStore = {
 			accumulated: '',
 			accumulatedReasoning: '',
 			isRegenerate: opts.isRegenerate ?? false,
+			isImpersonation: opts.isImpersonation ?? false,
 			originalMessageId: opts.originalMessageId ?? null,
 			startedAt: Date.now(),
 			lastEventAt: Date.now(),

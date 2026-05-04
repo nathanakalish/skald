@@ -538,6 +538,19 @@
 				if (next.length !== chatData.messages.length) {
 					chatData = { ...chatData, messages: next };
 				}
+			} else if (event.type === 'chat:impersonation') {
+				// Mirror the persisted impersonation draft into the cached chat
+				// row so a remount picks it up without a round-trip.
+				chatData = {
+					...chatData,
+					chat: {
+						...chatData.chat,
+						impersonationDraft: payload?.draft ?? null,
+						impersonationReasoning: payload?.reasoning ?? null,
+						impersonationStatus: payload?.status ?? null,
+						impersonationGeneratedAt: payload?.generatedAt ?? null,
+					}
+				};
 			}
 		}
 
@@ -551,6 +564,7 @@
 				}
 				generationsStore.start(chatId, {
 					isRegenerate: !!event.data.isRegenerate,
+					isImpersonation: !!event.data.isImpersonation,
 					originalMessageId: event.data.originalMessageId ?? null
 				});
 			} else {

@@ -463,6 +463,27 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			sqlite.exec('ALTER TABLE chats ADD COLUMN muted INTEGER DEFAULT 0');
 		}
 	}
+
+	// Background impersonation draft (idempotent). Lets impersonation streams
+	// keep going even if the user navigates away or closes the tab — the
+	// final text lands here so any device can pick it up next time the chat
+	// opens. Status is null/streaming/done/error.
+	{
+		const cols = sqlite.prepare("PRAGMA table_info('chats')").all() as { name: string }[];
+		const names = new Set(cols.map(c => c.name));
+		if (!names.has('impersonation_draft')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_draft TEXT');
+		}
+		if (!names.has('impersonation_reasoning')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_reasoning TEXT');
+		}
+		if (!names.has('impersonation_status')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_status TEXT');
+		}
+		if (!names.has('impersonation_generated_at')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_generated_at TEXT');
+		}
+	}
 	
 	// Add background_path column to characters (idempotent)
 	{

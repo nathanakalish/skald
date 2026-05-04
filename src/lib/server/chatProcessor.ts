@@ -107,11 +107,25 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		}
 	}
 
-	activeGenerations.start({ chatId, userId: chatUserId, isRegenerate: !!regenerate, originalMessageId });
+	activeGenerations.start({ chatId, userId: chatUserId, isRegenerate: !!regenerate, isImpersonation: !!impersonate, originalMessageId });
 	eventBus.emit({
 		type: 'streaming', chatId, userId: chatUserId,
-		data: { active: true, isRegenerate: !!regenerate, originalMessageId }
+		data: { active: true, isRegenerate: !!regenerate, isImpersonation: !!impersonate, originalMessageId }
 	});
+
+	// Mark the chat as having an in-flight impersonation draft so reloads
+	// from any device know to expect/restore one.
+	if (impersonate) {
+		db.update(chats)
+			.set({ impersonationStatus: 'streaming', impersonationDraft: '', impersonationReasoning: '', impersonationGeneratedAt: null })
+			.where(eq(chats.id, chatId))
+			.run();
+		broadcast(chatUserId, {
+			type: 'chat:impersonation',
+			chatId,
+			data: { status: 'streaming', draft: '', reasoning: '', generatedAt: null }
+		});
+	}
 
 	const streamStartedAt = Date.now();
 	let chunkCount = 0;
@@ -140,7 +154,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 				fullReasoning += text;
 				if (streamingEnabled) {
 					activeGenerations.appendReasoning(chatId, text);
-					eventBus.emit({ type: 'reasoning', chatId, userId: chatUserId, data: { reasoning: text } });
+					eventBus.emit({ type: 'reasoning', chatId, userId: chatUserId, data: { reasoning: text, isImpersonation: !!impersonate } });
 				}
 			},
 			onContent: (text) => {
@@ -154,7 +168,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 				fullResponse += out;
 				if (streamingEnabled) {
 					activeGenerations.appendToken(chatId, out);
-					eventBus.emit({ type: 'token', chatId, userId: chatUserId, data: { token: out } });
+					eventBus.emit({ type: 'token', chatId, userId: chatUserId, data: { token: out, isImpersonation: !!impersonate } });
 				}
 			},
 		});
@@ -173,10 +187,10 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		if (!streamingEnabled) {
 			if (fullReasoning) {
 				activeGenerations.appendReasoning(chatId, fullReasoning);
-				eventBus.emit({ type: 'reasoning', chatId, userId: chatUserId, data: { reasoning: fullReasoning } });
+				eventBus.emit({ type: 'reasoning', chatId, userId: chatUserId, data: { reasoning: fullReasoning, isImpersonation: !!impersonate } });
 			}
 			activeGenerations.appendToken(chatId, fullResponse);
-			eventBus.emit({ type: 'token', chatId, userId: chatUserId, data: { token: fullResponse } });
+			eventBus.emit({ type: 'token', chatId, userId: chatUserId, data: { token: fullResponse, isImpersonation: !!impersonate } });
 		}
 	} catch (err) {
 		activeGenerations.clear(chatId);
@@ -192,8 +206,31 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 				durationMs: Date.now() - streamStartedAt, chunkCount, err,
 			});
 		}
-		eventBus.emit({ type: 'error', chatId, userId: chatUserId, data: { error: humanizeAnyError(err) } });
-		eventBus.emit({ type: 'streaming', chatId, userId: chatUserId, data: { active: false } });
+		// For impersonation: keep whatever partial draft we have. Save it
+		// to the chat row so the user can see/edit/finish it manually
+		// instead of losing the work.
+		if (impersonate) {
+			const generatedAt = new Date().toISOString();
+			const status = aborted ? 'done' : 'error';
+			const finalStatus = (fullResponse || fullReasoning) ? status : null;
+			db.update(chats)
+				.set({
+					impersonationDraft: fullResponse || null,
+					impersonationReasoning: fullReasoning || null,
+					impersonationStatus: finalStatus,
+					impersonationGeneratedAt: finalStatus ? generatedAt : null,
+				})
+				.where(eq(chats.id, chatId))
+				.run();
+			broadcast(chatUserId, {
+				type: 'chat:impersonation', chatId,
+				data: { status: finalStatus, draft: fullResponse, reasoning: fullReasoning, generatedAt: finalStatus ? generatedAt : null }
+			});
+		}
+		if (!aborted) {
+			eventBus.emit({ type: 'error', chatId, userId: chatUserId, data: { error: humanizeAnyError(err), isImpersonation: !!impersonate } });
+		}
+		eventBus.emit({ type: 'streaming', chatId, userId: chatUserId, data: { active: false, isImpersonation: !!impersonate } });
 		return;
 	}
 
@@ -283,6 +320,26 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		}
 	}
 
+	// Persist the impersonation draft to the chat row so any device opening
+	// the chat after the stream finishes lands on the same text.
+	if (impersonate) {
+		const generatedAt = new Date().toISOString();
+		const status = (fullResponse || fullReasoning) ? 'done' : null;
+		db.update(chats)
+			.set({
+				impersonationDraft: fullResponse || null,
+				impersonationReasoning: fullReasoning || null,
+				impersonationStatus: status,
+				impersonationGeneratedAt: status ? generatedAt : null,
+			})
+			.where(eq(chats.id, chatId))
+			.run();
+		broadcast(chatUserId, {
+			type: 'chat:impersonation', chatId,
+			data: { status, draft: fullResponse, reasoning: fullReasoning, generatedAt: status ? generatedAt : null }
+		});
+	}
+
 	// Emit completion and bump unread.
 	const viewedElsewhere = presence.hasFocusedSessionOnChat(chatUserId, chatId);
 	const currentChat = db.select().from(chats).where(eq(chats.id, chatId)).get();
@@ -293,6 +350,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			hasReasoning: !!fullReasoning,
 			viewedElsewhere,
 			muted: currentChat?.muted === true,
+			isImpersonation: !!impersonate,
 		}
 	});
 
@@ -371,7 +429,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	}
 
 	activeGenerations.clear(chatId);
-	eventBus.emit({ type: 'streaming', chatId, userId: chatUserId, data: { active: false } });
+	eventBus.emit({ type: 'streaming', chatId, userId: chatUserId, data: { active: false, isImpersonation: !!impersonate } });
 }
 
 /**

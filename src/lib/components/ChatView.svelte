@@ -183,6 +183,34 @@
 		return --placeholderIdSeq;
 	}
 
+	// Pick the right initial textarea value for a chat. Server-persisted
+	// impersonation drafts beat the local draft when they're newer than
+	// what this device last picked up — that's how the same generated text
+	// shows up across devices. We track the last-seen `generatedAt` per
+	// chat in localStorage so re-mounts on the same device don't keep
+	// clobbering edits the user already made on top of the draft.
+	function pickDraftForChat(c: typeof chat): string {
+		const local = (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function')
+			? localStorage.getItem(`skald-draft-${c.id}`) || ''
+			: '';
+		const status = (c as any).impersonationStatus as string | null | undefined;
+		const generatedAt = (c as any).impersonationGeneratedAt as string | null | undefined;
+		const draft = (c as any).impersonationDraft as string | null | undefined;
+		if (status === 'streaming') {
+			// Live tokens will arrive via the generations store and overwrite
+			// `input`. Start blank so we don't briefly flash an empty/stale draft.
+			return '';
+		}
+		if (status === 'done' && draft && generatedAt && typeof localStorage !== 'undefined') {
+			const seen = localStorage.getItem(`skald-impersonation-seen-${c.id}`);
+			if (seen !== generatedAt) {
+				localStorage.setItem(`skald-impersonation-seen-${c.id}`, generatedAt);
+				return draft;
+			}
+		}
+		return local;
+	}
+
 	function parseMessage(m: any): Message {
 		let swipes: string[] = [];
 		try { swipes = JSON.parse(m.swipes || '[]'); } catch { /* */ }
@@ -385,7 +413,6 @@
 	let reasoningModalName = $derived(reasoningModalIsImpersonation ? (activePersona?.name ?? 'You') : character.name);
 	let isImpersonating = $state(false);
 	let impersonateReasoning = $state('');
-	let impersonateAbortController: AbortController | null = $state(null);
 
 	// Character theme: parse character.theme JSON into CSS variable overrides
 	const ALLOWED_THEME_KEYS = new Set([
@@ -449,28 +476,30 @@
 		if (!isStreaming) return;
 		clearStreamTimeout();
 
-		if (isImpersonating) {
-			// Abort the direct fetch for impersonation
-			impersonateAbortController?.abort();
-		} else {
-			// Animate the streaming message out
+		// For non-impersonation regular replies we animate the streaming
+		// bubble out before swapping in the final state. Impersonation has
+		// no bubble (text lives in the textarea) so we just skip that.
+		if (!isImpersonating) {
 			abortAnimating = true;
+		}
 
-			// Abort server-side processing
-			try {
-				await fetch('/api/chat/abort', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ chatId: chat.id })
-				});
-			} catch {
-				// Best effort
-			}
+		try {
+			await fetch('/api/chat/abort', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ chatId: chat.id })
+			});
+		} catch {
+			// Best effort
+		}
 
+		if (!isImpersonating) {
 			await new Promise(r => setTimeout(r, 250));
 			abortAnimating = false;
 			finishStreaming();
 		}
+		// Impersonation finalization happens via the realtime
+		// `chat:impersonation` event + generationsStore done branch.
 	}
 
 	// Background-generation persistence: hydrate from the global generations
@@ -670,6 +699,7 @@
 		awaitingServerRefresh = true;
 		isStreaming = false;
 		isReasoning = false;
+		isImpersonating = false;
 		if (reasoningModalIsLive && streamAccumulatedReasoning) {
 			reasoningModalText = streamAccumulatedReasoning;
 			reasoningModalIsLive = false;
@@ -931,7 +961,7 @@
 			messageList = incoming;
 			messageSiblings = newSiblings;
 			totalMsgCount = newTotal || incoming.length;
-			input = localStorage.getItem(`skald-draft-${chatId}`) || '';
+			input = pickDraftForChat(chat);
 			isStreaming = false;
 			isReasoning = false;
 			streamingReasoning = '';
@@ -940,6 +970,8 @@
 			streamAccumulatedReasoning = '';
 			streamIsRegenerate = false;
 			streamOriginalMessage = null;
+			isImpersonating = false;
+			impersonateReasoning = chat.impersonationStatus === 'done' ? (chat.impersonationReasoning ?? '') : '';
 			awaitingServerRefresh = false;
 			lastSyncedChatId = chatId;
 			bootstrappedStartedAt = null;
@@ -1004,7 +1036,14 @@
 				});
 			} else if (gen.status === 'streaming' && !untrack(() => isStreaming)) {
 				untrack(() => {
-					if (gen.isRegenerate && gen.originalMessageId != null) {
+					if (gen.isImpersonation) {
+						// Impersonation: tokens go into the textarea, not a
+						// message bubble. No placeholder needed.
+						isImpersonating = true;
+						input = gen.accumulated;
+						impersonateReasoning = gen.accumulatedReasoning;
+						streamingReasoning = gen.accumulatedReasoning;
+					} else if (gen.isRegenerate && gen.originalMessageId != null) {
 						// Regenerate: keep the original content visible (it gets
 						// blurred under the spinner overlay, like reformat). The
 						// real content (or the new swipe) lands on finishStreaming.
@@ -1073,6 +1112,32 @@
 					});
 				}
 				resetStreamTimeout();
+			}
+		}
+
+		// Live mirror for impersonation: tokens land in the textarea and
+		// reasoning area instead of a message bubble. Runs whenever the
+		// current generation is impersonation, regardless of streamingAssistantIdx.
+		if (gen && gen.isImpersonation && untrack(() => isImpersonating)) {
+			if (gen.accumulatedReasoning.length > untrack(() => impersonateReasoning).length) {
+				impersonateReasoning = gen.accumulatedReasoning;
+				streamingReasoning = gen.accumulatedReasoning;
+				if (!untrack(() => isReasoning)) isReasoning = true;
+				resetStreamTimeout();
+			}
+			if (gen.accumulated.length > untrack(() => input).length) {
+				isReasoning = false;
+				input = gen.accumulated;
+				resetStreamTimeout();
+			}
+			if (gen.status === 'done' || gen.status === 'error') {
+				untrack(() => {
+					isStreaming = false;
+					isImpersonating = false;
+					isReasoning = false;
+					streamingReasoning = '';
+					generationsStore.clear(chatId);
+				});
 			}
 		}
 	});
@@ -1281,6 +1346,12 @@
 
 		const hadFocus = document.activeElement === textareaEl;
 
+		// If we just consumed a server-persisted impersonation draft, clear
+		// it so other devices don't see a stale one on next open.
+		if ((chat as any).impersonationStatus === 'done' || (chat as any).impersonationDraft) {
+			fetch(`/api/chats/${chat.id}/impersonation`, { method: 'DELETE' }).catch(() => {});
+		}
+
 		input = '';
 		isStreaming = true;
 		isReasoning = false;
@@ -1345,102 +1416,26 @@
 
 	async function impersonateMessage() {
 		if (isStreaming) return;
-		isStreaming = true;
-		isImpersonating = true;
+		// Fire-and-forget: enqueue the generation server-side. Tokens come
+		// back via the realtime SSE flow → generationsStore → the live
+		// mirror $effect below routes them into `input`. This keeps the
+		// stream going (and the draft persisted) even if the user navigates
+		// away or the tab dies.
 		input = '';
-		let accumulated = '';
-		let accumulatedReasoning = '';
 		impersonateReasoning = '';
 		streamingReasoning = '';
-		isReasoning = false;
-		const controller = new AbortController();
-		impersonateAbortController = controller;
-
-		let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-		function resetImpersonateTimeout() {
-			if (timeoutTimer) clearTimeout(timeoutTimer);
-			timeoutTimer = setTimeout(() => {
-				controller.abort();
-			}, STREAM_TIMEOUT_MS);
-		}
-		resetImpersonateTimeout();
-
 		try {
-			const response = await fetch('/api/chat/stream', {
+			const res = await fetch('/api/chat/stream', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ chatId: chat.id, impersonate: true }),
-				signal: controller.signal
+				body: JSON.stringify({ chatId: chat.id, impersonate: true })
 			});
-
-			if (!response.ok) {
-				const err = await response.json();
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
 				input = `Error: ${err.error || 'Failed to impersonate'}`;
-				isStreaming = false;
-				return;
-			}
-
-			const reader = response.body?.getReader();
-			if (!reader) return;
-
-			const decoder = new TextDecoder();
-			let buffer = '';
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					const trimmed = line.trim();
-					if (!trimmed || !trimmed.startsWith('data: ')) continue;
-					const payload = trimmed.slice(6);
-					if (payload === '[DONE]') continue;
-
-					resetImpersonateTimeout();
-
-					try {
-						const parsed = JSON.parse(payload);
-						if (parsed.tokenStats) {
-							lastTokenStats = parsed.tokenStats;
-						} else if (parsed.reasoning) {
-							accumulatedReasoning += parsed.reasoning;
-							streamingReasoning = accumulatedReasoning;
-							isReasoning = true;
-						} else if (parsed.token) {
-							isReasoning = false;
-							accumulated += parsed.token;
-							input = accumulated;
-						} else if (parsed.error) {
-							accumulated += `\n\nError: ${parsed.error}`;
-							input = accumulated;
-						}
-					} catch {
-						// skip
-					}
-				}
 			}
 		} catch (err) {
-			if (controller.signal.aborted) {
-				// Aborted — keep whatever was accumulated
-			} else {
-				input = `Error: ${err instanceof Error ? err.message : 'Network error'}`;
-			}
-		} finally {
-			if (timeoutTimer) clearTimeout(timeoutTimer);
-			impersonateAbortController = null;
-			isStreaming = false;
-			isImpersonating = false;
-			isReasoning = false;
-			if (reasoningModalIsLive && accumulatedReasoning) {
-				reasoningModalText = accumulatedReasoning;
-				reasoningModalIsLive = false;
-			}
-			impersonateReasoning = accumulatedReasoning;
-			streamingReasoning = '';
+			input = `Error: ${err instanceof Error ? err.message : 'Network error'}`;
 		}
 	}
 

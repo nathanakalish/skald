@@ -53,7 +53,17 @@ export type RealtimeEvent =
 	| { type: 'theme:activated'; theme: Theme }
 	| { type: 'message:created'; chatId: number; message: Record<string, unknown> }
 	| { type: 'message:patched'; chatId: number; id: number; patch: Record<string, unknown> }
-	| { type: 'message:deleted'; chatId: number; ids: number[] };
+	| { type: 'message:deleted'; chatId: number; ids: number[] }
+	| {
+			type: 'chat:impersonation';
+			chatId: number;
+			data: {
+				status: 'streaming' | 'done' | 'error' | null;
+				draft: string | null;
+				reasoning: string | null;
+				generatedAt: string | null;
+			};
+	  };
 
 // Type guard used by the client dispatcher.
 export function isRealtimeEvent(t: string): boolean {

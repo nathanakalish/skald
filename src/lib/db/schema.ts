@@ -97,6 +97,16 @@ export const chats = sqliteTable('chats', {
 	// "latest message" subquery.
 	lastMessage: text('last_message').default(''),
 	lastMessageRole: text('last_message_role').default(''),
+	// Background impersonation draft: server-side textarea state so the
+	// generated user message survives navigation, refresh, and other devices.
+	// Status is null when there's nothing pending, 'streaming' while the LLM
+	// is producing tokens, 'done' once it finishes, 'error' on failure.
+	// `generatedAt` lets clients detect a fresh draft they haven't picked up
+	// yet (vs. one they already loaded into their textarea once).
+	impersonationDraft: text('impersonation_draft'),
+	impersonationReasoning: text('impersonation_reasoning'),
+	impersonationStatus: text('impersonation_status'),
+	impersonationGeneratedAt: text('impersonation_generated_at'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`),
 	updatedAt: text('updated_at').default(sql`(datetime('now'))`)
 });

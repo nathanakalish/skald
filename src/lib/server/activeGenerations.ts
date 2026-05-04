@@ -15,6 +15,7 @@ export interface ActiveGeneration {
 	chatId: number;
 	userId: number;
 	isRegenerate: boolean;
+	isImpersonation: boolean;
 	originalMessageId: number | null;
 	accumulated: string;
 	accumulatedReasoning: string;
@@ -29,12 +30,14 @@ export const activeGenerations = {
 		chatId: number;
 		userId: number;
 		isRegenerate?: boolean;
+		isImpersonation?: boolean;
 		originalMessageId?: number | null;
 	}): ActiveGeneration {
 		const gen: ActiveGeneration = {
 			chatId: opts.chatId,
 			userId: opts.userId,
 			isRegenerate: !!opts.isRegenerate,
+			isImpersonation: !!opts.isImpersonation,
 			originalMessageId: opts.originalMessageId ?? null,
 			accumulated: '',
 			accumulatedReasoning: '',

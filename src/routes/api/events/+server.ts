@@ -87,21 +87,21 @@ export const GET: RequestHandler = (requestEvent) => {
 					id: 0,
 					type: 'streaming',
 					...base,
-					data: { active: true, isRegenerate: gen.isRegenerate, originalMessageId: gen.originalMessageId }
+					data: { active: true, isRegenerate: gen.isRegenerate, isImpersonation: gen.isImpersonation, originalMessageId: gen.originalMessageId }
 				}));
 				if (gen.tokenStats) {
-					send(0, JSON.stringify({ id: 0, type: 'tokenStats', ...base, data: gen.tokenStats }));
+					send(0, JSON.stringify({ id: 0, type: 'tokenStats', ...base, data: { ...gen.tokenStats, isImpersonation: gen.isImpersonation } }));
 				}
 				if (gen.accumulatedReasoning) {
 					send(0, JSON.stringify({
 						id: 0, type: 'reasoning', ...base,
-						data: { reasoning: gen.accumulatedReasoning }
+						data: { reasoning: gen.accumulatedReasoning, isImpersonation: gen.isImpersonation }
 					}));
 				}
 				if (gen.accumulated) {
 					send(0, JSON.stringify({
 						id: 0, type: 'token', ...base,
-						data: { token: gen.accumulated }
+						data: { token: gen.accumulated, isImpersonation: gen.isImpersonation }
 					}));
 				}
 			}
