@@ -9,6 +9,7 @@ import { bumpChatTail } from '$lib/db/chatTail.js';
 import { chatSidebar } from '$lib/server/projections.js';
 import { logger } from '$lib/server/logger.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
+import { encodeChatListCursor, parseChatListCursor } from '$lib/server/chatListCursor.js';
 
 // GET /api/chats — paginated chat list for the sidebar.
 //   ?limit=N            (default 50, max 200)
@@ -71,8 +72,10 @@ export const GET: RequestHandler = async (event) => {
 			.all();
 		rows = [...pinned, ...unpinned];
 	} else {
-		const [cursorUpdatedAt, cursorIdStr] = cursor.split(':');
-		const cursorId = Number(cursorIdStr);
+		const parsedCursor = parseChatListCursor(cursor);
+		if (!parsedCursor) {
+			return json({ error: 'Invalid cursor' }, { status: 400 });
+		}
 		rows = db.select(chatSidebar)
 			.from(chats)
 			.innerJoin(characters, eq(chats.characterId, characters.id))
@@ -80,8 +83,8 @@ export const GET: RequestHandler = async (event) => {
 				eq(chats.userId, user.id),
 				eq(chats.pinned, 0),
 				or(
-					lt(chats.updatedAt, cursorUpdatedAt),
-					and(eq(chats.updatedAt, cursorUpdatedAt), lt(chats.id, cursorId))
+					lt(chats.updatedAt, parsedCursor.updatedAt),
+					and(eq(chats.updatedAt, parsedCursor.updatedAt), lt(chats.id, parsedCursor.id))
 				)
 			))
 			.orderBy(desc(chats.updatedAt), desc(chats.id))
@@ -97,7 +100,7 @@ export const GET: RequestHandler = async (event) => {
 		const dropped = unpinnedRows.pop()!;
 		void dropped;
 		const last = unpinnedRows[unpinnedRows.length - 1];
-		if (last) nextCursor = `${last.updatedAt}:${last.id}`;
+		if (last) nextCursor = encodeChatListCursor(last.updatedAt, last.id);
 		rows = isFirstPage
 			? [...rows.filter(r => r.pinned), ...unpinnedRows]
 			: unpinnedRows;
