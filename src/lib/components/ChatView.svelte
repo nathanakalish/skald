@@ -432,13 +432,37 @@
 	let isImpersonating = $state(false);
 	let impersonateReasoning = $state('');
 
-	// Derived view of the persisted impersonation swipes on the chat row.
-	// Re-parses whenever the chat row changes (which happens on bootstrap,
-	// chat switch, and via the chat:impersonation realtime patcher).
-	let chatImpersonationSwipes = $derived(parseImpersonationSwipes((chat as any).impersonationSwipes));
-	let chatImpersonationSwipeIndex = $derived(
-		Math.max(0, Math.min(chatImpersonationSwipes.length - 1, (chat as any).impersonationSwipeIndex ?? 0))
+	// Local mirror of the persisted impersonation swipes on the chat row.
+	// We keep these as $state (not $derived) so chevron nav can update them
+	// optimistically — otherwise the chevron index/text lags behind the
+	// PATCH→SSE roundtrip and feels sluggish. The $effect below re-syncs
+	// from the chat row whenever the server pushes a new snapshot.
+	let chatImpersonationSwipes = $state<ImpersonationSwipeEntry[]>(
+		untrack(() => parseImpersonationSwipes((chat as any).impersonationSwipes))
 	);
+	let chatImpersonationSwipeIndex = $state<number>(
+		untrack(() => Math.max(0, Math.min(
+			parseImpersonationSwipes((chat as any).impersonationSwipes).length - 1,
+			(chat as any).impersonationSwipeIndex ?? 0
+		)))
+	);
+	let lastSyncedImpersonationRaw = $state<string>(
+		untrack(() => ((chat as any).impersonationSwipes as string | null) ?? '')
+	);
+	$effect(() => {
+		const raw = ((chat as any).impersonationSwipes as string | null) ?? '';
+		const idx = (chat as any).impersonationSwipeIndex ?? 0;
+		// Only sync when the server snapshot actually changed. Local nav
+		// updates `chatImpersonationSwipes`/`chatImpersonationSwipeIndex`
+		// without touching `lastSyncedImpersonationRaw`, so the next SSE
+		// patch (which carries our just-sent payload) lands cleanly here.
+		if (raw !== untrack(() => lastSyncedImpersonationRaw)) {
+			lastSyncedImpersonationRaw = raw;
+			const parsed = parseImpersonationSwipes(raw);
+			chatImpersonationSwipes = parsed;
+			chatImpersonationSwipeIndex = Math.max(0, Math.min(parsed.length - 1, idx));
+		}
+	});
 	let activeImpersonationSwipe = $derived(chatImpersonationSwipes[chatImpersonationSwipeIndex]);
 
 	// Guide modal state. Used by the impersonate button menu, the send
@@ -1577,12 +1601,16 @@
 		haptic('light');
 
 		// Save current textarea contents into the active swipe in-place,
-		// then load the target swipe's draft into the textarea.
+		// then load the target swipe's draft into the textarea. Update local
+		// state immediately so chevrons + text feel instant; the PATCH below
+		// just persists for other devices / reloads.
 		const updated = chatImpersonationSwipes.slice();
 		updated[chatImpersonationSwipeIndex] = {
 			...updated[chatImpersonationSwipeIndex],
 			draft: input
 		};
+		chatImpersonationSwipes = updated;
+		chatImpersonationSwipeIndex = newIdx;
 		input = updated[newIdx]?.draft ?? '';
 		impersonateReasoning = updated[newIdx]?.reasoning ?? '';
 
@@ -2484,7 +2512,9 @@
 			<button
 				onclick={(e) => {
 					if (impersonateBtnHandlers.suppressClick()) { impersonateBtnHandlers.reset(); e.preventDefault(); return; }
-					impersonateMessage();
+					// Reuse the round's guidance so re-impersonating from
+					// the toolbar carries forward the user's last guide.
+					impersonateMessage(activeImpersonationSwipe?.guidance ?? undefined);
 				}}
 				onpointerdown={impersonateBtnHandlers.onpointerdown}
 				onpointermove={impersonateBtnHandlers.onpointermove}
@@ -2904,7 +2934,12 @@
 		</button>
 		<button
 			type="button"
-			onclick={() => { showImpersonateMenu = false; impersonateMessage(); }}
+			onclick={() => {
+				showImpersonateMenu = false;
+				// Reuse the active swipe's guidance for the round so the
+				// user doesn't have to re-enter it on every regenerate.
+				impersonateMessage(activeImpersonationSwipe?.guidance ?? undefined);
+			}}
 			disabled={isStreaming}
 			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 		>
