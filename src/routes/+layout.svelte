@@ -572,6 +572,15 @@
 					newSet.delete(chatId);
 					streamingChats = newSet;
 				}
+				// Impersonation aborts emit `streaming active:false` but
+				// no `complete` (since there's no assistant message to
+				// finalize). Without this, the generation stays in the
+				// 'streaming' status forever and ChatView's live-mirror
+				// never flips `isImpersonating` back off — leaving the
+				// stop button stuck. Flag it done here so the mirror runs.
+				if (event.data.isImpersonation) {
+					generationsStore.complete(chatId);
+				}
 			}
 		}
 

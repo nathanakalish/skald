@@ -1559,11 +1559,17 @@
 			} else {
 				updated[existingIdx] = { ...updated[existingIdx], draft: currentText };
 			}
-			fetch(`/api/chats/${chat.id}/impersonation`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ swipeIndex: existingIdx, swipes: updated })
-			}).catch(() => {});
+			// Await the PATCH so the server has the user's text persisted
+			// BEFORE chatProcessor reads the chat row to append the new
+			// placeholder swipe — otherwise the two writes race and the
+			// user's first-swipe text gets overwritten by an empty entry.
+			try {
+				await fetch(`/api/chats/${chat.id}/impersonation`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ swipeIndex: existingIdx, swipes: updated })
+				});
+			} catch { /* best effort */ }
 		}
 
 		// Fire-and-forget: enqueue the generation server-side. Tokens come
@@ -2825,14 +2831,14 @@
 					<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit guidance…' : 'Guide reply…'}
 				</button>
 			{/if}
-			{#if menuMsg.role === 'assistant' && menuAssistantParentGuidance && menuParentMsg && !menuIsCompacted}
+			{#if menuMsg.role === 'assistant' && menuParentMsg && menuParentMsg.role === 'user' && !menuIsCompacted}
 				<button
 					type="button"
 					onclick={() => { closeMsgMenu(); openGuideModal({ kind: 'editUserMsg', messageId: menuParentMsg!.id }, menuAssistantParentGuidance ?? ''); }}
 					disabled={isStreaming}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
-					<Wand2 class="h-4 w-4" />Edit guidance…
+					<Wand2 class="h-4 w-4" />{menuAssistantParentGuidance ? 'Edit guidance…' : 'Guide reply…'}
 				</button>
 			{/if}
 			{#if !menuIsLast && !menuIsCompacted}
@@ -2985,7 +2991,7 @@
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-enter"
 		onclick={() => { showGuideModal = false; guideModalTarget = null; }}
 	>
-		<div class="modal-enter mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-xl" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-enter mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-card p-5 shadow-xl" onclick={(e) => e.stopPropagation()}>
 			<h3 class="mb-1 text-sm font-semibold text-foreground">
 				{guideModalTarget?.kind === 'impersonate' ? 'Guide impersonation' : guideModalTarget?.kind === 'send' ? 'Guide reply' : 'Edit guidance'}
 			</h3>
@@ -2998,9 +3004,8 @@
 			</p>
 			<textarea
 				bind:value={guideModalText}
-				rows="4"
 				placeholder="e.g. Keep it short and aloof."
-				class="block w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring"
+				class="block min-h-[40vh] w-full flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring"
 			></textarea>
 			<div class="mt-4 flex items-center justify-end gap-2">
 				<button
