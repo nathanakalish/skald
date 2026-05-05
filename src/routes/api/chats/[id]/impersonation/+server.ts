@@ -55,7 +55,9 @@ export const DELETE: RequestHandler = async (event) => {
 
 	broadcast(user.id, {
 		type: 'chat:impersonation', chatId,
-		data: { status: null, swipes: [], swipeIndex: 0 }
+		status: null,
+		swipes: [],
+		swipeIndex: 0
 	});
 
 	return json({ ok: true });
@@ -99,7 +101,9 @@ export const PATCH: RequestHandler = async (event) => {
 
 	broadcast(user.id, {
 		type: 'chat:impersonation', chatId,
-		data: { status, swipes, swipeIndex }
+		status,
+		swipes,
+		swipeIndex
 	});
 
 	return json({ ok: true, swipes, swipeIndex });

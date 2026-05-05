@@ -864,6 +864,35 @@
 		};
 	});
 
+	// Close impersonate/send menus on click-outside or Escape
+	$effect(() => {
+		if (!showImpersonateMenu && !showSendMenu) return;
+		const onClick = (e: Event) => {
+			const t = e.target as HTMLElement;
+			if (showImpersonateMenu && !t.closest('[data-impersonate-menu]')) showImpersonateMenu = false;
+			if (showSendMenu && !t.closest('[data-send-menu]')) showSendMenu = false;
+		};
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') { showImpersonateMenu = false; showSendMenu = false; }
+		};
+		setTimeout(() => document.addEventListener('click', onClick), 0);
+		document.addEventListener('keydown', onKey);
+		return () => {
+			document.removeEventListener('click', onClick);
+			document.removeEventListener('keydown', onKey);
+		};
+	});
+
+	// Close Guide modal on Escape
+	$effect(() => {
+		if (!showGuideModal) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') { showGuideModal = false; guideModalTarget = null; }
+		};
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
+	});
+
 	// Delegated image load handler — adds 'loaded' class without inline event handlers
 	$effect(() => {
 		const el = messagesContainer;
@@ -2452,32 +2481,6 @@
 					</button>
 				{/if}
 			</div>
-			{#if chatImpersonationSwipes.length > 1 && !isStreaming}
-				<!-- Impersonation swipe selector: prev/index/next pip. Only
-				     visible when there's more than one generated draft to
-				     flip between. -->
-				<div class="flex shrink-0 items-center gap-0.5 rounded-full border border-border bg-card px-1.5 text-xs text-muted-foreground">
-					<button
-						type="button"
-						onclick={() => navImpersonationSwipe(-1)}
-						disabled={chatImpersonationSwipeIndex <= 0}
-						class="flex h-7 w-7 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30"
-						aria-label="Previous impersonation draft"
-					>
-						<ChevronLeft class="h-4 w-4" />
-					</button>
-					<span class="tabular-nums">{chatImpersonationSwipeIndex + 1}/{chatImpersonationSwipes.length}</span>
-					<button
-						type="button"
-						onclick={() => navImpersonationSwipe(1)}
-						disabled={chatImpersonationSwipeIndex >= chatImpersonationSwipes.length - 1}
-						class="flex h-7 w-7 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30"
-						aria-label="Next impersonation draft"
-					>
-						<ChevronRight class="h-4 w-4" />
-					</button>
-				</div>
-			{/if}
 			<button
 				onclick={(e) => {
 					if (impersonateBtnHandlers.suppressClick()) { impersonateBtnHandlers.reset(); e.preventDefault(); return; }
@@ -2856,6 +2859,7 @@
 <!-- Impersonate button context menu (long-press / right-click) -->
 {#if showImpersonateMenu && impersonateMenuPosition}
 	<div
+		data-impersonate-menu
 		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
 		style="--popup-origin: {impersonateMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {impersonateMenuPosition.x}px; {impersonateMenuPosition.flipUp ? 'bottom' : 'top'}: {impersonateMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - impersonateMenuPosition.y : 0) + 'px' : impersonateMenuPosition.y + 'px'}"
 	>
@@ -2923,6 +2927,7 @@
 <!-- Send button context menu (long-press / right-click) -->
 {#if showSendMenu && sendMenuPosition}
 	<div
+		data-send-menu
 		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
 		style="--popup-origin: {sendMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {sendMenuPosition.x}px; {sendMenuPosition.flipUp ? 'bottom' : 'top'}: {sendMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - sendMenuPosition.y : 0) + 'px' : sendMenuPosition.y + 'px'}"
 	>
@@ -2942,11 +2947,11 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 md:items-center"
-		onclick={(e) => { if (e.target === e.currentTarget) { showGuideModal = false; guideModalTarget = null; } }}
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-enter"
+		onclick={() => { showGuideModal = false; guideModalTarget = null; }}
 	>
-		<div class="w-full max-w-md rounded-2xl border border-border bg-popover p-4 shadow-2xl">
-			<h3 class="mb-2 text-sm font-semibold text-foreground">
+		<div class="modal-enter mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="mb-1 text-sm font-semibold text-foreground">
 				{guideModalTarget?.kind === 'impersonate' ? 'Guide impersonation' : guideModalTarget?.kind === 'send' ? 'Guide reply' : 'Edit guidance'}
 			</h3>
 			<p class="mb-3 text-xs text-muted-foreground">
@@ -2960,13 +2965,13 @@
 				bind:value={guideModalText}
 				rows="4"
 				placeholder="e.g. Keep it short and aloof."
-				class="block w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+				class="block w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring"
 			></textarea>
-			<div class="mt-3 flex items-center justify-end gap-2">
+			<div class="mt-4 flex items-center justify-end gap-2">
 				<button
 					type="button"
 					onclick={() => { showGuideModal = false; guideModalTarget = null; }}
-					class="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					class="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 				>
 					Cancel
 				</button>

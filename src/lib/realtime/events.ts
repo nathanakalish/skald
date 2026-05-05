@@ -57,16 +57,14 @@ export type RealtimeEvent =
 	| {
 			type: 'chat:impersonation';
 			chatId: number;
-			data: {
-				status: 'streaming' | 'done' | 'error' | null;
-				swipes: Array<{
-					draft: string;
-					reasoning: string;
-					guidance?: string;
-					generatedAt: string | null;
-				}>;
-				swipeIndex: number;
-			};
+			status: 'streaming' | 'done' | 'error' | null;
+			swipes: Array<{
+				draft: string;
+				reasoning: string;
+				guidance?: string;
+				generatedAt: string | null;
+			}>;
+			swipeIndex: number;
 	  };
 
 // Type guard used by the client dispatcher.

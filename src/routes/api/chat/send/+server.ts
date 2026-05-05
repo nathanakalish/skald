@@ -123,7 +123,9 @@ export const POST: RequestHandler = async (event) => {
 		}
 		broadcast(user.id, {
 			type: 'chat:impersonation', chatId,
-			data: { status: null, swipes: [], swipeIndex: 0 }
+			status: null,
+			swipes: [],
+			swipeIndex: 0
 		});
 	}
 

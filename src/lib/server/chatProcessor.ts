@@ -152,7 +152,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		broadcast(chatUserId, {
 			type: 'chat:impersonation',
 			chatId,
-			data: { status: 'streaming', swipes: startSwipes, swipeIndex: startIndex }
+			status: 'streaming',
+			swipes: startSwipes,
+			swipeIndex: startIndex
 		});
 	}
 
@@ -264,7 +266,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 				.run();
 			broadcast(chatUserId, {
 				type: 'chat:impersonation', chatId,
-				data: { status: finalStatus, swipes: partialSwipes, swipeIndex: partialIndex >= 0 ? partialIndex : 0 }
+				status: finalStatus,
+				swipes: partialSwipes,
+				swipeIndex: partialIndex >= 0 ? partialIndex : 0
 			});
 		}
 		if (!aborted) {
@@ -393,7 +397,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			.run();
 		broadcast(chatUserId, {
 			type: 'chat:impersonation', chatId,
-			data: { status, swipes: doneSwipes, swipeIndex: doneIndex >= 0 ? doneIndex : 0 }
+			status,
+			swipes: doneSwipes,
+			swipeIndex: doneIndex >= 0 ? doneIndex : 0
 		});
 	}
 
