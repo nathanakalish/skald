@@ -1769,6 +1769,12 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ guidance: text || null })
 				});
+				// Mirror locally so reopening the modal shows the *current*
+				// guidance, not the value from when the message was sent.
+				const idx = messageList.findIndex(m => m.id === target.userMessageId);
+				if (idx >= 0) {
+					messageList[idx] = { ...messageList[idx], guidance: text || null };
+				}
 			} catch { /* best effort */ }
 			regenerateMessage();
 		} else if (target.kind === 'guideReply') {
@@ -1782,6 +1788,10 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ guidance: text || null })
 				});
+				const idx = messageList.findIndex(m => m.id === target.userMessageId);
+				if (idx >= 0) {
+					messageList[idx] = { ...messageList[idx], guidance: text || null };
+				}
 			} catch { /* best effort */ }
 			await generateNextReply(text || undefined);
 		}

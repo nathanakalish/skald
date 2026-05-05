@@ -124,6 +124,18 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 	// History trimming happens below via the token-budget pass; we don't apply
 	// a coarse message-count cap anymore.
 
+	// If caller didn't pass explicit guidance (e.g. plain regenerations), fall
+	// back to whatever guidance was saved on the last user message in the active
+	// path. This means "Edit guidance → Go" and subsequent regenerations all
+	// pick up the persisted value automatically without the client needing to
+	// thread it through again.
+	// Skip the fallback for impersonation: the active-path's user messages hold
+	// assistant-reply guidance, which has nothing to do with an impersonation.
+	const effectiveGuidance: string | undefined = opts.guidance?.trim() ||
+		(!opts.impersonate
+			? ([...chatMessages].reverse().find(m => m.role === 'user')?.guidance ?? undefined) || undefined
+			: undefined);
+
 	// Lorebook
 	const lorebookMatches = matchLorebookEntries(character.id, chatId, chatMessages);
 
@@ -152,7 +164,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 		isGreeting: !!opts.greeting,
 		isRegenerate: !!opts.regenerate,
 		isImpersonate: !!opts.impersonate,
-		guidance: opts.guidance,
+		guidance: effectiveGuidance,
 		customPrompt,
 		lorebookDepth,
 		renderMode,
@@ -186,7 +198,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 				isGreeting: !!opts.greeting,
 				isRegenerate: !!opts.regenerate,
 				isImpersonate: !!opts.impersonate,
-				guidance: opts.guidance,
+				guidance: effectiveGuidance,
 				customPrompt,
 				lorebookDepth,
 				renderMode,
