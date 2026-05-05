@@ -242,7 +242,13 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		// manually instead of losing the work.
 		if (impersonate) {
 			const generatedAt = new Date().toISOString();
-			const partial = fullResponse || (fullReasoning ? '⚠ No response returned' : '');
+			// On user-initiated abort: keep the partial response if there
+			// was one, but DON'T inject the "⚠ No response returned"
+			// placeholder for empty drafts — the user just cancelled, so
+			// surfacing that scary text would be misleading and (more
+			// importantly) leaves the textarea/draft stuck with content
+			// the user didn't ask for.
+			const partial = fullResponse || (!aborted && fullReasoning ? '⚠ No response returned' : '');
 			const status = aborted ? 'done' : 'error';
 			const finalStatus = (partial || fullReasoning) ? status : null;
 			const partialRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
