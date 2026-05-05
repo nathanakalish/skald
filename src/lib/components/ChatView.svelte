@@ -2821,20 +2821,40 @@
 					<UserPen class="h-4 w-4" />Re-impersonate
 				</button>
 			{/if}
-			{#if menuMsg.role === 'user' && !menuIsCompacted}
+			{#if menuMsg.role === 'user' && menuIsLast && !menuIsCompacted}
 				<button
 					type="button"
-					onclick={() => { closeMsgMenu(); openGuideModal({ kind: 'editUserMsg', messageId: menuMsgObj.id }, menuMsgObj.guidance ?? ''); }}
+					onclick={() => {
+						const id = menuMsgObj.id;
+						const g = menuMsgObj.guidance ?? '';
+						closeMsgMenu();
+						openGuideModal({ kind: 'editUserMsg', messageId: id }, g);
+					}}
 					disabled={isStreaming}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
 					<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit guidance…' : 'Guide reply…'}
 				</button>
 			{/if}
+			{#if menuMsg.role === 'user' && !menuIsCompacted}
+				<button
+					type="button"
+					onclick={() => { closeMsgMenu(); openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? ''); }}
+					disabled={isStreaming}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+				>
+					<Wand2 class="h-4 w-4" />{activeImpersonationSwipe?.guidance ? 'Edit impersonation guidance…' : 'Guide impersonation…'}
+				</button>
+			{/if}
 			{#if menuMsg.role === 'assistant' && menuParentMsg && menuParentMsg.role === 'user' && !menuIsCompacted}
 				<button
 					type="button"
-					onclick={() => { closeMsgMenu(); openGuideModal({ kind: 'editUserMsg', messageId: menuParentMsg!.id }, menuAssistantParentGuidance ?? ''); }}
+					onclick={() => {
+						const id = menuParentMsg!.id;
+						const g = menuAssistantParentGuidance ?? '';
+						closeMsgMenu();
+						openGuideModal({ kind: 'editUserMsg', messageId: id }, g);
+					}}
 					disabled={isStreaming}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
