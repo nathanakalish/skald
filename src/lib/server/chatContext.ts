@@ -19,6 +19,10 @@ export interface ProcessOptions {
 	regenerate?: boolean;
 	greeting?: boolean;
 	impersonate?: boolean;
+	/** Optional guided-reply text the user attached. Injected as a system
+	 * instruction so the LLM treats it as out-of-band steering rather than
+	 * something the persona would say. */
+	guidance?: string;
 }
 
 /**
@@ -148,6 +152,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 		isGreeting: !!opts.greeting,
 		isRegenerate: !!opts.regenerate,
 		isImpersonate: !!opts.impersonate,
+		guidance: opts.guidance,
 		customPrompt,
 		lorebookDepth,
 		renderMode,
@@ -181,6 +186,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 				isGreeting: !!opts.greeting,
 				isRegenerate: !!opts.regenerate,
 				isImpersonate: !!opts.impersonate,
+				guidance: opts.guidance,
 				customPrompt,
 				lorebookDepth,
 				renderMode,

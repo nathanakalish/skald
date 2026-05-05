@@ -32,6 +32,25 @@ import { humanizeAnyError } from './chatErrors.js';
 
 export type { ProcessOptions };
 
+/** One impersonation swipe: a generated draft + the reasoning + the guidance
+ * that produced it (if any). Stored as a JSON array on chats.impersonation_swipes. */
+export interface ImpersonationSwipe {
+	draft: string;
+	reasoning: string;
+	guidance?: string;
+	generatedAt: string | null;
+}
+
+function parseImpersonationSwipes(raw: string | null | undefined): ImpersonationSwipe[] {
+	if (!raw) return [];
+	try {
+		const parsed = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+}
+
 export interface ProcessCallbacks {
 	onTokenStats?: (stats: any) => void;
 	onReasoning?: (text: string) => void;
@@ -45,7 +64,7 @@ export interface ProcessCallbacks {
  * Runs in the background (no HTTP response to write back to).
  */
 export async function processChat(opts: ProcessOptions, signal?: AbortSignal): Promise<void> {
-	const { chatId, regenerate, greeting, impersonate } = opts;
+	const { chatId, regenerate, greeting, impersonate, guidance } = opts;
 	void greeting;
 
 	let ctx;
@@ -114,16 +133,26 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	});
 
 	// Mark the chat as having an in-flight impersonation draft so reloads
-	// from any device know to expect/restore one.
+	// from any device know to expect/restore one. We append a fresh
+	// placeholder swipe so the streaming tokens have somewhere to land
+	// when the client refetches mid-stream; index points at it.
 	if (impersonate) {
+		const startRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
+		const startSwipes = parseImpersonationSwipes(startRow?.impersonationSwipes);
+		startSwipes.push({ draft: '', reasoning: '', guidance: guidance?.trim() || undefined, generatedAt: null });
+		const startIndex = startSwipes.length - 1;
 		db.update(chats)
-			.set({ impersonationStatus: 'streaming', impersonationDraft: '', impersonationReasoning: '', impersonationGeneratedAt: null })
+			.set({
+				impersonationStatus: 'streaming',
+				impersonationSwipes: JSON.stringify(startSwipes),
+				impersonationSwipeIndex: startIndex,
+			})
 			.where(eq(chats.id, chatId))
 			.run();
 		broadcast(chatUserId, {
 			type: 'chat:impersonation',
 			chatId,
-			data: { status: 'streaming', draft: '', reasoning: '', generatedAt: null }
+			data: { status: 'streaming', swipes: startSwipes, swipeIndex: startIndex }
 		});
 	}
 
@@ -207,24 +236,35 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			});
 		}
 		// For impersonation: keep whatever partial draft we have. Save it
-		// to the chat row so the user can see/edit/finish it manually
-		// instead of losing the work.
+		// to the active swipe entry so the user can see/edit/finish it
+		// manually instead of losing the work.
 		if (impersonate) {
 			const generatedAt = new Date().toISOString();
+			const partial = fullResponse || (fullReasoning ? '⚠ No response returned' : '');
 			const status = aborted ? 'done' : 'error';
-			const finalStatus = (fullResponse || fullReasoning) ? status : null;
+			const finalStatus = (partial || fullReasoning) ? status : null;
+			const partialRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
+			const partialSwipes = parseImpersonationSwipes(partialRow?.impersonationSwipes);
+			const partialIndex = partialSwipes.length - 1;
+			if (partialIndex >= 0) {
+				partialSwipes[partialIndex] = {
+					...partialSwipes[partialIndex],
+					draft: partial,
+					reasoning: fullReasoning,
+					generatedAt: finalStatus ? generatedAt : null,
+				};
+			}
 			db.update(chats)
 				.set({
-					impersonationDraft: fullResponse || null,
-					impersonationReasoning: fullReasoning || null,
+					impersonationSwipes: JSON.stringify(partialSwipes),
+					impersonationSwipeIndex: partialIndex >= 0 ? partialIndex : 0,
 					impersonationStatus: finalStatus,
-					impersonationGeneratedAt: finalStatus ? generatedAt : null,
 				})
 				.where(eq(chats.id, chatId))
 				.run();
 			broadcast(chatUserId, {
 				type: 'chat:impersonation', chatId,
-				data: { status: finalStatus, draft: fullResponse, reasoning: fullReasoning, generatedAt: finalStatus ? generatedAt : null }
+				data: { status: finalStatus, swipes: partialSwipes, swipeIndex: partialIndex >= 0 ? partialIndex : 0 }
 			});
 		}
 		if (!aborted) {
@@ -241,6 +281,13 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		contentChars: fullResponse.length,
 		reasoningChars: fullReasoning.length,
 	});
+
+	// Reasoning-only fallback: surface a placeholder so users see *something*
+	// rather than an empty bubble / empty draft. Applies to both regular
+	// replies and impersonation.
+	if (!fullResponse && fullReasoning) {
+		fullResponse = '⚠ No response returned';
+	}
 
 	// Persist to DB (skipped for impersonation — nothing to save).
 	if ((fullResponse || fullReasoning) && !impersonate) {
@@ -325,18 +372,28 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	if (impersonate) {
 		const generatedAt = new Date().toISOString();
 		const status = (fullResponse || fullReasoning) ? 'done' : null;
+		const doneRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
+		const doneSwipes = parseImpersonationSwipes(doneRow?.impersonationSwipes);
+		const doneIndex = doneSwipes.length - 1;
+		if (doneIndex >= 0) {
+			doneSwipes[doneIndex] = {
+				...doneSwipes[doneIndex],
+				draft: fullResponse,
+				reasoning: fullReasoning,
+				generatedAt: status ? generatedAt : null,
+			};
+		}
 		db.update(chats)
 			.set({
-				impersonationDraft: fullResponse || null,
-				impersonationReasoning: fullReasoning || null,
+				impersonationSwipes: JSON.stringify(doneSwipes),
+				impersonationSwipeIndex: doneIndex >= 0 ? doneIndex : 0,
 				impersonationStatus: status,
-				impersonationGeneratedAt: status ? generatedAt : null,
 			})
 			.where(eq(chats.id, chatId))
 			.run();
 		broadcast(chatUserId, {
 			type: 'chat:impersonation', chatId,
-			data: { status, draft: fullResponse, reasoning: fullReasoning, generatedAt: status ? generatedAt : null }
+			data: { status, swipes: doneSwipes, swipeIndex: doneIndex >= 0 ? doneIndex : 0 }
 		});
 	}
 

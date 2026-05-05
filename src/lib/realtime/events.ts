@@ -59,9 +59,13 @@ export type RealtimeEvent =
 			chatId: number;
 			data: {
 				status: 'streaming' | 'done' | 'error' | null;
-				draft: string | null;
-				reasoning: string | null;
-				generatedAt: string | null;
+				swipes: Array<{
+					draft: string;
+					reasoning: string;
+					guidance?: string;
+					generatedAt: string | null;
+				}>;
+				swipeIndex: number;
 			};
 	  };
 

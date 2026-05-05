@@ -464,24 +464,33 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		}
 	}
 
-	// Background impersonation draft (idempotent). Lets impersonation streams
+	// Background impersonation drafts (idempotent). Lets impersonation streams
 	// keep going even if the user navigates away or closes the tab — the
 	// final text lands here so any device can pick it up next time the chat
-	// opens. Status is null/streaming/done/error.
+	// opens. impersonation_swipes is a JSON array of {draft, reasoning,
+	// guidance?, generatedAt} entries; impersonation_swipe_index points at
+	// the currently-active one. Status is null/streaming/done/error.
 	{
 		const cols = sqlite.prepare("PRAGMA table_info('chats')").all() as { name: string }[];
 		const names = new Set(cols.map(c => c.name));
-		if (!names.has('impersonation_draft')) {
-			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_draft TEXT');
+		if (!names.has('impersonation_swipes')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_swipes TEXT');
 		}
-		if (!names.has('impersonation_reasoning')) {
-			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_reasoning TEXT');
+		if (!names.has('impersonation_swipe_index')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_swipe_index INTEGER DEFAULT 0');
 		}
 		if (!names.has('impersonation_status')) {
 			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_status TEXT');
 		}
-		if (!names.has('impersonation_generated_at')) {
-			sqlite.exec('ALTER TABLE chats ADD COLUMN impersonation_generated_at TEXT');
+	}
+
+	// Per-user-message guidance text (idempotent). Stores the guided-reply
+	// instruction (if any) the user attached when sending or impersonating.
+	{
+		const cols = sqlite.prepare("PRAGMA table_info('messages')").all() as { name: string }[];
+		const names = new Set(cols.map(c => c.name));
+		if (!names.has('guidance')) {
+			sqlite.exec('ALTER TABLE messages ADD COLUMN guidance TEXT');
 		}
 	}
 	

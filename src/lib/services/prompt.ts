@@ -43,6 +43,10 @@ export interface PromptContext {
 	isGreeting?: boolean;
 	isRegenerate?: boolean;
 	isImpersonate?: boolean;
+	/** Optional guided-reply text. For impersonation it steers the LLM
+	 * writing as the persona; for regular replies it's an out-of-band
+	 * direction the character should follow without quoting. */
+	guidance?: string;
 	/** Custom system prompt to prepend (user-defined instructions) */
 	customPrompt?: string;
 	/** Lorebook injection depth (messages from end). Default: 4 */
@@ -293,6 +297,12 @@ function buildStoryImpersonateSlots(ctx: PromptContext): PromptSlot[] {
 		`Write ${userName}'s response — their dialogue, actions, thoughts, and narration — in the same style and tone as their previous messages. Stay consistent with ${userName}'s established personality and voice.`
 	);
 
+	if (ctx.guidance?.trim()) {
+		systemParts.push(
+			`Guidance from ${userName} for this reply (treat as direction, not dialogue — express it in ${userName}'s voice):\n${ctx.guidance.trim()}`
+		);
+	}
+
 	slots.push({
 		name: 'system',
 		order: ORDER.SYSTEM_PROMPT,
@@ -520,6 +530,12 @@ function buildTextingImpersonateSlots(ctx: PromptContext): PromptSlot[] {
 		`Write ${userName}'s next text message based on the conversation so far. Stay in character as ${userName} and respond naturally to what ${charName} said.`
 	);
 
+	if (ctx.guidance?.trim()) {
+		systemParts.push(
+			`Guidance from ${userName} for this reply (treat as direction, not the literal text — express it in ${userName}'s voice as a casual text message):\n${ctx.guidance.trim()}`
+		);
+	}
+
 	slots.push({
 		name: 'system',
 		order: ORDER.SYSTEM_PROMPT,
@@ -602,6 +618,27 @@ export function buildPromptWithSlots(ctx: PromptContext): {
 				role: 'system',
 				content: replaceVars(
 					`[Summary of the story so far (this replaces the earlier portion of the conversation, which has been compacted):\n${ctx.compactionSummary.trim()}]`,
+					charName,
+					userName,
+				)
+			}]
+		});
+	}
+
+	// Non-impersonate guidance: out-of-band system instruction the
+	// character should follow without quoting. Sits right before the post-
+	// history nudge so it's the most recent thing the model sees.
+	if (!ctx.isImpersonate && ctx.guidance?.trim()) {
+		const charName = ctx.character.name;
+		const userName = ctx.persona?.name || 'User';
+		slots.push({
+			name: 'guidance',
+			order: ORDER.POST_HISTORY + 50,
+			enabled: true,
+			messages: [{
+				role: 'system',
+				content: replaceVars(
+					`[Out-of-band guidance from {{user}} for your next reply. Treat this as direction only — do NOT quote, paraphrase, or reference it as something {{user}} said. Write your reply as {{char}} normally would, but shaped by this guidance:\n${ctx.guidance.trim()}]`,
 					charName,
 					userName,
 				)

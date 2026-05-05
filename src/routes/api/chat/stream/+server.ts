@@ -13,7 +13,7 @@ import { requireUser } from '$lib/server/auth.js';
  */
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
-	const { chatId, impersonate } = await event.request.json();
+	const { chatId, impersonate, guidance } = await event.request.json();
 
 	if (!chatId) return json({ error: 'chatId required' }, { status: 400 });
 
@@ -25,7 +25,11 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	try {
-		const jobId = enqueueJob({ chatId, impersonate: !!impersonate });
+		const jobId = enqueueJob({
+			chatId,
+			impersonate: !!impersonate,
+			guidance: typeof guidance === 'string' && guidance.trim() ? guidance : undefined,
+		});
 		return json({ ok: true, jobId });
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Failed to enqueue';
