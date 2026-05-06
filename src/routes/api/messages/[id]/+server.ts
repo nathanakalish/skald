@@ -184,6 +184,24 @@ export const DELETE: RequestHandler = async (event) => {
 			}
 		}
 
+		// Symmetric move for impersonation: if a user message carrying
+		// impersonation guidance is being deleted, stash it on the chat row
+		// so the chat-bar's "Guide impersonation…" modal prefills with it next
+		// time. Skip if the chat already has one queued.
+		if (message.role === 'user' && message.impersonationGuidance && message.impersonationGuidance.trim()) {
+			if (!(ownerChat.pendingImpersonationGuidance && ownerChat.pendingImpersonationGuidance.trim())) {
+				db.update(chats)
+					.set({ pendingImpersonationGuidance: message.impersonationGuidance })
+					.where(eq(chats.id, message.chatId))
+					.run();
+				broadcast(user.id, {
+					type: 'chat:patched',
+					id: message.chatId,
+					patch: { pendingImpersonationGuidance: message.impersonationGuidance }
+				});
+			}
+		}
+
 		// Promote direct children to this message's parent so deleting one node
 		// keeps the surrounding branch intact.
 		for (const child of directChildren) {
@@ -248,6 +266,21 @@ export const DELETE: RequestHandler = async (event) => {
 				chatId: message.chatId,
 				id: parent.id,
 				patch: { guidance: message.guidance }
+			});
+		}
+	}
+
+	// Symmetric for impersonation guidance on the deleted-thread root.
+	if (message.role === 'user' && message.impersonationGuidance && message.impersonationGuidance.trim()) {
+		if (!(ownerChat.pendingImpersonationGuidance && ownerChat.pendingImpersonationGuidance.trim())) {
+			db.update(chats)
+				.set({ pendingImpersonationGuidance: message.impersonationGuidance })
+				.where(eq(chats.id, message.chatId))
+				.run();
+			broadcast(user.id, {
+				type: 'chat:patched',
+				id: message.chatId,
+				patch: { pendingImpersonationGuidance: message.impersonationGuidance }
 			});
 		}
 	}

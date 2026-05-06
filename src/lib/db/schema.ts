@@ -109,6 +109,10 @@ export const chats = sqliteTable('chats', {
 	// every assistant generation. Lets the user set a persistent steer
 	// ("keep it short", "avoid X") without retyping it on every send.
 	replyGuidance: text('reply_guidance'),
+	// Holding slot for impersonation guidance orphaned by deleting the user
+	// message that owned it. Prefills the chat-bar's "Guide impersonation…"
+	// modal next time it's opened, then clears once the user impersonates.
+	pendingImpersonationGuidance: text('pending_impersonation_guidance'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`),
 	updatedAt: text('updated_at').default(sql`(datetime('now'))`)
 });

@@ -1124,13 +1124,17 @@
 			const needsUpdate = incoming.length !== currentList.length ||
 				incoming.some((m, idx) => {
 					const old = currentList[idx];
-					return !old || old.id !== m.id || old.content !== m.content || old.swipeIndex !== m.swipeIndex;
+					return !old || old.id !== m.id || old.content !== m.content || old.swipeIndex !== m.swipeIndex
+						|| (old.guidance ?? null) !== (m.guidance ?? null)
+						|| (old.impersonationGuidance ?? null) !== (m.impersonationGuidance ?? null);
 				});
 			if (needsUpdate) {
 				messageList = incoming.map(m => {
 					const old = oldById.get(m.id);
 					if (old && old.content === m.content && old.swipeIndex === m.swipeIndex &&
-						old.swipes.length === m.swipes.length && old.reasoning.length === m.reasoning.length) {
+						old.swipes.length === m.swipes.length && old.reasoning.length === m.reasoning.length &&
+						(old.guidance ?? null) === (m.guidance ?? null) &&
+						(old.impersonationGuidance ?? null) === (m.impersonationGuidance ?? null)) {
 						return old;
 					}
 					return m;
@@ -3111,7 +3115,14 @@
 			type="button"
 			onclick={() => {
 				showImpersonateMenu = false;
-				openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? '');
+				// If a previous impersonation swipe already has guidance, reuse
+				// it. Otherwise fall back to the chat's pending impersonation
+				// guidance (orphaned from a deleted user message), so the user
+				// doesn't lose what they wrote.
+				const seed = activeImpersonationSwipe?.guidance
+					?? chat.pendingImpersonationGuidance
+					?? '';
+				openGuideModal({ kind: 'impersonate' }, seed);
 			}}
 			disabled={isStreaming}
 			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"

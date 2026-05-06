@@ -131,11 +131,17 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		impSwipes = parseImpersonationSwipes(startRow?.impersonationSwipes);
 		impSwipes.push({ draft: '', reasoning: '', guidance: guidance?.trim() || undefined, generatedAt: null });
 		impIndex = impSwipes.length - 1;
+		// If the chat had a pending impersonation guidance (orphaned from a
+		// deleted user message), starting an impersonation consumes it —
+		// either it just got picked up via `guidance`, or the user moved on
+		// without it. Either way, clear it now.
+		const hadPending = !!(startRow?.pendingImpersonationGuidance && startRow.pendingImpersonationGuidance.trim());
 		db.update(chats)
 			.set({
 				impersonationStatus: 'streaming',
 				impersonationSwipes: JSON.stringify(impSwipes),
 				impersonationSwipeIndex: impIndex,
+				...(hadPending ? { pendingImpersonationGuidance: null } : {}),
 			})
 			.where(eq(chats.id, chatId))
 			.run();
@@ -146,6 +152,13 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			swipes: impSwipes,
 			swipeIndex: impIndex
 		});
+		if (hadPending) {
+			broadcast(chatUserId, {
+				type: 'chat:patched',
+				id: chatId,
+				patch: { pendingImpersonationGuidance: null }
+			});
+		}
 	}
 
 	const streamStartedAt = Date.now();

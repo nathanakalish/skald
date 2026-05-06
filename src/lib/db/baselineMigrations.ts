@@ -497,12 +497,15 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		}
 	}
 
-	// Chat-wide reply guidance (idempotent).
+	// Chat-wide reply guidance + pending impersonation guidance (idempotent).
 	{
 		const cols = sqlite.prepare("PRAGMA table_info('chats')").all() as { name: string }[];
 		const names = new Set(cols.map(c => c.name));
 		if (!names.has('reply_guidance')) {
 			sqlite.exec('ALTER TABLE chats ADD COLUMN reply_guidance TEXT');
+		}
+		if (!names.has('pending_impersonation_guidance')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN pending_impersonation_guidance TEXT');
 		}
 	}
 	
