@@ -75,20 +75,25 @@ export const POST: RequestHandler = async (event) => {
 
 		// If the client passed impersonation swipes, fold them into the
 		// user message so all generated drafts are preserved as swipes.
-		// The selected swipe wins for `content` / current `guidance`.
+		// The selected swipe wins for `content`.
 		let messageSwipes: string[] = [content];
 		let messageReasoning: string[] = [''];
 		let messageSwipeIndex = 0;
-		let messageGuidance: string | null = guidance ?? null;
+		// Reply guidance steers the assistant reply; it lives on the
+		// assistant message that gets produced (set by chatProcessor at
+		// insert time), not on the user message. Only impersonation
+		// guidance from the active swipe is preserved on the user row.
+		const messageGuidance: string | null = null;
+		let messageImpersonationGuidance: string | null = null;
 		if (impSwipes.length > 0) {
 			messageSwipes = impSwipes.map(s => s.draft ?? '');
 			messageReasoning = impSwipes.map(s => s.reasoning ?? '');
 			messageSwipeIndex = impIdx;
 			// Selected swipe's text is what we just sent; trust it.
 			messageSwipes[impIdx] = content;
-			// Per-swipe guidance lives at this entry; fall back to the
-			// guidance passed alongside the send for the active one.
-			messageGuidance = impSwipes[impIdx]?.guidance ?? guidance ?? null;
+			// Preserve the active swipe's impersonation guidance for later
+			// inspection — it has nothing to do with the reply prompt.
+			messageImpersonationGuidance = impSwipes[impIdx]?.guidance ?? null;
 		}
 
 		// Atomic: insert the message, advance the leaf, and clear the
@@ -104,6 +109,7 @@ export const POST: RequestHandler = async (event) => {
 					swipeIndex: messageSwipeIndex,
 					reasoning: JSON.stringify(messageReasoning),
 					guidance: messageGuidance,
+					impersonationGuidance: messageImpersonationGuidance,
 					parentId: userParentId,
 				})
 				.run();
@@ -134,11 +140,25 @@ export const POST: RequestHandler = async (event) => {
 
 	// Hand it off to the background queue.
 	try {
+		// On regenerate, reply guidance lives on the assistant message itself
+		// (the active leaf). Look it up here so guidance is always explicitly
+		// linked to the message it belongs to, never inferred ambiently.
+		let jobGuidance = guidance;
+		if (regenerate && !jobGuidance) {
+			const leafId = chat.activeLeafId;
+			if (leafId) {
+				const leaf = db.select({ role: messages.role, guidance: messages.guidance })
+					.from(messages).where(eq(messages.id, leafId)).get();
+				if (leaf?.role === 'assistant' && leaf.guidance && leaf.guidance.trim()) {
+					jobGuidance = leaf.guidance;
+				}
+			}
+		}
 		const jobId = enqueueJob({
 			chatId,
 			regenerate: !!regenerate,
 			greeting: !!greeting,
-			guidance,
+			guidance: jobGuidance,
 		});
 		return json({ ok: true, jobId, userMsgId });
 	} catch (err) {

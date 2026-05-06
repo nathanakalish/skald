@@ -105,9 +105,9 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ id, reasoning: reasoningSwipes, swipeIndex: idx });
 	}
 
-	// Edit per-user-message guidance text. Used by the assistant-reply
-	// Guide menu — updating the parent user message's guidance, then the
-	// caller usually re-runs the generation.
+	// Edit per-message reply guidance text. Used by the assistant-reply
+	// Guide menu — updates the assistant message's own guidance so future
+	// regenerations of THIS reply pick it up.
 	if ('guidance' in body) {
 		const raw = body.guidance;
 		const guidance = typeof raw === 'string' && raw.trim() ? raw : null;

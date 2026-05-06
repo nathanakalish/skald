@@ -175,6 +175,7 @@
 		parentId: number | null;
 		createdAt: string | null;
 		guidance: string | null;
+		impersonationGuidance: string | null;
 	}
 
 	// Monotonic negative IDs for client-side message placeholders. Real DB IDs are positive,
@@ -229,7 +230,8 @@
 			reasoning,
 			parentId: m.parentId ?? null,
 			createdAt: m.createdAt ?? null,
-			guidance: m.guidance ?? null
+			guidance: m.guidance ?? null,
+			impersonationGuidance: m.impersonationGuidance ?? null
 		};
 	}
 
@@ -465,8 +467,8 @@
 		| { kind: 'impersonate' }
 		| { kind: 'impersonateView' } // read-only: just shows the guidance that produced the active swipe
 		| { kind: 'send' }
-		| { kind: 'guideReply'; userMessageId: number } // PATCH user msg, then start a NEW reply
-		| { kind: 'editAssistantGuidance'; userMessageId: number }; // PATCH parent user msg, then regenerate the assistant
+		| { kind: 'guideReply'; userMessageId: number } // start a NEW reply with the guidance attached
+		| { kind: 'editAssistantGuidance'; assistantMessageId: number }; // PATCH the assistant's own guidance, then regenerate it
 	let showGuideModal = $state(false);
 	let guideModalText = $state('');
 	let guideModalTarget = $state<GuideTarget | null>(null);
@@ -649,9 +651,21 @@
 						}
 						knownMessageIds.add(msg.id);
 					} else if (msg.role === 'assistant' && streamingAssistantIdx < 0) {
-						// Cross-device: another device produced an assistant
-						// message; we have no in-flight stream of our own.
-						messageList = [...messageList, msg];
+						// Cross-device or post-finishStreaming: try to claim a
+						// leftover assistant placeholder first. Server-side regex
+						// scripts and image caching may have rewritten the content,
+						// so the strict content match above can miss — leading to
+						// the placeholder + new message both showing until refresh.
+						const orphanIdx = messageList.findIndex(
+							(m) => m.id < 0 && m.role === 'assistant'
+						);
+						if (orphanIdx >= 0) {
+							const next = messageList.slice();
+							next[orphanIdx] = { ...next[orphanIdx], ...msg };
+							messageList = next;
+						} else {
+							messageList = [...messageList, msg];
+						}
 						knownMessageIds.add(msg.id);
 					}
 					// Else: assistant placeholder is owned by our local
@@ -1269,7 +1283,8 @@
 			reasoning: [reasoning],
 			parentId: null,
 			createdAt: new Date().toISOString().replace('Z', ''),
-			guidance: null
+			guidance: null,
+			impersonationGuidance: null
 		};
 		messageList = [...messageList, placeholder];
 		streamingAssistantIdx = messageList.length - 1;
@@ -1310,7 +1325,7 @@
 		if (isTexting) await initialTypingDelay();
 
 		// Add placeholder for assistant
-		messageList = [{ id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: null }];
+		messageList = [{ id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: null, impersonationGuidance: null }];
 		totalMsgCount = 1;
 		streamingAssistantIdx = 0;
 		await scrollToBottom(true);
@@ -1518,7 +1533,7 @@
 		const optimisticGuidance = impSwipesSnap.length > 0
 			? (impSwipesSnap[impIdxSnap]?.guidance ?? guidance ?? null)
 			: (guidance ?? null);
-		messageList = [...messageList, { id: nextPlaceholderId(), role: 'user', content, swipes: optimisticSwipes, swipeIndex: optimisticIdx, reasoning: optimisticReasoning, parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: optimisticGuidance }];
+		messageList = [...messageList, { id: nextPlaceholderId(), role: 'user', content, swipes: optimisticSwipes, swipeIndex: optimisticIdx, reasoning: optimisticReasoning, parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: optimisticGuidance, impersonationGuidance: null }];
 		totalMsgCount++;
 		await scrollToBottom(true);
 
@@ -1526,7 +1541,7 @@
 		if (isTexting) await initialTypingDelay();
 
 		// Add placeholder for assistant
-		messageList = [...messageList, { id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: null }];
+		messageList = [...messageList, { id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: null, impersonationGuidance: null }];
 		totalMsgCount++;
 		streamingAssistantIdx = messageList.length - 1;
 		await scrollToBottom(true);
@@ -1750,17 +1765,18 @@
 		} else if (target.kind === 'send') {
 			sendMessage(text || undefined);
 		} else if (target.kind === 'editAssistantGuidance') {
-			// Update the parent user message's guidance and regenerate the
-			// existing assistant reply against the new guidance.
+			// Update the assistant message's own guidance and regenerate it
+			// against the new guidance. Future regenerations of this same
+			// assistant pick up the persisted value automatically.
 			try {
-				await fetch(`/api/messages/${target.userMessageId}`, {
+				await fetch(`/api/messages/${target.assistantMessageId}`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ guidance: text || null })
 				});
 				// Mirror locally so reopening the modal shows the *current*
-				// guidance, not the value from when the message was sent.
-				const idx = messageList.findIndex(m => m.id === target.userMessageId);
+				// guidance, not the value from when the message was first sent.
+				const idx = messageList.findIndex(m => m.id === target.assistantMessageId);
 				if (idx >= 0) {
 					messageList[idx] = { ...messageList[idx], guidance: text || null };
 				}
@@ -1768,20 +1784,8 @@
 			regenerateMessage();
 		} else if (target.kind === 'guideReply') {
 			// User message is the latest — there's no assistant reply yet.
-			// Persist the guidance on the user message, then kick off a new
-			// generation. We seed local streaming UI the same way sendMessage
-			// does so the user sees the typing bubble immediately.
-			try {
-				await fetch(`/api/messages/${target.userMessageId}`, {
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ guidance: text || null })
-				});
-				const idx = messageList.findIndex(m => m.id === target.userMessageId);
-				if (idx >= 0) {
-					messageList[idx] = { ...messageList[idx], guidance: text || null };
-				}
-			} catch { /* best effort */ }
+			// Just kick off generation with the guidance inline; chatProcessor
+			// will save it on the new assistant message at insert time.
 			await generateNextReply(text || undefined);
 		}
 	}
@@ -2834,7 +2838,7 @@
 		{@const menuHasBranches = menuSiblings && menuSiblings.total > 1}
 		{@const menuIsCompacted = isMessageCompacted(menuMsg.id)}
 		{@const menuParentMsg = menuMsgObj.parentId != null ? messageList.find((mm) => mm.id === menuMsgObj.parentId) : null}
-		{@const menuAssistantParentGuidance = menuMsg.role === 'assistant' ? (menuParentMsg?.guidance ?? null) : null}
+		{@const menuAssistantGuidance = menuMsg.role === 'assistant' ? (menuMsgObj.guidance ?? null) : null}
 		<div
 			data-msg-menu
 			class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
@@ -2921,14 +2925,13 @@
 					type="button"
 					onclick={() => {
 						const id = menuMsgObj.id;
-						const g = menuMsgObj.guidance ?? '';
 						closeMsgMenu();
-						openGuideModal({ kind: 'guideReply', userMessageId: id }, g);
+						openGuideModal({ kind: 'guideReply', userMessageId: id }, '');
 					}}
 					disabled={isStreaming}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
-					<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit reply guidance…' : 'Guide reply…'}
+					<Wand2 class="h-4 w-4" />Guide reply…
 				</button>
 				<button
 					type="button"
@@ -2948,14 +2951,14 @@
 				>
 					<Wand2 class="h-4 w-4" />{activeImpersonationSwipe?.guidance ? 'Edit impersonation guidance…' : 'Guide impersonation…'}
 				</button>
-			{:else if menuMsg.role === 'user' && !menuIsCompacted && menuMsgObj.guidance}
-				<!-- 2nd-latest user message: show the guidance read-only so the
-				     user can see what they used, but can't edit it now that the
-				     impersonation round has already produced a reply. -->
+			{:else if menuMsg.role === 'user' && !menuIsCompacted && menuMsgObj.impersonationGuidance}
+				<!-- 2nd-latest user message: show the impersonation guidance
+				     read-only so the user can see what they used, but can't edit
+				     it now that the impersonation round has already produced a reply. -->
 				<button
 					type="button"
 					onclick={() => {
-						const g = menuMsgObj.guidance ?? '';
+						const g = menuMsgObj.impersonationGuidance ?? '';
 						closeMsgMenu();
 						openGuideModal({ kind: 'impersonateView' }, g);
 					}}
@@ -2968,15 +2971,15 @@
 				<button
 					type="button"
 					onclick={() => {
-						const id = menuParentMsg!.id;
-						const g = menuAssistantParentGuidance ?? '';
+						const id = menuMsgObj.id;
+						const g = menuAssistantGuidance ?? '';
 						closeMsgMenu();
-						openGuideModal({ kind: 'editAssistantGuidance', userMessageId: id }, g);
+						openGuideModal({ kind: 'editAssistantGuidance', assistantMessageId: id }, g);
 					}}
 					disabled={isStreaming}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
-					<Wand2 class="h-4 w-4" />{menuAssistantParentGuidance ? 'Edit guidance…' : 'Guide reply…'}
+					<Wand2 class="h-4 w-4" />{menuAssistantGuidance ? 'Edit reply guidance…' : 'Guide reply…'}
 				</button>
 			{/if}
 			{#if !menuIsLast && !menuIsCompacted}

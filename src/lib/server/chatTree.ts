@@ -19,6 +19,7 @@ export interface RawMessageRow {
 	reasoning: string | null;
 	created_at: string;
 	guidance: string | null;
+	impersonation_guidance: string | null;
 }
 
 export interface MessageRow {
@@ -32,6 +33,7 @@ export interface MessageRow {
 	reasoning: string | null;
 	createdAt: string;
 	guidance: string | null;
+	impersonationGuidance: string | null;
 }
 
 function mapRow(r: RawMessageRow): MessageRow {
@@ -46,6 +48,7 @@ function mapRow(r: RawMessageRow): MessageRow {
 		reasoning: r.reasoning,
 		createdAt: r.created_at,
 		guidance: r.guidance ?? null,
+		impersonationGuidance: r.impersonation_guidance ?? null,
 	};
 }
 

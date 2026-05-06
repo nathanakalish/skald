@@ -21,6 +21,7 @@
 			overrideRenderMode: string | null;
 			useCharacterTheme: boolean;
 			allowExternalResources: boolean | null;
+			replyGuidance?: string | null;
 			overrideCompactionEnabled?: boolean | null;
 			overrideCompactionThreshold?: number | null;
 			overrideCompactionMode?: string | null;
@@ -46,6 +47,7 @@
 	let temperature = $state<number | null>(null);
 	let maxTokens = $state<number | null>(null);
 	let customPrompt = $state<string>('');
+	let replyGuidance = $state<string>('');
 	let personaId = $state<number | null>(null);
 	let includeReasoning = $state<boolean | null>(null);
 	let reasoningEffort = $state<string | null>(null);
@@ -94,6 +96,7 @@
 				temperature = chat.overrideTemperature ?? null;
 				maxTokens = chat.overrideMaxTokens ?? null;
 				customPrompt = chat.overrideCustomPrompt ?? '';
+				replyGuidance = chat.replyGuidance ?? '';
 				personaId = chat.overridePersonaId ?? null;
 				includeReasoning = chat.overrideIncludeReasoning ?? null;
 				reasoningEffort = chat.overrideReasoningEffort ?? null;
@@ -189,6 +192,7 @@
 					overrideTemperature: temperature,
 					overrideMaxTokens: maxTokens,
 					overrideCustomPrompt: customPrompt || null,
+					replyGuidance: replyGuidance.trim() ? replyGuidance : null,
 					overridePersonaId: personaId || null,
 					overrideIncludeReasoning: includeReasoning,
 					overrideReasoningEffort: reasoningEffort,
@@ -227,6 +231,7 @@
 		if (field === 'reasoningEffort') reasoningEffort = null;
 		if (field === 'renderMode') renderModeOverride = null;
 		if (field === 'customPrompt') customPrompt = '';
+		if (field === 'replyGuidance') replyGuidance = '';
 	}
 
 	const modal = createModalState(() => open);
@@ -575,6 +580,25 @@
 									placeholder="Override or extend the global custom instructions for this chat..."
 								></textarea>
 								<p class="text-xs text-muted-foreground">Replaces provider custom instructions when set. Supports &#123;&#123;char&#125;&#125; / &#123;&#123;user&#125;&#125; macros.</p>
+							</div>
+
+							<!-- Chat-wide reply guidance -->
+							<div class="space-y-1.5">
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-medium">Reply guidance</span>
+									{#if replyGuidance}
+										<button onclick={() => resetField('replyGuidance')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+											<RotateCcw class="h-3 w-3" /> Clear
+										</button>
+									{/if}
+								</div>
+								<textarea
+									bind:value={replyGuidance}
+									rows={3}
+									class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
+									placeholder="e.g. keep replies short, avoid breaking the fourth wall…"
+								></textarea>
+								<p class="text-xs text-muted-foreground">Sent on every reply in this chat, in addition to any per-message guidance.</p>
 							</div>
 
 							<!-- External Resources -->

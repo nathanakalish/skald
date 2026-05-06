@@ -492,6 +492,18 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		if (!names.has('guidance')) {
 			sqlite.exec('ALTER TABLE messages ADD COLUMN guidance TEXT');
 		}
+		if (!names.has('impersonation_guidance')) {
+			sqlite.exec('ALTER TABLE messages ADD COLUMN impersonation_guidance TEXT');
+		}
+	}
+
+	// Chat-wide reply guidance (idempotent).
+	{
+		const cols = sqlite.prepare("PRAGMA table_info('chats')").all() as { name: string }[];
+		const names = new Set(cols.map(c => c.name));
+		if (!names.has('reply_guidance')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN reply_guidance TEXT');
+		}
 	}
 	
 	// Add background_path column to characters (idempotent)

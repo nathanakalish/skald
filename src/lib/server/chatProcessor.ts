@@ -350,6 +350,12 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 						swipes: JSON.stringify([cachedResponse]),
 						swipeIndex: 0,
 						reasoning: JSON.stringify([fullReasoning || '']),
+						// Persist the per-message reply guidance (if any) on the
+						// assistant we just produced so future regenerations of
+						// THIS message pick it up automatically. Chat-wide guidance
+						// is intentionally not stored here — it's read live from
+						// the chat row.
+						guidance: opts.guidance && opts.guidance.trim() ? opts.guidance : null,
 						parentId: parentMsgId,
 					})
 					.run();

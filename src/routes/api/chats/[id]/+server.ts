@@ -104,6 +104,10 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 	if ('useCharacterTheme' in body) updates.useCharacterTheme = body.useCharacterTheme ? 1 : 0;
 	if ('allowExternalResources' in body) updates.allowExternalResources = body.allowExternalResources == null ? null : body.allowExternalResources ? 1 : 0;
+	if ('replyGuidance' in body) {
+		const v = body.replyGuidance;
+		updates.replyGuidance = typeof v === 'string' && v.trim() ? v : null;
+	}
 
 	if (Object.keys(updates).length > 0) {
 		db.update(chats).set(updates).where(eq(chats.id, id)).run();

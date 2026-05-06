@@ -105,6 +105,10 @@ export const chats = sqliteTable('chats', {
 	impersonationSwipes: text('impersonation_swipes'),
 	impersonationSwipeIndex: integer('impersonation_swipe_index').default(0),
 	impersonationStatus: text('impersonation_status'),
+	// Chat-wide reply guidance: appended to per-message reply guidance on
+	// every assistant generation. Lets the user set a persistent steer
+	// ("keep it short", "avoid X") without retyping it on every send.
+	replyGuidance: text('reply_guidance'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`),
 	updatedAt: text('updated_at').default(sql`(datetime('now'))`)
 });
@@ -123,6 +127,12 @@ export const messages = sqliteTable('messages', {
 	// message (or its current swipe). Lets the UI offer a Guide menu item
 	// on the assistant reply so the user can revise the guidance and re-run.
 	guidance: text('guidance'),
+	// User-message-only: the impersonation guidance that was used when the
+	// active impersonation draft for this message was generated. Kept
+	// separate from `guidance` so impersonation steering can never leak
+	// into the LLM's reply prompt — guidance is for the assistant reply,
+	// impersonationGuidance is just for inspection / re-impersonation.
+	impersonationGuidance: text('impersonation_guidance'),
 	parentId: integer('parent_id').references((): any => messages.id, { onDelete: 'set null' }),
 	createdAt: text('created_at').default(sql`(datetime('now'))`)
 });

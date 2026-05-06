@@ -124,22 +124,23 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 	// History trimming happens below via the token-budget pass; we don't apply
 	// a coarse message-count cap anymore.
 
-	// If caller didn't pass explicit guidance (e.g. plain regenerations), fall
-	// back to whatever guidance was saved on the last user message in the active
-	// path. This means "Edit guidance → Go" and subsequent regenerations all
-	// pick up the persisted value automatically without the client needing to
-	// thread it through again.
-	// Skip the fallback for impersonation: the active-path's user messages hold
-	// assistant-reply guidance, which has nothing to do with an impersonation.
-	let effectiveGuidance: string | undefined = opts.guidance?.trim() || undefined;
-	if (!effectiveGuidance && !opts.impersonate) {
-		for (let i = chatMessages.length - 1; i >= 0; i--) {
-			const m = chatMessages[i];
-			if (m.role === 'user') {
-				effectiveGuidance = m.guidance?.trim() || undefined;
-				break;
-			}
+	// Guidance is strictly tied to whatever the caller passed plus the
+	// chat-wide reply guidance, if any. We do NOT walk the active path
+	// looking for stored guidance — that would let stale reply guidance
+	// from an earlier turn silently steer later generations. Regenerate
+	// paths must explicitly look up the assistant message's guidance and
+	// forward it via opts.guidance.
+	let effectiveGuidance: string | undefined;
+	if (!opts.impersonate) {
+		const chatWide = chat.replyGuidance?.trim();
+		const perMessage = opts.guidance?.trim();
+		if (chatWide && perMessage) {
+			effectiveGuidance = `${chatWide}\n\n${perMessage}`;
+		} else {
+			effectiveGuidance = chatWide || perMessage || undefined;
 		}
+	} else {
+		effectiveGuidance = opts.guidance?.trim() || undefined;
 	}
 
 	// Lorebook
