@@ -5,23 +5,7 @@ import { chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
-
-interface ImpersonationSwipe {
-	draft: string;
-	reasoning: string;
-	guidance?: string;
-	generatedAt: string | null;
-}
-
-function parseSwipes(raw: string | null | undefined): ImpersonationSwipe[] {
-	if (!raw) return [];
-	try {
-		const parsed = JSON.parse(raw);
-		return Array.isArray(parsed) ? parsed : [];
-	} catch {
-		return [];
-	}
-}
+import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/impersonationSwipes.js';
 
 function normalizeSwipes(input: unknown): ImpersonationSwipe[] {
 	if (!Array.isArray(input)) return [];
@@ -77,7 +61,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
 
 	const body = await event.request.json();
-	const existing = parseSwipes(chat.impersonationSwipes);
+	const existing = parseImpersonationSwipes(chat.impersonationSwipes);
 	const swipes = body.swipes !== undefined ? normalizeSwipes(body.swipes) : existing;
 
 	let swipeIndex = Number.isFinite(body.swipeIndex) ? Number(body.swipeIndex) : (chat.impersonationSwipeIndex ?? 0);

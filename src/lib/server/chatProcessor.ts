@@ -29,27 +29,10 @@ import { resolveCompactionSettings, runCompaction, shouldAutoCompact } from './c
 /** Truncation length for the chat-tail "preview" snippet shown in the sidebar. */
 const PREVIEW_MAX_CHARS = 200;
 import { humanizeAnyError } from './chatErrors.js';
+import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/impersonationSwipes.js';
 
 export type { ProcessOptions };
-
-/** One impersonation swipe: a generated draft + the reasoning + the guidance
- * that produced it (if any). Stored as a JSON array on chats.impersonation_swipes. */
-export interface ImpersonationSwipe {
-	draft: string;
-	reasoning: string;
-	guidance?: string;
-	generatedAt: string | null;
-}
-
-function parseImpersonationSwipes(raw: string | null | undefined): ImpersonationSwipe[] {
-	if (!raw) return [];
-	try {
-		const parsed = JSON.parse(raw);
-		return Array.isArray(parsed) ? parsed : [];
-	} catch {
-		return [];
-	}
-}
+export type { ImpersonationSwipe };
 
 export interface ProcessCallbacks {
 	onTokenStats?: (stats: any) => void;
@@ -132,20 +115,27 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		data: { active: true, isRegenerate: !!regenerate, isImpersonation: !!impersonate, originalMessageId }
 	});
 
+	// In-memory snapshot of the impersonation swipes blob. We seed it from
+	// the chat row once at start, then mutate locally and persist on each
+	// transition (start → [abort/error →] done). Saves two SELECT+JSON.parse
+	// passes per impersonation vs. re-reading the row at each step.
+	let impSwipes: ImpersonationSwipe[] = [];
+	let impIndex = -1;
+
 	// Mark the chat as having an in-flight impersonation draft so reloads
 	// from any device know to expect/restore one. We append a fresh
 	// placeholder swipe so the streaming tokens have somewhere to land
 	// when the client refetches mid-stream; index points at it.
 	if (impersonate) {
 		const startRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
-		const startSwipes = parseImpersonationSwipes(startRow?.impersonationSwipes);
-		startSwipes.push({ draft: '', reasoning: '', guidance: guidance?.trim() || undefined, generatedAt: null });
-		const startIndex = startSwipes.length - 1;
+		impSwipes = parseImpersonationSwipes(startRow?.impersonationSwipes);
+		impSwipes.push({ draft: '', reasoning: '', guidance: guidance?.trim() || undefined, generatedAt: null });
+		impIndex = impSwipes.length - 1;
 		db.update(chats)
 			.set({
 				impersonationStatus: 'streaming',
-				impersonationSwipes: JSON.stringify(startSwipes),
-				impersonationSwipeIndex: startIndex,
+				impersonationSwipes: JSON.stringify(impSwipes),
+				impersonationSwipeIndex: impIndex,
 			})
 			.where(eq(chats.id, chatId))
 			.run();
@@ -153,8 +143,8 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			type: 'chat:impersonation',
 			chatId,
 			status: 'streaming',
-			swipes: startSwipes,
-			swipeIndex: startIndex
+			swipes: impSwipes,
+			swipeIndex: impIndex
 		});
 	}
 
@@ -251,12 +241,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			const partial = fullResponse || (!aborted && fullReasoning ? '⚠ No response returned' : '');
 			const status = aborted ? 'done' : 'error';
 			const finalStatus = (partial || fullReasoning) ? status : null;
-			const partialRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
-			const partialSwipes = parseImpersonationSwipes(partialRow?.impersonationSwipes);
-			const partialIndex = partialSwipes.length - 1;
-			if (partialIndex >= 0) {
-				partialSwipes[partialIndex] = {
-					...partialSwipes[partialIndex],
+			if (impIndex >= 0) {
+				impSwipes[impIndex] = {
+					...impSwipes[impIndex],
 					draft: partial,
 					reasoning: fullReasoning,
 					generatedAt: finalStatus ? generatedAt : null,
@@ -264,8 +251,8 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			}
 			db.update(chats)
 				.set({
-					impersonationSwipes: JSON.stringify(partialSwipes),
-					impersonationSwipeIndex: partialIndex >= 0 ? partialIndex : 0,
+					impersonationSwipes: JSON.stringify(impSwipes),
+					impersonationSwipeIndex: impIndex >= 0 ? impIndex : 0,
 					impersonationStatus: finalStatus,
 				})
 				.where(eq(chats.id, chatId))
@@ -273,8 +260,8 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			broadcast(chatUserId, {
 				type: 'chat:impersonation', chatId,
 				status: finalStatus,
-				swipes: partialSwipes,
-				swipeIndex: partialIndex >= 0 ? partialIndex : 0
+				swipes: impSwipes,
+				swipeIndex: impIndex >= 0 ? impIndex : 0
 			});
 		}
 		if (!aborted) {
@@ -382,12 +369,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	if (impersonate) {
 		const generatedAt = new Date().toISOString();
 		const status = (fullResponse || fullReasoning) ? 'done' : null;
-		const doneRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
-		const doneSwipes = parseImpersonationSwipes(doneRow?.impersonationSwipes);
-		const doneIndex = doneSwipes.length - 1;
-		if (doneIndex >= 0) {
-			doneSwipes[doneIndex] = {
-				...doneSwipes[doneIndex],
+		if (impIndex >= 0) {
+			impSwipes[impIndex] = {
+				...impSwipes[impIndex],
 				draft: fullResponse,
 				reasoning: fullReasoning,
 				generatedAt: status ? generatedAt : null,
@@ -395,8 +379,8 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		}
 		db.update(chats)
 			.set({
-				impersonationSwipes: JSON.stringify(doneSwipes),
-				impersonationSwipeIndex: doneIndex >= 0 ? doneIndex : 0,
+				impersonationSwipes: JSON.stringify(impSwipes),
+				impersonationSwipeIndex: impIndex >= 0 ? impIndex : 0,
 				impersonationStatus: status,
 			})
 			.where(eq(chats.id, chatId))
@@ -404,8 +388,8 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		broadcast(chatUserId, {
 			type: 'chat:impersonation', chatId,
 			status,
-			swipes: doneSwipes,
-			swipeIndex: doneIndex >= 0 ? doneIndex : 0
+			swipes: impSwipes,
+			swipeIndex: impIndex >= 0 ? impIndex : 0
 		});
 	}
 

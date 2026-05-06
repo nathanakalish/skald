@@ -16,6 +16,7 @@
 	import { generationsStore } from '$lib/stores/generations.svelte.js';
 	import { LinkValidator } from '$lib/chat/linkValidation.svelte.js';
 	import { TextareaAutosizer } from '$lib/chat/textareaAutosize.svelte.js';
+	import { parseImpersonationSwipes, type ImpersonationSwipe as ImpersonationSwipeEntry } from '$lib/chat/impersonationSwipes.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
 
@@ -211,21 +212,6 @@
 			}
 		}
 		return local;
-	}
-
-	interface ImpersonationSwipeEntry {
-		draft: string;
-		reasoning: string;
-		guidance?: string;
-		generatedAt: string | null;
-	}
-
-	function parseImpersonationSwipes(raw: unknown): ImpersonationSwipeEntry[] {
-		if (typeof raw !== 'string' || !raw) return [];
-		try {
-			const parsed = JSON.parse(raw);
-			return Array.isArray(parsed) ? parsed : [];
-		} catch { return []; }
 	}
 
 	function parseMessage(m: any): Message {
@@ -447,7 +433,9 @@
 	);
 	let chatImpersonationSwipeIndex = $state<number>(
 		untrack(() => Math.max(0, Math.min(
-			parseImpersonationSwipes((chat as any).impersonationSwipes).length - 1,
+			// Reuse the parse from the line above — avoids a second JSON.parse
+			// of the same blob on mount.
+			chatImpersonationSwipes.length - 1,
 			(chat as any).impersonationSwipeIndex ?? 0
 		)))
 	);
@@ -557,7 +545,6 @@
 		if (!isImpersonating) {
 			abortAnimating = true;
 		}
-		wasAbortedManually = true;
 		wasAbortedManually = true;
 
 		try {
@@ -804,11 +791,9 @@
 		if (streamIsRegenerate) {
 			await tick();
 		}
-		streamingAssistantIdx = -1;
+		clearStreamBubbleTarget();
 		streamAccumulated = '';
 		streamAccumulatedReasoning = '';
-		streamIsRegenerate = false;
-		streamOriginalMessage = null;
 		generationsStore.clear(chat.id);
 		wasAbortedManually = false;
 		userScrolledAway = false;
@@ -1087,11 +1072,9 @@
 			isStreaming = false;
 			isReasoning = false;
 			streamingReasoning = '';
-			streamingAssistantIdx = -1;
+			clearStreamBubbleTarget();
 			streamAccumulated = '';
 			streamAccumulatedReasoning = '';
-			streamIsRegenerate = false;
-			streamOriginalMessage = null;
 			isImpersonating = false;
 			{
 				const swipes = parseImpersonationSwipes((chat as any).impersonationSwipes);
@@ -1169,9 +1152,7 @@
 						// message bubble. No placeholder needed. Clear any
 						// stale assistant-bubble streaming state so live
 						// token mirroring can't bleed into the previous reply.
-						streamingAssistantIdx = -1;
-						streamIsRegenerate = false;
-						streamOriginalMessage = null;
+						clearStreamBubbleTarget();
 						isImpersonating = true;
 						input = gen.accumulated;
 						impersonateReasoning = gen.accumulatedReasoning;
@@ -1292,6 +1273,16 @@
 		};
 		messageList = [...messageList, placeholder];
 		streamingAssistantIdx = messageList.length - 1;
+	}
+
+	// Clear the assistant-bubble streaming target. Called whenever we're
+	// done with (or cancelling) a stream that was painting into a specific
+	// message slot. Doesn't touch token buffers — finishStreaming and the
+	// pre-stream setup do that explicitly when needed.
+	function clearStreamBubbleTarget() {
+		streamingAssistantIdx = -1;
+		streamIsRegenerate = false;
+		streamOriginalMessage = null;
 	}
 
 	// Persist input draft per conversation
@@ -1615,9 +1606,7 @@
 		// Defensive: blow away any stale assistant-bubble stream state so
 		// the impersonation tokens can't be mirrored onto the previous
 		// reply (which would render the regen blur+spinner overlay there).
-		streamingAssistantIdx = -1;
-		streamIsRegenerate = false;
-		streamOriginalMessage = null;
+		clearStreamBubbleTarget();
 		streamAccumulated = '';
 		streamAccumulatedReasoning = '';
 		try {
@@ -2202,17 +2191,13 @@
 				const err = await response.json();
 				messageList[lastAssistantIdx] = { ...streamOriginalMessage!, content: `Error: ${err.error || 'Failed to regenerate'}` };
 				isStreaming = false;
-				streamingAssistantIdx = -1;
-				streamIsRegenerate = false;
-				streamOriginalMessage = null;
+				clearStreamBubbleTarget();
 			}
 			// SSE events will drive the rest
 		} catch (err) {
 			messageList[lastAssistantIdx] = { ...streamOriginalMessage!, content: `Error: ${err instanceof Error ? err.message : 'Network error'}` };
 		 isStreaming = false;
-			streamingAssistantIdx = -1;
-			streamIsRegenerate = false;
-			streamOriginalMessage = null;
+			clearStreamBubbleTarget();
 		}
 	}
 </script>

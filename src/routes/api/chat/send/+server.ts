@@ -48,7 +48,10 @@ export const POST: RequestHandler = async (event) => {
 				guidance: typeof e.guidance === 'string' && e.guidance.trim() ? e.guidance : undefined,
 			}));
 	}
-	let impIdx = Number.isFinite(rawImpersonationIdx) ? Math.max(0, Math.min(impSwipes.length - 1, Number(rawImpersonationIdx))) : 0;
+	let impIdx = 0;
+	if (impSwipes.length > 0 && Number.isFinite(rawImpersonationIdx)) {
+		impIdx = Math.max(0, Math.min(impSwipes.length - 1, Number(rawImpersonationIdx)));
+	}
 
 	// Save the user message (skip on regenerate / greeting).
 	let userMsgId: number | null = null;

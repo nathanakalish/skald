@@ -131,10 +131,16 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 	// thread it through again.
 	// Skip the fallback for impersonation: the active-path's user messages hold
 	// assistant-reply guidance, which has nothing to do with an impersonation.
-	const effectiveGuidance: string | undefined = opts.guidance?.trim() ||
-		(!opts.impersonate
-			? ([...chatMessages].reverse().find(m => m.role === 'user')?.guidance ?? undefined) || undefined
-			: undefined);
+	let effectiveGuidance: string | undefined = opts.guidance?.trim() || undefined;
+	if (!effectiveGuidance && !opts.impersonate) {
+		for (let i = chatMessages.length - 1; i >= 0; i--) {
+			const m = chatMessages[i];
+			if (m.role === 'user') {
+				effectiveGuidance = m.guidance?.trim() || undefined;
+				break;
+			}
+		}
+	}
 
 	// Lorebook
 	const lorebookMatches = matchLorebookEntries(character.id, chatId, chatMessages);
