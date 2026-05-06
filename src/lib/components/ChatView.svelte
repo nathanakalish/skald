@@ -1784,8 +1784,22 @@
 			regenerateMessage();
 		} else if (target.kind === 'guideReply') {
 			// User message is the latest — there's no assistant reply yet.
-			// Just kick off generation with the guidance inline; chatProcessor
-			// will save it on the new assistant message at insert time.
+			// Persist the guidance on the user message first (so an empty
+			// submit clears any stale guidance left over from a deleted
+			// assistant), then kick off generation. chatProcessor will
+			// move the guidance onto the new assistant and clear it from
+			// the user message.
+			try {
+				await fetch(`/api/messages/${target.userMessageId}`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ guidance: text || null })
+				});
+				const idx = messageList.findIndex(m => m.id === target.userMessageId);
+				if (idx >= 0) {
+					messageList[idx] = { ...messageList[idx], guidance: text || null };
+				}
+			} catch { /* best effort */ }
 			await generateNextReply(text || undefined);
 		}
 	}
@@ -2925,13 +2939,14 @@
 					type="button"
 					onclick={() => {
 						const id = menuMsgObj.id;
+						const g = menuMsgObj.guidance ?? '';
 						closeMsgMenu();
-						openGuideModal({ kind: 'guideReply', userMessageId: id }, '');
+						openGuideModal({ kind: 'guideReply', userMessageId: id }, g);
 					}}
 					disabled={isStreaming}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
-					<Wand2 class="h-4 w-4" />Guide reply…
+					<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit reply guidance…' : 'Guide reply…'}
 				</button>
 				<button
 					type="button"

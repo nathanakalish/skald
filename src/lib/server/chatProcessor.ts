@@ -341,6 +341,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		} else {
 			// Wrap insert + activeLeafId update in a tx so a crash between the two
 			// can't leave the chat pointing at a deleted message id (M1).
+			const newGuidance = opts.guidance && opts.guidance.trim() ? opts.guidance : null;
 			const assistantMsgId = rawDb.transaction(() => {
 				const result = db.insert(messages)
 					.values({
@@ -355,18 +356,34 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 						// THIS message pick it up automatically. Chat-wide guidance
 						// is intentionally not stored here — it's read live from
 						// the chat row.
-						guidance: opts.guidance && opts.guidance.trim() ? opts.guidance : null,
+						guidance: newGuidance,
 						parentId: parentMsgId,
 					})
 					.run();
 
 				const id = Number(result.lastInsertRowid);
 				db.update(chats).set({ activeLeafId: id, updatedAt: sql`datetime('now')` }).where(eq(chats.id, chatId)).run();
+				// Pending guidance on the parent user message (left there by a
+				// prior assistant deletion) has now been consumed by the new
+				// reply — clear it so it doesn't get reapplied if the user
+				// keeps the new reply and later sends another turn.
+				if (newGuidance && parentMsgId != null) {
+					db.update(messages)
+						.set({ guidance: null })
+						.where(and(eq(messages.id, parentMsgId), eq(messages.role, 'user')))
+						.run();
+				}
 				return id;
 			})();
 			bumpChatTail(chatId, cachedResponse, 'assistant');
 			const row = db.select().from(messages).where(eq(messages.id, assistantMsgId)).get();
 			if (row) broadcast(chatUserId, { type: 'message:created', chatId, message: row as any });
+			if (newGuidance && parentMsgId != null) {
+				broadcast(chatUserId, {
+					type: 'message:patched', chatId, id: parentMsgId,
+					patch: { guidance: null }
+				});
+			}
 		}
 	}
 

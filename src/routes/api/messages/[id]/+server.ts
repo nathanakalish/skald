@@ -164,6 +164,26 @@ export const DELETE: RequestHandler = async (event) => {
 			.filter((m) => m.parentId === id)
 			.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
 
+		// If we're deleting an assistant reply that carried reply guidance,
+		// hand the guidance back to the parent user message so the next
+		// "Guide reply…" picks it up and the user doesn't lose what they
+		// wrote. Skip if the parent already has its own pending guidance.
+		if (message.role === 'assistant' && message.guidance && message.guidance.trim() && message.parentId != null) {
+			const parent = allMsgs.find(m => m.id === message.parentId);
+			if (parent && parent.role === 'user' && !(parent.guidance && parent.guidance.trim())) {
+				db.update(messages)
+					.set({ guidance: message.guidance })
+					.where(eq(messages.id, parent.id))
+					.run();
+				broadcast(user.id, {
+					type: 'message:patched',
+					chatId: message.chatId,
+					id: parent.id,
+					patch: { guidance: message.guidance }
+				});
+			}
+		}
+
 		// Promote direct children to this message's parent so deleting one node
 		// keeps the surrounding branch intact.
 		for (const child of directChildren) {
@@ -212,6 +232,26 @@ export const DELETE: RequestHandler = async (event) => {
 	// Thread delete: remove this message and all descendants.
 	const descendantIds = getDescendantIds(id, message.chatId);
 	const allIdsToDelete = [id, ...descendantIds];
+
+	// Same guidance hand-off as the single-delete path: if the root of the
+	// deleted thread is an assistant reply with guidance, push it back onto
+	// the parent user message so it survives the deletion.
+	if (message.role === 'assistant' && message.guidance && message.guidance.trim() && message.parentId != null) {
+		const parent = db.select().from(messages).where(eq(messages.id, message.parentId)).get();
+		if (parent && parent.role === 'user' && !(parent.guidance && parent.guidance.trim())) {
+			db.update(messages)
+				.set({ guidance: message.guidance })
+				.where(eq(messages.id, parent.id))
+				.run();
+			broadcast(user.id, {
+				type: 'message:patched',
+				chatId: message.chatId,
+				id: parent.id,
+				patch: { guidance: message.guidance }
+			});
+		}
+	}
+
 	for (const delId of allIdsToDelete) {
 		db.delete(messages).where(eq(messages.id, delId)).run();
 	}
