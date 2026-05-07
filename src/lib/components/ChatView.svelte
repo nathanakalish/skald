@@ -455,7 +455,25 @@
 			lastSyncedImpersonationRaw = raw;
 			const parsed = parseImpersonationSwipes(raw);
 			chatImpersonationSwipes = parsed;
-			chatImpersonationSwipeIndex = Math.max(0, Math.min(parsed.length - 1, idx));
+			const newIdx = Math.max(0, Math.min(parsed.length - 1, idx));
+			chatImpersonationSwipeIndex = newIdx;
+
+			// Push the active swipe's draft into the textarea when it
+			// represents a fresh server-side change — e.g. a user message
+			// just got "unsent" via revertLeafUserMessages and its content
+			// belongs in the chat bar now. Use the same generatedAt-marker
+			// trick as pickDraftForChat so we only do this once per swipe.
+			const status = (chat as any).impersonationStatus as string | null | undefined;
+			const active = parsed[newIdx];
+			if (status !== 'streaming' && active?.generatedAt && typeof localStorage !== 'undefined') {
+				const seenKey = `skald-impersonation-seen-${chat.id}`;
+				const seen = localStorage.getItem(seenKey);
+				if (seen !== active.generatedAt) {
+					localStorage.setItem(seenKey, active.generatedAt);
+					input = active.draft ?? '';
+					impersonateReasoning = active.reasoning ?? '';
+				}
+			}
 		}
 	});
 	let activeImpersonationSwipe = $derived(chatImpersonationSwipes[chatImpersonationSwipeIndex]);
@@ -3115,14 +3133,7 @@
 			type="button"
 			onclick={() => {
 				showImpersonateMenu = false;
-				// If a previous impersonation swipe already has guidance, reuse
-				// it. Otherwise fall back to the chat's pending impersonation
-				// guidance (orphaned from a deleted user message), so the user
-				// doesn't lose what they wrote.
-				const seed = activeImpersonationSwipe?.guidance
-					?? chat.pendingImpersonationGuidance
-					?? '';
-				openGuideModal({ kind: 'impersonate' }, seed);
+				openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? '');
 			}}
 			disabled={isStreaming}
 			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"

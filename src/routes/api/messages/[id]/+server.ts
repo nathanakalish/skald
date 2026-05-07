@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
+import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -164,44 +165,6 @@ export const DELETE: RequestHandler = async (event) => {
 			.filter((m) => m.parentId === id)
 			.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
 
-		// If we're deleting an assistant reply that carried reply guidance,
-		// hand the guidance back to the parent user message so the next
-		// "Guide reply…" picks it up and the user doesn't lose what they
-		// wrote. Skip if the parent already has its own pending guidance.
-		if (message.role === 'assistant' && message.guidance && message.guidance.trim() && message.parentId != null) {
-			const parent = allMsgs.find(m => m.id === message.parentId);
-			if (parent && parent.role === 'user' && !(parent.guidance && parent.guidance.trim())) {
-				db.update(messages)
-					.set({ guidance: message.guidance })
-					.where(eq(messages.id, parent.id))
-					.run();
-				broadcast(user.id, {
-					type: 'message:patched',
-					chatId: message.chatId,
-					id: parent.id,
-					patch: { guidance: message.guidance }
-				});
-			}
-		}
-
-		// Symmetric move for impersonation: if a user message carrying
-		// impersonation guidance is being deleted, stash it on the chat row
-		// so the chat-bar's "Guide impersonation…" modal prefills with it next
-		// time. Skip if the chat already has one queued.
-		if (message.role === 'user' && message.impersonationGuidance && message.impersonationGuidance.trim()) {
-			if (!(ownerChat.pendingImpersonationGuidance && ownerChat.pendingImpersonationGuidance.trim())) {
-				db.update(chats)
-					.set({ pendingImpersonationGuidance: message.impersonationGuidance })
-					.where(eq(chats.id, message.chatId))
-					.run();
-				broadcast(user.id, {
-					type: 'chat:patched',
-					id: message.chatId,
-					patch: { pendingImpersonationGuidance: message.impersonationGuidance }
-				});
-			}
-		}
-
 		// Promote direct children to this message's parent so deleting one node
 		// keeps the surrounding branch intact.
 		for (const child of directChildren) {
@@ -244,46 +207,18 @@ export const DELETE: RequestHandler = async (event) => {
 		db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
 		recomputeChatTail(message.chatId);
 		broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: [id] });
+
+		// If the new leaf is a user message, unsend it back into the chat bar.
+		// Helper handles its own broadcasts + tail recompute.
+		const reverted = revertLeafUserMessages(message.chatId, user.id);
+		if (reverted.changed) newLeafId = reverted.newActiveLeafId;
+
 		return json({ success: true, newActiveLeafId: newLeafId, mode: deleteMode });
 	}
 
 	// Thread delete: remove this message and all descendants.
 	const descendantIds = getDescendantIds(id, message.chatId);
 	const allIdsToDelete = [id, ...descendantIds];
-
-	// Same guidance hand-off as the single-delete path: if the root of the
-	// deleted thread is an assistant reply with guidance, push it back onto
-	// the parent user message so it survives the deletion.
-	if (message.role === 'assistant' && message.guidance && message.guidance.trim() && message.parentId != null) {
-		const parent = db.select().from(messages).where(eq(messages.id, message.parentId)).get();
-		if (parent && parent.role === 'user' && !(parent.guidance && parent.guidance.trim())) {
-			db.update(messages)
-				.set({ guidance: message.guidance })
-				.where(eq(messages.id, parent.id))
-				.run();
-			broadcast(user.id, {
-				type: 'message:patched',
-				chatId: message.chatId,
-				id: parent.id,
-				patch: { guidance: message.guidance }
-			});
-		}
-	}
-
-	// Symmetric for impersonation guidance on the deleted-thread root.
-	if (message.role === 'user' && message.impersonationGuidance && message.impersonationGuidance.trim()) {
-		if (!(ownerChat.pendingImpersonationGuidance && ownerChat.pendingImpersonationGuidance.trim())) {
-			db.update(chats)
-				.set({ pendingImpersonationGuidance: message.impersonationGuidance })
-				.where(eq(chats.id, message.chatId))
-				.run();
-			broadcast(user.id, {
-				type: 'chat:patched',
-				id: message.chatId,
-				patch: { pendingImpersonationGuidance: message.impersonationGuidance }
-			});
-		}
-	}
 
 	for (const delId of allIdsToDelete) {
 		db.delete(messages).where(eq(messages.id, delId)).run();
@@ -319,10 +254,16 @@ export const DELETE: RequestHandler = async (event) => {
 		db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
 		recomputeChatTail(message.chatId);
 		broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: allIdsToDelete });
+
+		const reverted = revertLeafUserMessages(message.chatId, user.id);
+		if (reverted.changed) newLeafId = reverted.newActiveLeafId;
+
 		return json({ success: true, newActiveLeafId: newLeafId, mode: deleteMode });
 	}
 
 	recomputeChatTail(message.chatId);
 	broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: allIdsToDelete });
-	return json({ success: true, newActiveLeafId: message.parentId ?? null, mode: deleteMode });
+	const reverted = revertLeafUserMessages(message.chatId, user.id);
+	const finalLeaf = reverted.changed ? reverted.newActiveLeafId : (message.parentId ?? null);
+	return json({ success: true, newActiveLeafId: finalLeaf, mode: deleteMode });
 };

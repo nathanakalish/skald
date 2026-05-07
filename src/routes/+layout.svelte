@@ -550,12 +550,6 @@
 						impersonationStatus: payload?.status ?? null,
 					}
 				};
-			} else if (event.type === 'chat:patched' && payload?.id === chatData.chat?.id && payload?.patch) {
-				// Generic chat-row field patch (e.g. pendingImpersonationGuidance).
-				chatData = {
-					...chatData,
-					chat: { ...chatData.chat, ...payload.patch }
-				};
 			}
 		}
 

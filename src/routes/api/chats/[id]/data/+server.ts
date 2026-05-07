@@ -6,6 +6,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { cacheImage } from '$lib/services/imageCache.js';
 import { requireUser } from '$lib/server/auth.js';
 import { loadActivePath, loadSiblings, type MessageRow } from '$lib/server/chatTree.js';
+import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 import { logger } from '$lib/server/logger.js';
 
 export const GET: RequestHandler = async (event) => {
@@ -16,8 +17,16 @@ export const GET: RequestHandler = async (event) => {
 	const limit = limitParam ? Math.max(1, Number(limitParam)) : null;
 	const offset = offsetParam ? Math.max(0, Number(offsetParam)) : 0;
 
-	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
+	let chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+
+	// Lazy migration: any leaf user message gets unsent into the chat bar.
+	// Re-read the chat row if anything changed so the impersonation snapshot
+	// we ship to the client is current.
+	const reverted = revertLeafUserMessages(chatId, user.id);
+	if (reverted.changed) {
+		chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get()!;
+	}
 
 	const character = db
 		.select()
