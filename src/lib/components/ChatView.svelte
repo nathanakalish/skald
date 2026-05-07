@@ -2508,16 +2508,16 @@
 								</div>
 							{:else if isStreaming && !isImpersonating && i === messageList.length - 1 && message.role === 'assistant' && !streamIsRegenerate && (!message.content || isReasoning)}
 								{#if !message.content}
-									<div class="flex items-center justify-center gap-1.5 py-1 px-1 min-h-[28px]">
-										<span class="typing-dot h-2 w-2 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-2 w-2 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-2 w-2 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
+									<div class="flex items-center justify-center gap-2.5 py-2 px-1 min-h-[36px]">
+										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 0ms"></span>
+										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 160ms"></span>
+										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 320ms"></span>
 										{#if isReasoning}
 											<button
 												onclick={() => { reasoningModalIsImpersonation = false; reasoningModalIsLive = true; showReasoningModal = true; }}
-												class="ml-1 flex items-center justify-center rounded-md p-0.5 text-muted-foreground/50 hover:text-primary hover:bg-accent transition-colors"
+												class="ml-1 flex items-center justify-center rounded-md p-0.5 text-muted-foreground/60 hover:text-primary hover:bg-accent transition-colors"
 											>
-												<Brain class="h-4 w-4" />
+												<Brain class="h-5 w-5" />
 											</button>
 										{/if}
 									</div>
@@ -2535,10 +2535,10 @@
 									>
 										{@html renderContent(message.content, true)}
 									</div>
-									<div class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground/60">
-										<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 320ms"></span>
+									<div class="mt-1 flex items-center gap-2.5 text-xs text-muted-foreground/60">
+										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
+										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
+										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
 										<button
 										onclick={() => { reasoningModalIsLive = true; showReasoningModal = true; }}
 										class="ml-0.5 flex items-center gap-1 rounded-lg px-2 py-1.5 hover:text-primary hover:bg-accent transition-colors"
@@ -2573,10 +2573,10 @@
 							{/if}
 							{#if reformattingMessageId === message.id || (streamIsRegenerate && streamingAssistantIdx === i)}
 								<div class="reformatting-overlay pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-[inherit] bg-black/10 backdrop-blur-[1px]">
-									<div class="flex items-center justify-center gap-1.5 drop-shadow">
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-foreground" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-foreground" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-foreground" style="animation-delay: 320ms"></span>
+									<div class="flex items-center justify-center gap-2.5 drop-shadow">
+										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 0ms"></span>
+										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 160ms"></span>
+										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 320ms"></span>
 									</div>
 									{#if streamIsRegenerate && streamingAssistantIdx === i && (isReasoning || streamAccumulatedReasoning)}
 										<button
@@ -2648,16 +2648,25 @@
 					rows="1"
 					class="block w-full resize-none rounded-3xl border border-input bg-card px-4 py-2.5 text-sm leading-normal placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
 				></textarea>
-				{#if isImpersonating && isReasoning}
-					<button
-						onclick={() => { reasoningModalIsImpersonation = true; reasoningModalIsLive = true; showReasoningModal = true; }}
-						class="absolute inset-0 flex items-center justify-center gap-1.5 rounded-3xl text-xs text-muted-foreground/60 hover:text-primary hover:bg-accent/80 transition-colors"
-					>
-						<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 0ms"></span>
-						<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 160ms"></span>
-						<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 320ms"></span>
-						<Brain class="h-3.5 w-3.5" />
-					</button>
+				{#if isImpersonating}
+					{#if isReasoning}
+						<button
+							onclick={() => { reasoningModalIsImpersonation = true; reasoningModalIsLive = true; showReasoningModal = true; }}
+							class="absolute inset-0 flex items-center justify-center gap-2 rounded-3xl text-xs text-muted-foreground/70 hover:text-primary hover:bg-accent/80 transition-colors"
+						>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
+							<Brain class="h-4 w-4" />
+						</button>
+					{:else}
+						<!-- Waiting for first token: show plain dots, no brain -->
+						<div class="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-3xl">
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
+						</div>
+					{/if}
 				{/if}
 			</div>
 			<button
@@ -3222,16 +3231,16 @@
 
 <style>
 	.typing-dot {
-		animation: typing-bounce 1.4s ease-in-out infinite;
+		animation: typing-bounce 1.2s ease-in-out infinite;
 	}
 
 	@keyframes typing-bounce {
 		0%, 60%, 100% {
 			transform: translateY(0);
-			opacity: 0.4;
+			opacity: 0.35;
 		}
 		30% {
-			transform: translateY(-4px);
+			transform: translateY(-6px);
 			opacity: 1;
 		}
 	}
