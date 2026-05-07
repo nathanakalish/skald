@@ -2648,7 +2648,7 @@
 					rows="1"
 					class="block w-full resize-none rounded-3xl border border-input bg-card px-4 py-2.5 text-sm leading-normal placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
 				></textarea>
-				{#if isImpersonating}
+				{#if isImpersonating && !input}
 					{#if isReasoning}
 						<button
 							onclick={() => { reasoningModalIsImpersonation = true; reasoningModalIsLive = true; showReasoningModal = true; }}
