@@ -19,6 +19,10 @@ export interface ProcessOptions {
 	regenerate?: boolean;
 	greeting?: boolean;
 	impersonate?: boolean;
+	/** Optional guided-reply text the user attached. Injected as a system
+	 * instruction so the LLM treats it as out-of-band steering rather than
+	 * something the persona would say. */
+	guidance?: string;
 }
 
 /**
@@ -120,6 +124,25 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 	// History trimming happens below via the token-budget pass; we don't apply
 	// a coarse message-count cap anymore.
 
+	// Guidance is strictly tied to whatever the caller passed plus the
+	// chat-wide reply guidance, if any. We do NOT walk the active path
+	// looking for stored guidance — that would let stale reply guidance
+	// from an earlier turn silently steer later generations. Regenerate
+	// paths must explicitly look up the assistant message's guidance and
+	// forward it via opts.guidance.
+	let effectiveGuidance: string | undefined;
+	if (!opts.impersonate) {
+		const chatWide = chat.replyGuidance?.trim();
+		const perMessage = opts.guidance?.trim();
+		if (chatWide && perMessage) {
+			effectiveGuidance = `${chatWide}\n\n${perMessage}`;
+		} else {
+			effectiveGuidance = chatWide || perMessage || undefined;
+		}
+	} else {
+		effectiveGuidance = opts.guidance?.trim() || undefined;
+	}
+
 	// Lorebook
 	const lorebookMatches = matchLorebookEntries(character.id, chatId, chatMessages);
 
@@ -148,6 +171,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 		isGreeting: !!opts.greeting,
 		isRegenerate: !!opts.regenerate,
 		isImpersonate: !!opts.impersonate,
+		guidance: effectiveGuidance,
 		customPrompt,
 		lorebookDepth,
 		renderMode,
@@ -181,6 +205,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 				isGreeting: !!opts.greeting,
 				isRegenerate: !!opts.regenerate,
 				isImpersonate: !!opts.impersonate,
+				guidance: effectiveGuidance,
 				customPrompt,
 				lorebookDepth,
 				renderMode,

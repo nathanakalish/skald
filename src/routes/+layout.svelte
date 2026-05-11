@@ -539,16 +539,15 @@
 					chatData = { ...chatData, messages: next };
 				}
 			} else if (event.type === 'chat:impersonation') {
-				// Mirror the persisted impersonation draft into the cached chat
-				// row so a remount picks it up without a round-trip.
+				// Mirror the persisted impersonation swipes into the cached
+				// chat row so a remount picks them up without a round-trip.
 				chatData = {
 					...chatData,
 					chat: {
 						...chatData.chat,
-						impersonationDraft: payload?.draft ?? null,
-						impersonationReasoning: payload?.reasoning ?? null,
+						impersonationSwipes: payload?.swipes ? JSON.stringify(payload.swipes) : null,
+						impersonationSwipeIndex: payload?.swipeIndex ?? 0,
 						impersonationStatus: payload?.status ?? null,
-						impersonationGeneratedAt: payload?.generatedAt ?? null,
 					}
 				};
 			}
@@ -572,6 +571,15 @@
 					const newSet = new Set(streamingChats);
 					newSet.delete(chatId);
 					streamingChats = newSet;
+				}
+				// Impersonation aborts emit `streaming active:false` but
+				// no `complete` (since there's no assistant message to
+				// finalize). Without this, the generation stays in the
+				// 'streaming' status forever and ChatView's live-mirror
+				// never flips `isImpersonating` back off — leaving the
+				// stop button stuck. Flag it done here so the mirror runs.
+				if (event.data.isImpersonation) {
+					generationsStore.complete(chatId);
 				}
 			}
 		}

@@ -29,8 +29,10 @@ import { resolveCompactionSettings, runCompaction, shouldAutoCompact } from './c
 /** Truncation length for the chat-tail "preview" snippet shown in the sidebar. */
 const PREVIEW_MAX_CHARS = 200;
 import { humanizeAnyError } from './chatErrors.js';
+import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/impersonationSwipes.js';
 
 export type { ProcessOptions };
+export type { ImpersonationSwipe };
 
 export interface ProcessCallbacks {
 	onTokenStats?: (stats: any) => void;
@@ -45,7 +47,7 @@ export interface ProcessCallbacks {
  * Runs in the background (no HTTP response to write back to).
  */
 export async function processChat(opts: ProcessOptions, signal?: AbortSignal): Promise<void> {
-	const { chatId, regenerate, greeting, impersonate } = opts;
+	const { chatId, regenerate, greeting, impersonate, guidance } = opts;
 	void greeting;
 
 	let ctx;
@@ -113,17 +115,36 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		data: { active: true, isRegenerate: !!regenerate, isImpersonation: !!impersonate, originalMessageId }
 	});
 
+	// In-memory snapshot of the impersonation swipes blob. We seed it from
+	// the chat row once at start, then mutate locally and persist on each
+	// transition (start → [abort/error →] done). Saves two SELECT+JSON.parse
+	// passes per impersonation vs. re-reading the row at each step.
+	let impSwipes: ImpersonationSwipe[] = [];
+	let impIndex = -1;
+
 	// Mark the chat as having an in-flight impersonation draft so reloads
-	// from any device know to expect/restore one.
+	// from any device know to expect/restore one. We append a fresh
+	// placeholder swipe so the streaming tokens have somewhere to land
+	// when the client refetches mid-stream; index points at it.
 	if (impersonate) {
+		const startRow = db.select().from(chats).where(eq(chats.id, chatId)).get();
+		impSwipes = parseImpersonationSwipes(startRow?.impersonationSwipes);
+		impSwipes.push({ draft: '', reasoning: '', guidance: guidance?.trim() || undefined, generatedAt: null });
+		impIndex = impSwipes.length - 1;
 		db.update(chats)
-			.set({ impersonationStatus: 'streaming', impersonationDraft: '', impersonationReasoning: '', impersonationGeneratedAt: null })
+			.set({
+				impersonationStatus: 'streaming',
+				impersonationSwipes: JSON.stringify(impSwipes),
+				impersonationSwipeIndex: impIndex,
+			})
 			.where(eq(chats.id, chatId))
 			.run();
 		broadcast(chatUserId, {
 			type: 'chat:impersonation',
 			chatId,
-			data: { status: 'streaming', draft: '', reasoning: '', generatedAt: null }
+			status: 'streaming',
+			swipes: impSwipes,
+			swipeIndex: impIndex
 		});
 	}
 
@@ -207,24 +228,40 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			});
 		}
 		// For impersonation: keep whatever partial draft we have. Save it
-		// to the chat row so the user can see/edit/finish it manually
-		// instead of losing the work.
+		// to the active swipe entry so the user can see/edit/finish it
+		// manually instead of losing the work.
 		if (impersonate) {
 			const generatedAt = new Date().toISOString();
+			// On user-initiated abort: keep the partial response if there
+			// was one, but DON'T inject the "⚠ No response returned"
+			// placeholder for empty drafts — the user just cancelled, so
+			// surfacing that scary text would be misleading and (more
+			// importantly) leaves the textarea/draft stuck with content
+			// the user didn't ask for.
+			const partial = fullResponse || (!aborted && fullReasoning ? '⚠ No response returned' : '');
 			const status = aborted ? 'done' : 'error';
-			const finalStatus = (fullResponse || fullReasoning) ? status : null;
+			const finalStatus = (partial || fullReasoning) ? status : null;
+			if (impIndex >= 0) {
+				impSwipes[impIndex] = {
+					...impSwipes[impIndex],
+					draft: partial,
+					reasoning: fullReasoning,
+					generatedAt: finalStatus ? generatedAt : null,
+				};
+			}
 			db.update(chats)
 				.set({
-					impersonationDraft: fullResponse || null,
-					impersonationReasoning: fullReasoning || null,
+					impersonationSwipes: JSON.stringify(impSwipes),
+					impersonationSwipeIndex: impIndex >= 0 ? impIndex : 0,
 					impersonationStatus: finalStatus,
-					impersonationGeneratedAt: finalStatus ? generatedAt : null,
 				})
 				.where(eq(chats.id, chatId))
 				.run();
 			broadcast(chatUserId, {
 				type: 'chat:impersonation', chatId,
-				data: { status: finalStatus, draft: fullResponse, reasoning: fullReasoning, generatedAt: finalStatus ? generatedAt : null }
+				status: finalStatus,
+				swipes: impSwipes,
+				swipeIndex: impIndex >= 0 ? impIndex : 0
 			});
 		}
 		if (!aborted) {
@@ -241,6 +278,13 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		contentChars: fullResponse.length,
 		reasoningChars: fullReasoning.length,
 	});
+
+	// Reasoning-only fallback: surface a placeholder so users see *something*
+	// rather than an empty bubble / empty draft. Applies to both regular
+	// replies and impersonation.
+	if (!fullResponse && fullReasoning) {
+		fullResponse = '⚠ No response returned';
+	}
 
 	// Persist to DB (skipped for impersonation — nothing to save).
 	if ((fullResponse || fullReasoning) && !impersonate) {
@@ -297,6 +341,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		} else {
 			// Wrap insert + activeLeafId update in a tx so a crash between the two
 			// can't leave the chat pointing at a deleted message id (M1).
+			const newGuidance = opts.guidance && opts.guidance.trim() ? opts.guidance : null;
 			const assistantMsgId = rawDb.transaction(() => {
 				const result = db.insert(messages)
 					.values({
@@ -306,17 +351,39 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 						swipes: JSON.stringify([cachedResponse]),
 						swipeIndex: 0,
 						reasoning: JSON.stringify([fullReasoning || '']),
+						// Persist the per-message reply guidance (if any) on the
+						// assistant we just produced so future regenerations of
+						// THIS message pick it up automatically. Chat-wide guidance
+						// is intentionally not stored here — it's read live from
+						// the chat row.
+						guidance: newGuidance,
 						parentId: parentMsgId,
 					})
 					.run();
 
 				const id = Number(result.lastInsertRowid);
 				db.update(chats).set({ activeLeafId: id, updatedAt: sql`datetime('now')` }).where(eq(chats.id, chatId)).run();
+				// Pending guidance on the parent user message (left there by a
+				// prior assistant deletion) has now been consumed by the new
+				// reply — clear it so it doesn't get reapplied if the user
+				// keeps the new reply and later sends another turn.
+				if (newGuidance && parentMsgId != null) {
+					db.update(messages)
+						.set({ guidance: null })
+						.where(and(eq(messages.id, parentMsgId), eq(messages.role, 'user')))
+						.run();
+				}
 				return id;
 			})();
 			bumpChatTail(chatId, cachedResponse, 'assistant');
 			const row = db.select().from(messages).where(eq(messages.id, assistantMsgId)).get();
 			if (row) broadcast(chatUserId, { type: 'message:created', chatId, message: row as any });
+			if (newGuidance && parentMsgId != null) {
+				broadcast(chatUserId, {
+					type: 'message:patched', chatId, id: parentMsgId,
+					patch: { guidance: null }
+				});
+			}
 		}
 	}
 
@@ -325,18 +392,27 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	if (impersonate) {
 		const generatedAt = new Date().toISOString();
 		const status = (fullResponse || fullReasoning) ? 'done' : null;
+		if (impIndex >= 0) {
+			impSwipes[impIndex] = {
+				...impSwipes[impIndex],
+				draft: fullResponse,
+				reasoning: fullReasoning,
+				generatedAt: status ? generatedAt : null,
+			};
+		}
 		db.update(chats)
 			.set({
-				impersonationDraft: fullResponse || null,
-				impersonationReasoning: fullReasoning || null,
+				impersonationSwipes: JSON.stringify(impSwipes),
+				impersonationSwipeIndex: impIndex >= 0 ? impIndex : 0,
 				impersonationStatus: status,
-				impersonationGeneratedAt: status ? generatedAt : null,
 			})
 			.where(eq(chats.id, chatId))
 			.run();
 		broadcast(chatUserId, {
 			type: 'chat:impersonation', chatId,
-			data: { status, draft: fullResponse, reasoning: fullReasoning, generatedAt: status ? generatedAt : null }
+			status,
+			swipes: impSwipes,
+			swipeIndex: impIndex >= 0 ? impIndex : 0
 		});
 	}
 

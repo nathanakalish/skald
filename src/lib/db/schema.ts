@@ -97,16 +97,22 @@ export const chats = sqliteTable('chats', {
 	// "latest message" subquery.
 	lastMessage: text('last_message').default(''),
 	lastMessageRole: text('last_message_role').default(''),
-	// Background impersonation draft: server-side textarea state so the
-	// generated user message survives navigation, refresh, and other devices.
-	// Status is null when there's nothing pending, 'streaming' while the LLM
-	// is producing tokens, 'done' once it finishes, 'error' on failure.
-	// `generatedAt` lets clients detect a fresh draft they haven't picked up
-	// yet (vs. one they already loaded into their textarea once).
-	impersonationDraft: text('impersonation_draft'),
-	impersonationReasoning: text('impersonation_reasoning'),
+	// Background impersonation drafts: each entry is a {draft, reasoning,
+	// guidance?, generatedAt} swipe. Status is null when there's nothing
+	// pending, 'streaming' while the LLM is producing the latest entry,
+	// 'done' once it finishes, 'error' on failure. The index points at the
+	// swipe currently mirrored into the user's textarea.
+	impersonationSwipes: text('impersonation_swipes'),
+	impersonationSwipeIndex: integer('impersonation_swipe_index').default(0),
 	impersonationStatus: text('impersonation_status'),
-	impersonationGeneratedAt: text('impersonation_generated_at'),
+	// Chat-wide reply guidance: appended to per-message reply guidance on
+	// every assistant generation. Lets the user set a persistent steer
+	// ("keep it short", "avoid X") without retyping it on every send.
+	replyGuidance: text('reply_guidance'),
+	// Holding slot for impersonation guidance orphaned by deleting the user
+	// message that owned it. Prefills the chat-bar's "Guide impersonation…"
+	// modal next time it's opened, then clears once the user impersonates.
+	pendingImpersonationGuidance: text('pending_impersonation_guidance'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`),
 	updatedAt: text('updated_at').default(sql`(datetime('now'))`)
 });
@@ -121,6 +127,16 @@ export const messages = sqliteTable('messages', {
 	swipes: text('swipes').default('[]'),
 	swipeIndex: integer('swipe_index').default(0),
 	reasoning: text('reasoning').default('[]'),
+	// User-message-only: the guided-reply guidance text that produced this
+	// message (or its current swipe). Lets the UI offer a Guide menu item
+	// on the assistant reply so the user can revise the guidance and re-run.
+	guidance: text('guidance'),
+	// User-message-only: the impersonation guidance that was used when the
+	// active impersonation draft for this message was generated. Kept
+	// separate from `guidance` so impersonation steering can never leak
+	// into the LLM's reply prompt — guidance is for the assistant reply,
+	// impersonationGuidance is just for inspection / re-impersonation.
+	impersonationGuidance: text('impersonation_guidance'),
 	parentId: integer('parent_id').references((): any => messages.id, { onDelete: 'set null' }),
 	createdAt: text('created_at').default(sql`(datetime('now'))`)
 });

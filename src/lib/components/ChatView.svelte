@@ -16,6 +16,7 @@
 	import { generationsStore } from '$lib/stores/generations.svelte.js';
 	import { LinkValidator } from '$lib/chat/linkValidation.svelte.js';
 	import { TextareaAutosizer } from '$lib/chat/textareaAutosize.svelte.js';
+	import { parseImpersonationSwipes, type ImpersonationSwipe as ImpersonationSwipeEntry } from '$lib/chat/impersonationSwipes.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
 
@@ -173,6 +174,8 @@
 		reasoning: string[];
 		parentId: number | null;
 		createdAt: string | null;
+		guidance: string | null;
+		impersonationGuidance: string | null;
 	}
 
 	// Monotonic negative IDs for client-side message placeholders. Real DB IDs are positive,
@@ -194,18 +197,19 @@
 			? localStorage.getItem(`skald-draft-${c.id}`) || ''
 			: '';
 		const status = (c as any).impersonationStatus as string | null | undefined;
-		const generatedAt = (c as any).impersonationGeneratedAt as string | null | undefined;
-		const draft = (c as any).impersonationDraft as string | null | undefined;
 		if (status === 'streaming') {
 			// Live tokens will arrive via the generations store and overwrite
 			// `input`. Start blank so we don't briefly flash an empty/stale draft.
 			return '';
 		}
-		if (status === 'done' && draft && generatedAt && typeof localStorage !== 'undefined') {
+		const swipes = parseImpersonationSwipes((c as any).impersonationSwipes);
+		const idx = (c as any).impersonationSwipeIndex ?? 0;
+		const active = swipes[idx];
+		if (status === 'done' && active?.draft && active.generatedAt && typeof localStorage !== 'undefined') {
 			const seen = localStorage.getItem(`skald-impersonation-seen-${c.id}`);
-			if (seen !== generatedAt) {
-				localStorage.setItem(`skald-impersonation-seen-${c.id}`, generatedAt);
-				return draft;
+			if (seen !== active.generatedAt) {
+				localStorage.setItem(`skald-impersonation-seen-${c.id}`, active.generatedAt);
+				return active.draft;
 			}
 		}
 		return local;
@@ -225,7 +229,9 @@
 			swipeIndex: m.swipeIndex ?? 0,
 			reasoning,
 			parentId: m.parentId ?? null,
-			createdAt: m.createdAt ?? null
+			createdAt: m.createdAt ?? null,
+			guidance: m.guidance ?? null,
+			impersonationGuidance: m.impersonationGuidance ?? null
 		};
 	}
 
@@ -353,6 +359,11 @@
 	let deletingFromIdx: number | null = $state(null);
 	let deletingSingleIdx: number | null = $state(null);
 	let abortAnimating = $state(false);
+	// True between the user pressing Stop and finishStreaming() running.
+	// Lets the placeholder/no-response text be skipped on user-initiated
+	// aborts so cancelled generations don't leave a stuck "⚠ No response
+	// returned" bubble that can't be deleted (it has a placeholder id).
+	let wasAbortedManually = $state(false);
 	let textareaRows = $state(1);
 	type DeleteMode = 'single' | 'thread';
 	let deleteMode = $state<DeleteMode>('thread');
@@ -413,6 +424,78 @@
 	let reasoningModalName = $derived(reasoningModalIsImpersonation ? (activePersona?.name ?? 'You') : character.name);
 	let isImpersonating = $state(false);
 	let impersonateReasoning = $state('');
+
+	// Local mirror of the persisted impersonation swipes on the chat row.
+	// We keep these as $state (not $derived) so chevron nav can update them
+	// optimistically — otherwise the chevron index/text lags behind the
+	// PATCH→SSE roundtrip and feels sluggish. The $effect below re-syncs
+	// from the chat row whenever the server pushes a new snapshot.
+	let chatImpersonationSwipes = $state<ImpersonationSwipeEntry[]>(
+		untrack(() => parseImpersonationSwipes((chat as any).impersonationSwipes))
+	);
+	let chatImpersonationSwipeIndex = $state<number>(
+		untrack(() => Math.max(0, Math.min(
+			// Reuse the parse from the line above — avoids a second JSON.parse
+			// of the same blob on mount.
+			chatImpersonationSwipes.length - 1,
+			(chat as any).impersonationSwipeIndex ?? 0
+		)))
+	);
+	let lastSyncedImpersonationRaw = $state<string>(
+		untrack(() => ((chat as any).impersonationSwipes as string | null) ?? '')
+	);
+	$effect(() => {
+		const raw = ((chat as any).impersonationSwipes as string | null) ?? '';
+		const idx = (chat as any).impersonationSwipeIndex ?? 0;
+		// Only sync when the server snapshot actually changed. Local nav
+		// updates `chatImpersonationSwipes`/`chatImpersonationSwipeIndex`
+		// without touching `lastSyncedImpersonationRaw`, so the next SSE
+		// patch (which carries our just-sent payload) lands cleanly here.
+		if (raw !== untrack(() => lastSyncedImpersonationRaw)) {
+			lastSyncedImpersonationRaw = raw;
+			const parsed = parseImpersonationSwipes(raw);
+			chatImpersonationSwipes = parsed;
+			const newIdx = Math.max(0, Math.min(parsed.length - 1, idx));
+			chatImpersonationSwipeIndex = newIdx;
+
+			// Push the active swipe's draft into the textarea when it
+			// represents a fresh server-side change — e.g. a user message
+			// just got "unsent" via revertLeafUserMessages and its content
+			// belongs in the chat bar now. Use the same generatedAt-marker
+			// trick as pickDraftForChat so we only do this once per swipe.
+			const status = (chat as any).impersonationStatus as string | null | undefined;
+			const active = parsed[newIdx];
+			if (status !== 'streaming' && active?.generatedAt && typeof localStorage !== 'undefined') {
+				const seenKey = `skald-impersonation-seen-${chat.id}`;
+				const seen = localStorage.getItem(seenKey);
+				if (seen !== active.generatedAt) {
+					localStorage.setItem(seenKey, active.generatedAt);
+					input = active.draft ?? '';
+					impersonateReasoning = active.reasoning ?? '';
+				}
+			}
+		}
+	});
+	let activeImpersonationSwipe = $derived(chatImpersonationSwipes[chatImpersonationSwipeIndex]);
+
+	// Guide modal state. Used by the impersonate button menu, the send
+	// button menu, and the user/assistant message context menus. The
+	// `target` describes what the modal will do on submit.
+	type GuideTarget =
+		| { kind: 'impersonate' }
+		| { kind: 'impersonateView' } // read-only: just shows the guidance that produced the active swipe
+		| { kind: 'send' }
+		| { kind: 'guideReply'; userMessageId: number } // start a NEW reply with the guidance attached
+		| { kind: 'editAssistantGuidance'; assistantMessageId: number }; // PATCH the assistant's own guidance, then regenerate it
+	let showGuideModal = $state(false);
+	let guideModalText = $state('');
+	let guideModalTarget = $state<GuideTarget | null>(null);
+
+	// Long-press / right-click menus for the impersonate + send buttons.
+	let showImpersonateMenu = $state(false);
+	let impersonateMenuPosition = $state<{ x: number; y: number; flipUp: boolean } | null>(null);
+	let showSendMenu = $state(false);
+	let sendMenuPosition = $state<{ x: number; y: number; flipUp: boolean } | null>(null);
 
 	// Character theme: parse character.theme JSON into CSS variable overrides
 	const ALLOWED_THEME_KEYS = new Set([
@@ -482,6 +565,7 @@
 		if (!isImpersonating) {
 			abortAnimating = true;
 		}
+		wasAbortedManually = true;
 
 		try {
 			await fetch('/api/chat/abort', {
@@ -585,9 +669,21 @@
 						}
 						knownMessageIds.add(msg.id);
 					} else if (msg.role === 'assistant' && streamingAssistantIdx < 0) {
-						// Cross-device: another device produced an assistant
-						// message; we have no in-flight stream of our own.
-						messageList = [...messageList, msg];
+						// Cross-device or post-finishStreaming: try to claim a
+						// leftover assistant placeholder first. Server-side regex
+						// scripts and image caching may have rewritten the content,
+						// so the strict content match above can miss — leading to
+						// the placeholder + new message both showing until refresh.
+						const orphanIdx = messageList.findIndex(
+							(m) => m.id < 0 && m.role === 'assistant'
+						);
+						if (orphanIdx >= 0) {
+							const next = messageList.slice();
+							next[orphanIdx] = { ...next[orphanIdx], ...msg };
+							messageList = next;
+						} else {
+							messageList = [...messageList, msg];
+						}
 						knownMessageIds.add(msg.id);
 					}
 					// Else: assistant placeholder is owned by our local
@@ -616,10 +712,25 @@
 		}
 
 		if (streamingAssistantIdx >= 0) {
-			// If model produced reasoning but no content, show an error
-			if (!streamAccumulated && streamAccumulatedReasoning) {
-				streamAccumulated = 'Error: Model produced reasoning but no response content.';
+			// User-cancelled generation with no usable output: drop the
+			// placeholder bubble entirely instead of leaving a stuck
+			// "⚠ No response returned" message that has no DB id and
+			// can't be deleted.
+			if (wasAbortedManually && !streamAccumulated) {
+				const idx = streamingAssistantIdx;
+				const removed = messageList[idx];
+				messageList = messageList.slice(0, idx).concat(messageList.slice(idx + 1));
+				if (removed) totalMsgCount = Math.max(0, totalMsgCount - 1);
+				streamingAssistantIdx = -1;
+			} else if (!streamAccumulated && streamAccumulatedReasoning) {
+				// Reasoning-only output (model returned thoughts but no
+				// final text): surface a placeholder so the bubble isn't
+				// blank. Skipped on manual abort (handled above).
+				streamAccumulated = '⚠ No response returned';
 			}
+		}
+
+		if (streamingAssistantIdx >= 0) {
 
 			// In texting mode, reveal the full message after a typing delay
 			if (isTexting && (streamAccumulated || streamAccumulatedReasoning)) {
@@ -712,12 +823,11 @@
 		if (streamIsRegenerate) {
 			await tick();
 		}
-		streamingAssistantIdx = -1;
+		clearStreamBubbleTarget();
 		streamAccumulated = '';
 		streamAccumulatedReasoning = '';
-		streamIsRegenerate = false;
-		streamOriginalMessage = null;
 		generationsStore.clear(chat.id);
+		wasAbortedManually = false;
 		userScrolledAway = false;
 		await scrollToBottom();
 		// Defer refresh to break out of $effect reactive scope (avoids SvelteKit SSR fetch warning)
@@ -817,6 +927,35 @@
 			el?.removeEventListener('scroll', onScroll);
 			document.removeEventListener('keydown', onKey);
 		};
+	});
+
+	// Close impersonate/send menus on click-outside or Escape
+	$effect(() => {
+		if (!showImpersonateMenu && !showSendMenu) return;
+		const onClick = (e: Event) => {
+			const t = e.target as HTMLElement;
+			if (showImpersonateMenu && !t.closest('[data-impersonate-menu]')) showImpersonateMenu = false;
+			if (showSendMenu && !t.closest('[data-send-menu]')) showSendMenu = false;
+		};
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') { showImpersonateMenu = false; showSendMenu = false; }
+		};
+		setTimeout(() => document.addEventListener('click', onClick), 0);
+		document.addEventListener('keydown', onKey);
+		return () => {
+			document.removeEventListener('click', onClick);
+			document.removeEventListener('keydown', onKey);
+		};
+	});
+
+	// Close Guide modal on Escape
+	$effect(() => {
+		if (!showGuideModal) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') { showGuideModal = false; guideModalTarget = null; }
+		};
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
 	});
 
 	// Delegated image load handler — adds 'loaded' class without inline event handlers
@@ -965,13 +1104,17 @@
 			isStreaming = false;
 			isReasoning = false;
 			streamingReasoning = '';
-			streamingAssistantIdx = -1;
+			clearStreamBubbleTarget();
 			streamAccumulated = '';
 			streamAccumulatedReasoning = '';
-			streamIsRegenerate = false;
-			streamOriginalMessage = null;
 			isImpersonating = false;
-			impersonateReasoning = chat.impersonationStatus === 'done' ? (chat.impersonationReasoning ?? '') : '';
+			{
+				const swipes = parseImpersonationSwipes((chat as any).impersonationSwipes);
+				const idx = (chat as any).impersonationSwipeIndex ?? 0;
+				impersonateReasoning = chat.impersonationStatus === 'done'
+					? (swipes[idx]?.reasoning ?? '')
+					: '';
+			}
 			awaitingServerRefresh = false;
 			lastSyncedChatId = chatId;
 			bootstrappedStartedAt = null;
@@ -999,13 +1142,17 @@
 			const needsUpdate = incoming.length !== currentList.length ||
 				incoming.some((m, idx) => {
 					const old = currentList[idx];
-					return !old || old.id !== m.id || old.content !== m.content || old.swipeIndex !== m.swipeIndex;
+					return !old || old.id !== m.id || old.content !== m.content || old.swipeIndex !== m.swipeIndex
+						|| (old.guidance ?? null) !== (m.guidance ?? null)
+						|| (old.impersonationGuidance ?? null) !== (m.impersonationGuidance ?? null);
 				});
 			if (needsUpdate) {
 				messageList = incoming.map(m => {
 					const old = oldById.get(m.id);
 					if (old && old.content === m.content && old.swipeIndex === m.swipeIndex &&
-						old.swipes.length === m.swipes.length && old.reasoning.length === m.reasoning.length) {
+						old.swipes.length === m.swipes.length && old.reasoning.length === m.reasoning.length &&
+						(old.guidance ?? null) === (m.guidance ?? null) &&
+						(old.impersonationGuidance ?? null) === (m.impersonationGuidance ?? null)) {
 						return old;
 					}
 					return m;
@@ -1038,7 +1185,10 @@
 				untrack(() => {
 					if (gen.isImpersonation) {
 						// Impersonation: tokens go into the textarea, not a
-						// message bubble. No placeholder needed.
+						// message bubble. No placeholder needed. Clear any
+						// stale assistant-bubble streaming state so live
+						// token mirroring can't bleed into the previous reply.
+						clearStreamBubbleTarget();
 						isImpersonating = true;
 						input = gen.accumulated;
 						impersonateReasoning = gen.accumulatedReasoning;
@@ -1080,7 +1230,10 @@
 		// Live mirror: keep local stream state aligned with new tokens
 		// arriving via the global store (covers tokens that streamed in
 		// while this component was unmounted *and* normal live streaming).
-		if (gen && untrack(() => isStreaming) && untrack(() => streamingAssistantIdx) >= 0) {
+		// Skip during impersonation — those tokens belong in the textarea,
+		// not in a message bubble (the impersonation mirror block below
+		// owns that path).
+		if (gen && !gen.isImpersonation && untrack(() => isStreaming) && untrack(() => streamingAssistantIdx) >= 0) {
 			if (gen.accumulatedReasoning.length > untrack(() => streamAccumulatedReasoning).length) {
 				streamAccumulatedReasoning = gen.accumulatedReasoning;
 				streamingReasoning = gen.accumulatedReasoning;
@@ -1151,10 +1304,22 @@
 			swipeIndex: 0,
 			reasoning: [reasoning],
 			parentId: null,
-			createdAt: new Date().toISOString().replace('Z', '')
+			createdAt: new Date().toISOString().replace('Z', ''),
+			guidance: null,
+			impersonationGuidance: null
 		};
 		messageList = [...messageList, placeholder];
 		streamingAssistantIdx = messageList.length - 1;
+	}
+
+	// Clear the assistant-bubble streaming target. Called whenever we're
+	// done with (or cancelling) a stream that was painting into a specific
+	// message slot. Doesn't touch token buffers — finishStreaming and the
+	// pre-stream setup do that explicitly when needed.
+	function clearStreamBubbleTarget() {
+		streamingAssistantIdx = -1;
+		streamIsRegenerate = false;
+		streamOriginalMessage = null;
 	}
 
 	// Persist input draft per conversation
@@ -1182,7 +1347,7 @@
 		if (isTexting) await initialTypingDelay();
 
 		// Add placeholder for assistant
-		messageList = [{ id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', '') }];
+		messageList = [{ id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: null, impersonationGuidance: null }];
 		totalMsgCount = 1;
 		streamingAssistantIdx = 0;
 		await scrollToBottom(true);
@@ -1340,15 +1505,21 @@
 		}
 	}
 
-	async function sendMessage() {
+	async function sendMessage(guidance?: string) {
 		const content = input.trim();
 		if (!content || isStreaming) return;
 
 		const hadFocus = document.activeElement === textareaEl;
 
-		// If we just consumed a server-persisted impersonation draft, clear
-		// it so other devices don't see a stale one on next open.
-		if ((chat as any).impersonationStatus === 'done' || (chat as any).impersonationDraft) {
+		// Snapshot any persisted impersonation swipes so the outgoing user
+		// message preserves all of them as swipeable variants. The send
+		// endpoint also clears them server-side in the same transaction.
+		const impSwipesSnap = chatImpersonationSwipes.slice();
+		const impIdxSnap = chatImpersonationSwipeIndex;
+		const hadImpersonation = (chat as any).impersonationStatus === 'done' || impSwipesSnap.length > 0;
+		if (hadImpersonation && impSwipesSnap.length === 0) {
+			// Defensive: legacy/stale state (status=done with empty swipes).
+			// Just nuke it so the send doesn't get stuck thinking we have data.
 			fetch(`/api/chats/${chat.id}/impersonation`, { method: 'DELETE' }).catch(() => {});
 		}
 
@@ -1372,8 +1543,19 @@
 			}
 		}
 
-		// Optimistically add user message
-		messageList = [...messageList, { id: nextPlaceholderId(), role: 'user', content, swipes: [content], swipeIndex: 0, reasoning: [], parentId: null, createdAt: new Date().toISOString().replace('Z', '') }];
+		// Optimistically add user message — preserve impersonation swipes
+		// as message swipes so the user can flip between them later.
+		const optimisticSwipes = impSwipesSnap.length > 0
+			? impSwipesSnap.map((s, i) => i === impIdxSnap ? content : s.draft)
+			: [content];
+		const optimisticReasoning = impSwipesSnap.length > 0
+			? impSwipesSnap.map(s => s.reasoning ?? '')
+			: [];
+		const optimisticIdx = impSwipesSnap.length > 0 ? impIdxSnap : 0;
+		const optimisticGuidance = impSwipesSnap.length > 0
+			? (impSwipesSnap[impIdxSnap]?.guidance ?? guidance ?? null)
+			: (guidance ?? null);
+		messageList = [...messageList, { id: nextPlaceholderId(), role: 'user', content, swipes: optimisticSwipes, swipeIndex: optimisticIdx, reasoning: optimisticReasoning, parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: optimisticGuidance, impersonationGuidance: null }];
 		totalMsgCount++;
 		await scrollToBottom(true);
 
@@ -1381,7 +1563,7 @@
 		if (isTexting) await initialTypingDelay();
 
 		// Add placeholder for assistant
-		messageList = [...messageList, { id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', '') }];
+		messageList = [...messageList, { id: nextPlaceholderId(), role: 'assistant', content: '', swipes: [''], swipeIndex: 0, reasoning: [''], parentId: null, createdAt: new Date().toISOString().replace('Z', ''), guidance: null, impersonationGuidance: null }];
 		totalMsgCount++;
 		streamingAssistantIdx = messageList.length - 1;
 		await scrollToBottom(true);
@@ -1390,7 +1572,13 @@
 			const response = await fetch('/api/chat/send', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ chatId: chat.id, content })
+				body: JSON.stringify({
+					chatId: chat.id,
+					content,
+					guidance: guidance && guidance.trim() ? guidance : undefined,
+					impersonationSwipes: impSwipesSnap.length > 0 ? impSwipesSnap : undefined,
+					impersonationSwipeIndex: impSwipesSnap.length > 0 ? impIdxSnap : undefined,
+				})
 			});
 
 			if (!response.ok) {
@@ -1414,8 +1602,36 @@
 		}
 	}
 
-	async function impersonateMessage() {
-		if (isStreaming) return;
+	async function impersonateMessage(guidance?: string) {
+		// Single-tap during streaming is silently ignored — re-impersonate
+		// is only available via the menu (and grayed out there too).
+		if (isStreaming || isImpersonating) return;
+		// Save whatever's in the textarea right now into the active swipe
+		// (in-place) before kicking off a new generation. If there are no
+		// swipes yet, this becomes swipe[0]. The new draft will append.
+		const currentText = input;
+		const existing = chatImpersonationSwipes.slice();
+		const existingIdx = chatImpersonationSwipeIndex;
+		if (currentText.trim() || existing.length > 0) {
+			const updated = existing.length > 0 ? existing.slice() : [];
+			if (updated.length === 0) {
+				updated.push({ draft: currentText, reasoning: '', generatedAt: null });
+			} else {
+				updated[existingIdx] = { ...updated[existingIdx], draft: currentText };
+			}
+			// Await the PATCH so the server has the user's text persisted
+			// BEFORE chatProcessor reads the chat row to append the new
+			// placeholder swipe — otherwise the two writes race and the
+			// user's first-swipe text gets overwritten by an empty entry.
+			try {
+				await fetch(`/api/chats/${chat.id}/impersonation`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ swipeIndex: existingIdx, swipes: updated })
+				});
+			} catch { /* best effort */ }
+		}
+
 		// Fire-and-forget: enqueue the generation server-side. Tokens come
 		// back via the realtime SSE flow → generationsStore → the live
 		// mirror $effect below routes them into `input`. This keeps the
@@ -1424,11 +1640,21 @@
 		input = '';
 		impersonateReasoning = '';
 		streamingReasoning = '';
+		// Defensive: blow away any stale assistant-bubble stream state so
+		// the impersonation tokens can't be mirrored onto the previous
+		// reply (which would render the regen blur+spinner overlay there).
+		clearStreamBubbleTarget();
+		streamAccumulated = '';
+		streamAccumulatedReasoning = '';
 		try {
 			const res = await fetch('/api/chat/stream', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ chatId: chat.id, impersonate: true })
+				body: JSON.stringify({
+					chatId: chat.id,
+					impersonate: true,
+					guidance: guidance && guidance.trim() ? guidance : undefined,
+				})
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
@@ -1436,6 +1662,222 @@
 			}
 		} catch (err) {
 			input = `Error: ${err instanceof Error ? err.message : 'Network error'}`;
+		}
+	}
+
+	async function navImpersonationSwipe(direction: -1 | 1) {
+		if (isStreaming) return;
+		if (chatImpersonationSwipes.length === 0) return;
+		const newIdx = chatImpersonationSwipeIndex + direction;
+		if (newIdx < 0 || newIdx >= chatImpersonationSwipes.length) return;
+		haptic('light');
+
+		// Save current textarea contents into the active swipe in-place,
+		// then load the target swipe's draft into the textarea. Update local
+		// state immediately so chevrons + text feel instant; the PATCH below
+		// just persists for other devices / reloads.
+		const updated = chatImpersonationSwipes.slice();
+		updated[chatImpersonationSwipeIndex] = {
+			...updated[chatImpersonationSwipeIndex],
+			draft: input
+		};
+		chatImpersonationSwipes = updated;
+		chatImpersonationSwipeIndex = newIdx;
+		input = updated[newIdx]?.draft ?? '';
+		impersonateReasoning = updated[newIdx]?.reasoning ?? '';
+
+		try {
+			await fetch(`/api/chats/${chat.id}/impersonation`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ swipeIndex: newIdx, swipes: updated })
+			});
+		} catch { /* best effort */ }
+	}
+
+	// Long-press / right-click handler factory for toolbar buttons (impersonate, send).
+	function buttonContextHandlers(open: (x: number, y: number) => void) {
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		let start = { x: 0, y: 0 };
+		let fired = false;
+		return {
+			onpointerdown(e: PointerEvent) {
+				if (e.button !== 0) return;
+				start = { x: e.clientX, y: e.clientY };
+				fired = false;
+				if (timer) clearTimeout(timer);
+				timer = setTimeout(() => {
+					timer = null;
+					fired = true;
+					haptic('medium');
+					open(start.x, start.y);
+				}, 500);
+			},
+			onpointermove(e: PointerEvent) {
+				if (!timer) return;
+				if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) {
+					clearTimeout(timer);
+					timer = null;
+				}
+			},
+			onpointerup() {
+				if (timer) { clearTimeout(timer); timer = null; }
+			},
+			onpointercancel() {
+				if (timer) { clearTimeout(timer); timer = null; }
+			},
+			oncontextmenu(e: MouseEvent) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (timer) { clearTimeout(timer); timer = null; }
+				open(e.clientX, e.clientY);
+			},
+			suppressClick() {
+				return fired;
+			},
+			reset() {
+				fired = false;
+			}
+		};
+	}
+
+	function positionForMenu(clientX: number, clientY: number, menuW: number, menuH: number) {
+		const winW = window.innerWidth;
+		const winH = window.innerHeight;
+		const flipUp = clientY + menuH > winH;
+		const x = Math.max(8, Math.min(winW - menuW - 8, clientX - menuW / 2));
+		const rawY = flipUp ? clientY - 8 : clientY + 8;
+		const y = flipUp
+			? Math.max(menuH + 8, Math.min(winH - 8, rawY))
+			: Math.max(8, Math.min(winH - menuH - 8, rawY));
+		return { x, y, flipUp };
+	}
+
+	const IMPERSONATE_MENU_W = 220;
+	const IMPERSONATE_MENU_H = 220;
+	const SEND_MENU_W = 220;
+	const SEND_MENU_H = 80;
+
+	const impersonateBtnHandlers = buttonContextHandlers((x, y) => {
+		impersonateMenuPosition = positionForMenu(x, y, IMPERSONATE_MENU_W, IMPERSONATE_MENU_H);
+		showImpersonateMenu = true;
+	});
+	const sendBtnHandlers = buttonContextHandlers((x, y) => {
+		sendMenuPosition = positionForMenu(x, y, SEND_MENU_W, SEND_MENU_H);
+		showSendMenu = true;
+	});
+
+	function openGuideModal(target: GuideTarget, prefill = '') {
+		guideModalTarget = target;
+		guideModalText = prefill;
+		showGuideModal = true;
+	}
+
+	async function submitGuideModal() {
+		const text = guideModalText.trim();
+		const target = guideModalTarget;
+		showGuideModal = false;
+		guideModalTarget = null;
+		guideModalText = '';
+		if (!target) return;
+		if (target.kind === 'impersonate') {
+			impersonateMessage(text || undefined);
+		} else if (target.kind === 'impersonateView') {
+			// no-op; modal was read-only
+		} else if (target.kind === 'send') {
+			sendMessage(text || undefined);
+		} else if (target.kind === 'editAssistantGuidance') {
+			// Update the assistant message's own guidance and regenerate it
+			// against the new guidance. Future regenerations of this same
+			// assistant pick up the persisted value automatically.
+			try {
+				await fetch(`/api/messages/${target.assistantMessageId}`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ guidance: text || null })
+				});
+				// Mirror locally so reopening the modal shows the *current*
+				// guidance, not the value from when the message was first sent.
+				const idx = messageList.findIndex(m => m.id === target.assistantMessageId);
+				if (idx >= 0) {
+					messageList[idx] = { ...messageList[idx], guidance: text || null };
+				}
+			} catch { /* best effort */ }
+			regenerateMessage();
+		} else if (target.kind === 'guideReply') {
+			// User message is the latest — there's no assistant reply yet.
+			// Persist the guidance on the user message first (so an empty
+			// submit clears any stale guidance left over from a deleted
+			// assistant), then kick off generation. chatProcessor will
+			// move the guidance onto the new assistant and clear it from
+			// the user message.
+			try {
+				await fetch(`/api/messages/${target.userMessageId}`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ guidance: text || null })
+				});
+				const idx = messageList.findIndex(m => m.id === target.userMessageId);
+				if (idx >= 0) {
+					messageList[idx] = { ...messageList[idx], guidance: text || null };
+				}
+			} catch { /* best effort */ }
+			await generateNextReply(text || undefined);
+		}
+	}
+
+	// Kick off a fresh assistant reply for the existing latest user
+	// message. Used by "Guide Reply" when the user message is already at
+	// the tail (no assistant after it). Server-side, /api/chat/stream
+	// without an `impersonate` flag enqueues a normal generation against
+	// whatever the chat's active leaf currently is.
+	async function generateNextReply(guidance?: string) {
+		if (isStreaming || isImpersonating) return;
+		isStreaming = true;
+		isReasoning = false;
+		streamingReasoning = '';
+		streamAccumulated = '';
+		streamAccumulatedReasoning = '';
+		streamIsRegenerate = false;
+		streamOriginalMessage = null;
+		impersonateReasoning = '';
+		resetStreamTimeout();
+
+		if (isTexting) await initialTypingDelay();
+
+		appendStreamPlaceholder('', '');
+		streamingAssistantIdx = messageList.length - 1;
+		await scrollToBottom(true);
+
+		try {
+			const res = await fetch('/api/chat/stream', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					chatId: chat.id,
+					guidance: guidance && guidance.trim() ? guidance : undefined,
+				})
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				if (streamingAssistantIdx >= 0) {
+					messageList[streamingAssistantIdx] = {
+						...messageList[streamingAssistantIdx],
+						content: `Error: ${err.error || 'Failed to generate'}`
+					};
+				}
+				isStreaming = false;
+				streamingAssistantIdx = -1;
+			}
+		} catch (err) {
+			if (streamingAssistantIdx >= 0) {
+				messageList[streamingAssistantIdx] = {
+					...messageList[streamingAssistantIdx],
+					content: `Error: ${err instanceof Error ? err.message : 'Network error'}`
+				};
+			}
+			isStreaming = false;
+			streamingAssistantIdx = -1;
 		}
 	}
 
@@ -1453,6 +1895,19 @@
 		input = content;
 		await tick();
 		sendMessage();
+	}
+
+	async function reImpersonateMessage(msgIdx: number) {
+		if (isStreaming) return;
+		const msg = messageList[msgIdx];
+
+		// Delete the user message (cascades to children) and trim the local
+		// view, then kick off a fresh impersonation. Mirrors `resendMessage`.
+		await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' });
+		messageList = messageList.slice(0, msgIdx);
+		input = '';
+		await tick();
+		impersonateMessage();
 	}
 
 	function startEdit(msg: Message) {
@@ -1776,17 +2231,13 @@
 				const err = await response.json();
 				messageList[lastAssistantIdx] = { ...streamOriginalMessage!, content: `Error: ${err.error || 'Failed to regenerate'}` };
 				isStreaming = false;
-				streamingAssistantIdx = -1;
-				streamIsRegenerate = false;
-				streamOriginalMessage = null;
+				clearStreamBubbleTarget();
 			}
 			// SSE events will drive the rest
 		} catch (err) {
 			messageList[lastAssistantIdx] = { ...streamOriginalMessage!, content: `Error: ${err instanceof Error ? err.message : 'Network error'}` };
 		 isStreaming = false;
-			streamingAssistantIdx = -1;
-			streamIsRegenerate = false;
-			streamOriginalMessage = null;
+			clearStreamBubbleTarget();
 		}
 	}
 </script>
@@ -2057,16 +2508,16 @@
 								</div>
 							{:else if isStreaming && !isImpersonating && i === messageList.length - 1 && message.role === 'assistant' && !streamIsRegenerate && (!message.content || isReasoning)}
 								{#if !message.content}
-									<div class="flex items-center justify-center gap-1.5 py-1 px-1 min-h-[28px]">
-										<span class="typing-dot h-2 w-2 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-2 w-2 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-2 w-2 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
+									<div class="flex items-center justify-center gap-2.5 py-2 px-1 min-h-[36px]">
+										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 0ms"></span>
+										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 160ms"></span>
+										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 320ms"></span>
 										{#if isReasoning}
 											<button
 												onclick={() => { reasoningModalIsImpersonation = false; reasoningModalIsLive = true; showReasoningModal = true; }}
-												class="ml-1 flex items-center justify-center rounded-md p-0.5 text-muted-foreground/50 hover:text-primary hover:bg-accent transition-colors"
+												class="ml-1 flex items-center justify-center rounded-md p-0.5 text-muted-foreground/60 hover:text-primary hover:bg-accent transition-colors"
 											>
-												<Brain class="h-4 w-4" />
+												<Brain class="h-5 w-5" />
 											</button>
 										{/if}
 									</div>
@@ -2084,10 +2535,10 @@
 									>
 										{@html renderContent(message.content, true)}
 									</div>
-									<div class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground/60">
-										<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 320ms"></span>
+									<div class="mt-1 flex items-center gap-2.5 text-xs text-muted-foreground/60">
+										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
+										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
+										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
 										<button
 										onclick={() => { reasoningModalIsLive = true; showReasoningModal = true; }}
 										class="ml-0.5 flex items-center gap-1 rounded-lg px-2 py-1.5 hover:text-primary hover:bg-accent transition-colors"
@@ -2122,10 +2573,10 @@
 							{/if}
 							{#if reformattingMessageId === message.id || (streamIsRegenerate && streamingAssistantIdx === i)}
 								<div class="reformatting-overlay pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-[inherit] bg-black/10 backdrop-blur-[1px]">
-									<div class="flex items-center justify-center gap-1.5 drop-shadow">
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-foreground" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-foreground" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-foreground" style="animation-delay: 320ms"></span>
+									<div class="flex items-center justify-center gap-2.5 drop-shadow">
+										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 0ms"></span>
+										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 160ms"></span>
+										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 320ms"></span>
 									</div>
 									{#if streamIsRegenerate && streamingAssistantIdx === i && (isReasoning || streamAccumulatedReasoning)}
 										<button
@@ -2197,33 +2648,42 @@
 					rows="1"
 					class="block w-full resize-none rounded-3xl border border-input bg-card px-4 py-2.5 text-sm leading-normal placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
 				></textarea>
-				{#if isImpersonating && isReasoning}
-					<button
-						onclick={() => { reasoningModalIsImpersonation = true; reasoningModalIsLive = true; showReasoningModal = true; }}
-						class="absolute inset-0 flex items-center justify-center gap-1.5 rounded-3xl text-xs text-muted-foreground/60 hover:text-primary hover:bg-accent/80 transition-colors"
-					>
-						<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 0ms"></span>
-						<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 160ms"></span>
-						<span class="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/50" style="animation-delay: 320ms"></span>
-						<Brain class="h-3.5 w-3.5" />
-					</button>
+				{#if isImpersonating && !input}
+					{#if isReasoning}
+						<button
+							onclick={() => { reasoningModalIsImpersonation = true; reasoningModalIsLive = true; showReasoningModal = true; }}
+							class="absolute inset-0 flex items-center justify-center gap-2 rounded-3xl text-xs text-muted-foreground/70 hover:text-primary hover:bg-accent/80 transition-colors"
+						>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
+							<Brain class="h-4 w-4" />
+						</button>
+					{:else}
+						<!-- Waiting for first token: show plain dots, no brain -->
+						<div class="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-3xl">
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
+							<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
+						</div>
+					{/if}
 				{/if}
 			</div>
-			{#if impersonateReasoning && !isStreaming}
-				<button
-					onclick={() => { reasoningModalIsImpersonation = true; reasoningModalIsLive = false; reasoningModalText = impersonateReasoning; showReasoningModal = true; }}
-					class="flex w-11 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-primary transition-colors hover:bg-primary/20"
-					title="View impersonation reasoning"
-					aria-label="View impersonation reasoning"
-				>
-					<Brain class="h-4 w-4" />
-				</button>
-			{/if}
 			<button
-				onclick={impersonateMessage}
-				disabled={isStreaming}
+				onclick={(e) => {
+					if (impersonateBtnHandlers.suppressClick()) { impersonateBtnHandlers.reset(); e.preventDefault(); return; }
+					// Reuse the round's guidance so re-impersonating from
+					// the toolbar carries forward the user's last guide.
+					impersonateMessage(activeImpersonationSwipe?.guidance ?? undefined);
+				}}
+				onpointerdown={impersonateBtnHandlers.onpointerdown}
+				onpointermove={impersonateBtnHandlers.onpointermove}
+				onpointerup={impersonateBtnHandlers.onpointerup}
+				onpointercancel={impersonateBtnHandlers.onpointercancel}
+				oncontextmenu={impersonateBtnHandlers.oncontextmenu}
+				disabled={isStreaming && !isImpersonating}
 				class="flex w-11 shrink-0 items-center justify-center rounded-full border border-input bg-card text-muted-foreground shadow-sm shadow-black/10 transition-all hover:bg-accent hover:text-foreground active:scale-90 disabled:opacity-50"
-				title="Impersonate"
+				title="Impersonate (long-press for options)"
 				aria-label="Impersonate"
 			>
 				<UserPen class="h-4 w-4" />
@@ -2232,8 +2692,8 @@
 				<button
 					onclick={abortGeneration}
 					class="flex w-11 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-all hover:bg-destructive/80 hover:scale-105 active:scale-90"
-					title="Stop generation"
-					aria-label="Stop generation"
+					title={isImpersonating ? 'Stop impersonation' : 'Stop generation'}
+					aria-label={isImpersonating ? 'Stop impersonation' : 'Stop generation'}
 				>
 					<Square class="h-4 w-4 fill-current" />
 				</button>
@@ -2241,10 +2701,18 @@
 				<!-- On mobile with "Send with Enter" enabled, hide the send button to
 				     give the textarea more room — Enter handles the send. -->
 				<button
-					onclick={sendMessage}
+					onclick={(e) => {
+						if (sendBtnHandlers.suppressClick()) { sendBtnHandlers.reset(); e.preventDefault(); return; }
+						sendMessage();
+					}}
+					onpointerdown={sendBtnHandlers.onpointerdown}
+					onpointermove={sendBtnHandlers.onpointermove}
+					onpointerup={sendBtnHandlers.onpointerup}
+					onpointercancel={sendBtnHandlers.onpointercancel}
+					oncontextmenu={sendBtnHandlers.oncontextmenu}
 					disabled={!input.trim()}
 					class="flex w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-all hover:bg-primary/90 hover:scale-105 hover:shadow-lg hover:shadow-primary/40 active:scale-90 disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100 disabled:active:scale-100"
-					aria-label="Send message"
+					aria-label="Send message (long-press for guided reply)"
 				>
 					<Send class="h-4 w-4" />
 				</button>
@@ -2414,6 +2882,8 @@
 		{@const menuSiblings = messageSiblings[menuMsg.id]}
 		{@const menuHasBranches = menuSiblings && menuSiblings.total > 1}
 		{@const menuIsCompacted = isMessageCompacted(menuMsg.id)}
+		{@const menuParentMsg = menuMsgObj.parentId != null ? messageList.find((mm) => mm.id === menuMsgObj.parentId) : null}
+		{@const menuAssistantGuidance = menuMsg.role === 'assistant' ? (menuMsgObj.guidance ?? null) : null}
 		<div
 			data-msg-menu
 			class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
@@ -2468,10 +2938,10 @@
 				</div>
 				<div class="my-0.5 h-px bg-border"></div>
 			{/if}
-			{#if menuMsg.role === 'assistant' && menuMsg.reasoning[menuMsg.swipeIndex]}
+			{#if menuMsg.reasoning[menuMsg.swipeIndex]}
 				<button
 					type="button"
-					onclick={() => { reasoningModalIsImpersonation = false; reasoningModalIsLive = false; reasoningModalText = menuMsgObj.reasoning[menuMsgObj.swipeIndex]; reasoningModalMessageId = menuMsgObj.id; showReasoningModal = true; closeMsgMenu(); }}
+					onclick={() => { reasoningModalIsImpersonation = menuMsg.role === 'user'; reasoningModalIsLive = false; reasoningModalText = menuMsgObj.reasoning[menuMsgObj.swipeIndex]; reasoningModalMessageId = menuMsgObj.id; showReasoningModal = true; closeMsgMenu(); }}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
 				>
 					<Brain class="h-4 w-4" />View reasoning
@@ -2495,6 +2965,67 @@
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
 					<CornerRightUp class="h-4 w-4" />Resend
+				</button>
+				<button
+					type="button"
+					onclick={() => {
+						const id = menuMsgObj.id;
+						const g = menuMsgObj.guidance ?? '';
+						closeMsgMenu();
+						openGuideModal({ kind: 'guideReply', userMessageId: id }, g);
+					}}
+					disabled={isStreaming}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+				>
+					<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit reply guidance…' : 'Guide reply…'}
+				</button>
+				<button
+					type="button"
+					onclick={() => { reImpersonateMessage(menuMsgIdx); closeMsgMenu(); }}
+					disabled={isStreaming}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+				>
+					<UserPen class="h-4 w-4" />Re-impersonate
+				</button>
+			{/if}
+			{#if menuMsg.role === 'user' && menuIsLast && !menuIsCompacted}
+				<button
+					type="button"
+					onclick={() => { closeMsgMenu(); openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? ''); }}
+					disabled={isStreaming}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+				>
+					<Wand2 class="h-4 w-4" />{activeImpersonationSwipe?.guidance ? 'Edit impersonation guidance…' : 'Guide impersonation…'}
+				</button>
+			{:else if menuMsg.role === 'user' && !menuIsCompacted && menuMsgObj.impersonationGuidance}
+				<!-- 2nd-latest user message: show the impersonation guidance
+				     read-only so the user can see what they used, but can't edit
+				     it now that the impersonation round has already produced a reply. -->
+				<button
+					type="button"
+					onclick={() => {
+						const g = menuMsgObj.impersonationGuidance ?? '';
+						closeMsgMenu();
+						openGuideModal({ kind: 'impersonateView' }, g);
+					}}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+				>
+					<Wand2 class="h-4 w-4" />View impersonation guidance
+				</button>
+			{/if}
+			{#if menuIsLastAssistant && menuParentMsg && menuParentMsg.role === 'user' && !menuIsCompacted}
+				<button
+					type="button"
+					onclick={() => {
+						const id = menuMsgObj.id;
+						const g = menuAssistantGuidance ?? '';
+						closeMsgMenu();
+						openGuideModal({ kind: 'editAssistantGuidance', assistantMessageId: id }, g);
+					}}
+					disabled={isStreaming}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+				>
+					<Wand2 class="h-4 w-4" />{menuAssistantGuidance ? 'Edit reply guidance…' : 'Guide reply…'}
 				</button>
 			{/if}
 			{#if !menuIsLast && !menuIsCompacted}
@@ -2548,18 +3079,168 @@
 	{/if}
 {/if}
 
+<!-- Impersonate button context menu (long-press / right-click) -->
+{#if showImpersonateMenu && impersonateMenuPosition}
+	<div
+		data-impersonate-menu
+		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
+		style="--popup-origin: {impersonateMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {impersonateMenuPosition.x}px; {impersonateMenuPosition.flipUp ? 'bottom' : 'top'}: {impersonateMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - impersonateMenuPosition.y : 0) + 'px' : impersonateMenuPosition.y + 'px'}"
+	>
+		{#if chatImpersonationSwipes.length > 1}
+			<div class="flex items-center justify-center gap-1 px-3 py-1.5">
+				<button
+					type="button"
+					onclick={() => navImpersonationSwipe(-1)}
+					disabled={isStreaming || chatImpersonationSwipeIndex <= 0}
+					class="flex h-7 w-7 items-center justify-center rounded text-foreground/60 transition-colors hover:text-foreground disabled:opacity-30"
+				>
+					<ChevronLeft class="h-4 w-4" />
+				</button>
+				<span class="text-xs tabular-nums text-muted-foreground">
+					{chatImpersonationSwipeIndex + 1}/{chatImpersonationSwipes.length}
+				</span>
+				<button
+					type="button"
+					onclick={() => navImpersonationSwipe(1)}
+					disabled={isStreaming || chatImpersonationSwipeIndex >= chatImpersonationSwipes.length - 1}
+					class="flex h-7 w-7 items-center justify-center rounded text-foreground/60 transition-colors hover:text-foreground disabled:opacity-30"
+				>
+					<ChevronRight class="h-4 w-4" />
+				</button>
+			</div>
+			<div class="my-0.5 h-px bg-border"></div>
+		{/if}
+		<button
+			type="button"
+			onclick={() => {
+				const reasoning = activeImpersonationSwipe?.reasoning ?? impersonateReasoning;
+				reasoningModalIsImpersonation = true;
+				reasoningModalIsLive = false;
+				reasoningModalText = reasoning;
+				showReasoningModal = true;
+				showImpersonateMenu = false;
+			}}
+			disabled={!(activeImpersonationSwipe?.reasoning || impersonateReasoning)}
+			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+		>
+			<Brain class="h-4 w-4" />View reasoning
+		</button>
+		<button
+			type="button"
+			onclick={() => {
+				showImpersonateMenu = false;
+				// Reuse the active swipe's guidance for the round so the
+				// user doesn't have to re-enter it on every regenerate.
+				impersonateMessage(activeImpersonationSwipe?.guidance ?? undefined);
+			}}
+			disabled={isStreaming}
+			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+		>
+			<RefreshCw class="h-4 w-4" />Re-impersonate
+		</button>
+		<button
+			type="button"
+			onclick={() => {
+				showImpersonateMenu = false;
+				openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? '');
+			}}
+			disabled={isStreaming}
+			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+		>
+			<Wand2 class="h-4 w-4" />Guide impersonation…
+		</button>
+	</div>
+{/if}
+
+<!-- Send button context menu (long-press / right-click) -->
+{#if showSendMenu && sendMenuPosition}
+	<div
+		data-send-menu
+		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
+		style="--popup-origin: {sendMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {sendMenuPosition.x}px; {sendMenuPosition.flipUp ? 'bottom' : 'top'}: {sendMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - sendMenuPosition.y : 0) + 'px' : sendMenuPosition.y + 'px'}"
+	>
+		<button
+			type="button"
+			onclick={() => { showSendMenu = false; openGuideModal({ kind: 'send' }, ''); }}
+			disabled={!input.trim()}
+			class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+		>
+			<Wand2 class="h-4 w-4" />Guide reply…
+		</button>
+	</div>
+{/if}
+
+<!-- Guide modal (shared by impersonate / send / message-edit flows) -->
+{#if showGuideModal}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-enter"
+		onclick={() => { showGuideModal = false; guideModalTarget = null; }}
+	>
+		<div class="modal-enter mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-card p-5 shadow-xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="mb-1 text-sm font-semibold text-foreground">
+				{guideModalTarget?.kind === 'impersonate'
+					? 'Guide impersonation'
+					: guideModalTarget?.kind === 'impersonateView'
+					? 'Impersonation guidance'
+					: guideModalTarget?.kind === 'send'
+					? 'Guide reply'
+					: guideModalTarget?.kind === 'guideReply'
+					? 'Guide reply'
+					: 'Edit guidance'}
+			</h3>
+			<p class="mb-3 text-xs text-muted-foreground">
+				{guideModalTarget?.kind === 'impersonate'
+					? "Tell the model how to write your next reply. The text won't appear in the message itself."
+					: guideModalTarget?.kind === 'impersonateView'
+					? 'The guidance used to produce the active impersonation swipe.'
+					: guideModalTarget?.kind === 'send'
+					? 'Out-of-band guidance the character should follow without quoting.'
+					: guideModalTarget?.kind === 'guideReply'
+					? 'Out-of-band guidance the character should follow without quoting. Sending will start the reply.'
+					: 'Update the guidance and re-run this reply.'}
+			</p>
+			<textarea
+				bind:value={guideModalText}
+				placeholder={guideModalTarget?.kind === 'impersonateView' ? '(no guidance was set)' : 'e.g. Keep it short and aloof.'}
+				readonly={guideModalTarget?.kind === 'impersonateView'}
+				class="block min-h-[40vh] w-full flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring {guideModalTarget?.kind === 'impersonateView' ? 'cursor-default opacity-90' : ''}"
+			></textarea>
+			<div class="mt-4 flex items-center justify-end gap-2">
+				<button
+					type="button"
+					onclick={() => { showGuideModal = false; guideModalTarget = null; }}
+					class="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+				>
+					{guideModalTarget?.kind === 'impersonateView' ? 'Close' : 'Cancel'}
+				</button>
+				{#if guideModalTarget?.kind !== 'impersonateView'}
+					<button
+						type="button"
+						onclick={submitGuideModal}
+						class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+					>
+						Go
+					</button>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
 	.typing-dot {
-		animation: typing-bounce 1.4s ease-in-out infinite;
+		animation: typing-bounce 1.2s ease-in-out infinite;
 	}
 
 	@keyframes typing-bounce {
 		0%, 60%, 100% {
 			transform: translateY(0);
-			opacity: 0.4;
+			opacity: 0.35;
 		}
 		30% {
-			transform: translateY(-4px);
+			transform: translateY(-6px);
 			opacity: 1;
 		}
 	}

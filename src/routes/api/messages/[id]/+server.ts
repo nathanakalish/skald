@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
+import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -105,6 +106,26 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ id, reasoning: reasoningSwipes, swipeIndex: idx });
 	}
 
+	// Edit per-message reply guidance text. Used by the assistant-reply
+	// Guide menu — updates the assistant message's own guidance so future
+	// regenerations of THIS reply pick it up.
+	if ('guidance' in body) {
+		const raw = body.guidance;
+		const guidance = typeof raw === 'string' && raw.trim() ? raw : null;
+		db.update(messages)
+			.set({ guidance })
+			.where(eq(messages.id, id))
+			.run();
+
+		broadcast(user.id, {
+			type: 'message:patched',
+			chatId: message.chatId,
+			id,
+			patch: { guidance }
+		});
+		return json({ id, guidance });
+	}
+
 	return json({ error: 'No valid update fields' }, { status: 400 });
 };
 
@@ -186,12 +207,19 @@ export const DELETE: RequestHandler = async (event) => {
 		db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
 		recomputeChatTail(message.chatId);
 		broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: [id] });
+
+		// If the new leaf is a user message, unsend it back into the chat bar.
+		// Helper handles its own broadcasts + tail recompute.
+		const reverted = revertLeafUserMessages(message.chatId, user.id);
+		if (reverted.changed) newLeafId = reverted.newActiveLeafId;
+
 		return json({ success: true, newActiveLeafId: newLeafId, mode: deleteMode });
 	}
 
 	// Thread delete: remove this message and all descendants.
 	const descendantIds = getDescendantIds(id, message.chatId);
 	const allIdsToDelete = [id, ...descendantIds];
+
 	for (const delId of allIdsToDelete) {
 		db.delete(messages).where(eq(messages.id, delId)).run();
 	}
@@ -226,10 +254,16 @@ export const DELETE: RequestHandler = async (event) => {
 		db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
 		recomputeChatTail(message.chatId);
 		broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: allIdsToDelete });
+
+		const reverted = revertLeafUserMessages(message.chatId, user.id);
+		if (reverted.changed) newLeafId = reverted.newActiveLeafId;
+
 		return json({ success: true, newActiveLeafId: newLeafId, mode: deleteMode });
 	}
 
 	recomputeChatTail(message.chatId);
 	broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: allIdsToDelete });
-	return json({ success: true, newActiveLeafId: message.parentId ?? null, mode: deleteMode });
+	const reverted = revertLeafUserMessages(message.chatId, user.id);
+	const finalLeaf = reverted.changed ? reverted.newActiveLeafId : (message.parentId ?? null);
+	return json({ success: true, newActiveLeafId: finalLeaf, mode: deleteMode });
 };

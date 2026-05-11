@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { messages, chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 
 // POST: Switch to a sibling branch. Accepts { direction: -1 | 0 | 1 }
 // direction -1/1: Find sibling at currentIndex + direction, walk to deepest leaf
@@ -73,5 +74,10 @@ export const POST: RequestHandler = async (event) => {
 	// Update activeLeafId
 	db.update(chats).set({ activeLeafId: leaf.id }).where(eq(chats.id, message.chatId)).run();
 
-	return json({ success: true, activeLeafId: leaf.id });
+	// If the deepest leaf on this branch is a user message, unsend it back
+	// into the chat bar so the invariant (leaf != user) holds.
+	const reverted = revertLeafUserMessages(message.chatId, user.id);
+	const finalLeaf = reverted.changed ? reverted.newActiveLeafId : leaf.id;
+
+	return json({ success: true, activeLeafId: finalLeaf });
 };

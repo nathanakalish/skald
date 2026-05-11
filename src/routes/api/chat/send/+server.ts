@@ -15,13 +15,43 @@ import { broadcast } from '$lib/server/realtime.js';
  */
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
-	const { chatId, content: rawContent, regenerate, greeting, parentId: clientParentId } = await event.request.json();
+	const {
+		chatId,
+		content: rawContent,
+		regenerate,
+		greeting,
+		parentId: clientParentId,
+		guidance: rawGuidance,
+		impersonationSwipes: rawImpersonationSwipes,
+		impersonationSwipeIndex: rawImpersonationIdx,
+	} = await event.request.json();
 
 	if (!chatId) return json({ error: 'chatId required' }, { status: 400 });
 
 	// Verify ownership.
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+
+	const guidance = typeof rawGuidance === 'string' && rawGuidance.trim() ? rawGuidance : undefined;
+
+	// Normalize impersonation-swipe payload from the client. The user may have
+	// produced multiple impersonation drafts; each becomes a swipe on the
+	// outgoing user message so they can flip between them later.
+	type ImpSwipeIn = { draft?: string; reasoning?: string; guidance?: string };
+	let impSwipes: ImpSwipeIn[] = [];
+	if (Array.isArray(rawImpersonationSwipes)) {
+		impSwipes = rawImpersonationSwipes
+			.filter((e: any) => e && typeof e === 'object')
+			.map((e: any) => ({
+				draft: typeof e.draft === 'string' ? e.draft : '',
+				reasoning: typeof e.reasoning === 'string' ? e.reasoning : '',
+				guidance: typeof e.guidance === 'string' && e.guidance.trim() ? e.guidance : undefined,
+			}));
+	}
+	let impIdx = 0;
+	if (impSwipes.length > 0 && Number.isFinite(rawImpersonationIdx)) {
+		impIdx = Math.max(0, Math.min(impSwipes.length - 1, Number(rawImpersonationIdx)));
+	}
 
 	// Save the user message (skip on regenerate / greeting).
 	let userMsgId: number | null = null;
@@ -43,29 +73,93 @@ export const POST: RequestHandler = async (event) => {
 			userParentId = clientParentId;
 		}
 
-		// Atomic: insert the message and advance the leaf in one go so a partial
-		// failure can't leave a dangling leaf pointer.
+		// If the client passed impersonation swipes, fold them into the
+		// user message so all generated drafts are preserved as swipes.
+		// The selected swipe wins for `content`.
+		let messageSwipes: string[] = [content];
+		let messageReasoning: string[] = [''];
+		let messageSwipeIndex = 0;
+		// Reply guidance steers the assistant reply; it lives on the
+		// assistant message that gets produced (set by chatProcessor at
+		// insert time), not on the user message. Only impersonation
+		// guidance from the active swipe is preserved on the user row.
+		const messageGuidance: string | null = null;
+		let messageImpersonationGuidance: string | null = null;
+		if (impSwipes.length > 0) {
+			messageSwipes = impSwipes.map(s => s.draft ?? '');
+			messageReasoning = impSwipes.map(s => s.reasoning ?? '');
+			messageSwipeIndex = impIdx;
+			// Selected swipe's text is what we just sent; trust it.
+			messageSwipes[impIdx] = content;
+			// Preserve the active swipe's impersonation guidance for later
+			// inspection — it has nothing to do with the reply prompt.
+			messageImpersonationGuidance = impSwipes[impIdx]?.guidance ?? null;
+		}
+
+		// Atomic: insert the message, advance the leaf, and clear the
+		// in-flight impersonation swipes in one go so a partial failure
+		// can't leave a dangling leaf pointer or stale draft.
 		userMsgId = db.transaction((tx) => {
 			const result = tx.insert(messages)
-				.values({ chatId, role: 'user', content, swipes: JSON.stringify([content]), swipeIndex: 0, parentId: userParentId })
+				.values({
+					chatId,
+					role: 'user',
+					content,
+					swipes: JSON.stringify(messageSwipes),
+					swipeIndex: messageSwipeIndex,
+					reasoning: JSON.stringify(messageReasoning),
+					guidance: messageGuidance,
+					impersonationGuidance: messageImpersonationGuidance,
+					parentId: userParentId,
+				})
 				.run();
 			const id = Number(result.lastInsertRowid);
 			tx.update(chats).set({ activeLeafId: id, updatedAt: sql`datetime('now')` }).where(eq(chats.id, chatId)).run();
+			tx.update(chats).set({
+				impersonationSwipes: null,
+				impersonationSwipeIndex: 0,
+				impersonationStatus: null,
+			}).where(eq(chats.id, chatId)).run();
 			return id;
 		});
 		bumpChatTail(chatId, content, 'user');
 		// Cross-device sync: tell other tabs/devices about the new user message so
 		// an open ChatView appends it without waiting for the assistant streaming
-		// pass to finish.
+		// pass to finish. Also clear the impersonation swipes everywhere.
 		if (userMsgId != null) {
 			const row = db.select().from(messages).where(eq(messages.id, userMsgId)).get();
 			if (row) broadcast(user.id, { type: 'message:created', chatId, message: row as any });
 		}
+		broadcast(user.id, {
+			type: 'chat:impersonation', chatId,
+			status: null,
+			swipes: [],
+			swipeIndex: 0
+		});
 	}
 
 	// Hand it off to the background queue.
 	try {
-		const jobId = enqueueJob({ chatId, regenerate: !!regenerate, greeting: !!greeting });
+		// On regenerate, reply guidance lives on the assistant message itself
+		// (the active leaf). Look it up here so guidance is always explicitly
+		// linked to the message it belongs to, never inferred ambiently.
+		let jobGuidance = guidance;
+		if (regenerate && !jobGuidance) {
+			const leafId = chat.activeLeafId;
+			if (leafId) {
+				const leaf = db.select({ role: messages.role, guidance: messages.guidance })
+					.from(messages).where(eq(messages.id, leafId)).get();
+				if (leaf?.role === 'assistant' && leaf.guidance && leaf.guidance.trim()) {
+					jobGuidance = leaf.guidance;
+				}
+			}
+		}
+		const jobId = enqueueJob({
+			chatId,
+			regenerate: !!regenerate,
+			greeting: !!greeting,
+			guidance: jobGuidance,
+		});
 		return json({ ok: true, jobId, userMsgId });
 	} catch (err) {
 		// M5: roll back the user message we just inserted; otherwise the chat is
