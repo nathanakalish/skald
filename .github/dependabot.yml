@@ -23,6 +23,7 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # Only track even-numbered (LTS) Node releases
+      # Don't auto-bump Node major versions — runtime deps (e.g. better-sqlite3)
+      # may not support the new version yet. Upgrade manually when ready.
       - dependency-name: "node"
-        versions: [">=23, <24", ">=25, <26", ">=27, <28", ">=29, <30"]
+        update-types: ["version-update:semver-major"]
