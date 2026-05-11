@@ -45,7 +45,7 @@
 		"lucide-svelte": "^1.0.1",
 		"marked": "^18.0.3",
 		"sharp": "^0.34.5",
-		"tailwind-merge": "^3.5.0",
+		"tailwind-merge": "^3.6.0",
 		"web-push": "^3.6.7"
 	}
 }
