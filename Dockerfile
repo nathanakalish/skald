@@ -1,5 +1,5 @@
 # ── Stage 1: Build ────────────────────────────────────────────
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN npm run build
 RUN npm ci --omit=dev
 
 # ── Stage 2: Runtime ──────────────────────────────────────────
-FROM node:24-slim AS runtime
+FROM node:26-slim AS runtime
 
 WORKDIR /app
 
