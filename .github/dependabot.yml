@@ -5,18 +5,30 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Major better-sqlite3 bumps need manual validation against the Node
+      # version in the Dockerfile before upgrading.
+      - dependency-name: "better-sqlite3"
+        update-types: ["version-update:semver-major"]
     groups:
+      svelte:
+        patterns: ["svelte", "@sveltejs/*", "svelte-*"]
+        update-types: ["minor", "patch"]
       dev-deps:
         dependency-type: development
         update-types: ["minor", "patch"]
-      runtime-patches:
+      runtime-minor:
         dependency-type: production
-        update-types: ["patch"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: "/"
