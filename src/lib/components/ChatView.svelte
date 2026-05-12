@@ -943,6 +943,9 @@
 	$effect(() => {
 		if (!showImpersonateMenu && !showSendMenu) return;
 		const onClick = (e: Event) => {
+			// Skip the synthetic click that follows the long-press that just
+			// opened this menu (mobile fires `click` after `pointerup`).
+			if (impersonateBtnHandlers.isSuppressing() || sendBtnHandlers.isSuppressing()) return;
 			const t = e.target as HTMLElement;
 			if (showImpersonateMenu && !t.closest('[data-impersonate-menu]')) showImpersonateMenu = false;
 			if (showSendMenu && !t.closest('[data-send-menu]')) showSendMenu = false;
@@ -1712,21 +1715,30 @@
 	}
 
 	// Long-press / right-click handler factory for toolbar buttons (impersonate, send).
+	//
+	// After a long-press fires we briefly suppress *both* the button's own click
+	// (so we don't double-trigger the action) AND any document-level click-outside
+	// listener (so the synthetic `click` mobile browsers dispatch on `pointerup`
+	// doesn't immediately close the menu we just opened). The single timestamp
+	// covers both consumers — keeps the contract uniform across menus.
 	function buttonContextHandlers(open: (x: number, y: number) => void) {
 		let timer: ReturnType<typeof setTimeout> | null = null;
 		let start = { x: 0, y: 0 };
-		let fired = false;
+		let suppressUntil = 0;
+		const SUPPRESS_MS = 400;
+		const trigger = (x: number, y: number) => {
+			suppressUntil = Date.now() + SUPPRESS_MS;
+			haptic('medium');
+			open(x, y);
+		};
 		return {
 			onpointerdown(e: PointerEvent) {
 				if (e.button !== 0) return;
 				start = { x: e.clientX, y: e.clientY };
-				fired = false;
 				if (timer) clearTimeout(timer);
 				timer = setTimeout(() => {
 					timer = null;
-					fired = true;
-					haptic('medium');
-					open(start.x, start.y);
+					trigger(start.x, start.y);
 				}, 500);
 			},
 			onpointermove(e: PointerEvent) {
@@ -1746,13 +1758,21 @@
 				e.preventDefault();
 				e.stopPropagation();
 				if (timer) { clearTimeout(timer); timer = null; }
-				open(e.clientX, e.clientY);
+				trigger(e.clientX, e.clientY);
 			},
+			// Used by the button's onclick to swallow the synthetic click that
+			// follows a long-press (would otherwise re-fire the primary action).
 			suppressClick() {
-				return fired;
+				return Date.now() < suppressUntil;
+			},
+			// Used by the document-level click-outside listener to ignore the
+			// same synthetic click — without this the menu opens & closes in
+			// the same gesture on mobile.
+			isSuppressing() {
+				return Date.now() < suppressUntil;
 			},
 			reset() {
-				fired = false;
+				suppressUntil = 0;
 			}
 		};
 	}
