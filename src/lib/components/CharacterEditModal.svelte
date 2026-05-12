@@ -37,6 +37,14 @@
 	let showDeleteConfirm = $state(false);
 	let menuOpen = $state(false);
 
+	// Post-save propagation prompt: when the saved character is in use by
+	// existing chats, ask the user whether they want those chats refreshed
+	// (title rename + sidebar bump). Greetings are deliberately preserved.
+	let showPropagateConfirm = $state(false);
+	let propagateChatCount = $state(0);
+	let propagatePreviousName = $state<string | null>(null);
+	let propagatingChats = $state(false);
+
 	$effect(() => {
 		if (!menuOpen) return;
 		const onClick = (e: MouseEvent) => {
@@ -240,10 +248,21 @@
 					Object.assign(character, body);
 					delete (character as any).light;
 				}
+				// Offer to propagate the change to existing chats. Most fields
+				// (description, system prompt, …) are read live so they update
+				// automatically; this is mostly a chat-title refresh + a
+				// confirmation that nothing is silently mutated. Greetings
+				// already in chat history are preserved either way.
+				const count = Number(body.chatCount ?? 0);
+				if (count > 0) {
+					propagateChatCount = count;
+					propagatePreviousName = body.previousName ?? null;
+					showPropagateConfirm = true;
+				}
 			}
 			if (embedded) {
 				editing = false;
-			} else {
+			} else if (!showPropagateConfirm) {
 				onclose();
 			}
 		} finally {
@@ -1186,4 +1205,32 @@
 	onsecondary={() => { showDeleteConfirm = false; ondelete?.(true); }}
 	onconfirm={() => { showDeleteConfirm = false; ondelete?.(); }}
 	oncancel={() => { showDeleteConfirm = false; }}
+/>
+
+<ConfirmModal
+	open={showPropagateConfirm}
+	variant="info"
+	title="Update existing chats?"
+	message={`This character is used in ${propagateChatCount} chat${propagateChatCount === 1 ? '' : 's'}. Apply your changes there too? Existing greetings will be left as-is so in-progress stories aren't disrupted.`}
+	confirmLabel={propagatingChats ? 'Updating…' : 'Update chats'}
+	cancelLabel="Skip"
+	onconfirm={async () => {
+		if (propagatingChats) return;
+		propagatingChats = true;
+		try {
+			await api(`/api/characters/${character.id}/sync-chats`, {
+				method: 'POST',
+				json: { oldName: propagatePreviousName },
+				errorLabel: 'Failed to update existing chats'
+			});
+		} finally {
+			propagatingChats = false;
+			showPropagateConfirm = false;
+			if (!embedded) onclose();
+		}
+	}}
+	oncancel={() => {
+		showPropagateConfirm = false;
+		if (!embedded) onclose();
+	}}
 />

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X, Check, CheckCheck, ChevronLeft, ChevronRight, RefreshCw, Loader2, FileText, Sparkles } from 'lucide-svelte';
+	import { X, Check, CheckCheck, ChevronLeft, ChevronRight, RefreshCw, FileText, Sparkles, Square } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { renderRoleplay } from '$lib/utils/rp-format.js';
@@ -23,6 +23,10 @@
 	let mobileTab = $state<'original' | 'reformatted'>('reformatted');
 	let accepted: boolean[] = $state([]);
 	let regenerating = $state(false);
+	// Abort controller for the in-flight reformat. Lets the user bail out
+	// of a slow LLM call without waiting for it to finish; the original
+	// reformatted text stays untouched on cancel.
+	let regenerateController: AbortController | null = null;
 
 	// Synced scrolling refs
 	let leftPane: HTMLDivElement | undefined = $state();
@@ -45,11 +49,14 @@
 		const cur = results[activeIndex];
 		if (!cur || regenerating) return;
 		regenerating = true;
+		const controller = new AbortController();
+		regenerateController = controller;
 		try {
 			const res = await fetch('/api/reformat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ text: cur.original })
+				body: JSON.stringify({ text: cur.original }),
+				signal: controller.signal
 			});
 			if (!res.ok) {
 				const data = await res.json();
@@ -58,11 +65,18 @@
 			}
 			const data = await res.json();
 			results[activeIndex] = { ...cur, reformatted: data.reformatted };
-		} catch {
+		} catch (err) {
+			// User-cancelled: silently keep the previous reformatted text.
+			if ((err as any)?.name === 'AbortError') return;
 			alert('Failed to regenerate');
 		} finally {
+			if (regenerateController === controller) regenerateController = null;
 			regenerating = false;
 		}
+	}
+
+	function stopRegenerate() {
+		regenerateController?.abort();
 	}
 
 	function acceptCurrent() {
@@ -217,19 +231,23 @@
 			<!-- Footer -->
 			<div class="flex items-center justify-between border-t border-border px-5 py-3">
 				<div class="flex items-center gap-2">
-					<button
-						onclick={regenerateCurrent}
-						disabled={regenerating}
-						class="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
-					>
-						{#if regenerating}
-							<Loader2 class="h-4 w-4 animate-spin" />
-							Regenerating…
-						{:else}
+					{#if regenerating}
+						<button
+							onclick={stopRegenerate}
+							class="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
+						>
+							<Square class="h-4 w-4" />
+							Stop
+						</button>
+					{:else}
+						<button
+							onclick={regenerateCurrent}
+							class="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
+						>
 							<RefreshCw class="h-4 w-4" />
 							Regenerate
-						{/if}
-					</button>
+						</button>
+					{/if}
 				</div>
 				<div class="flex items-center gap-2">
 					<button

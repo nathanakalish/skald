@@ -157,6 +157,39 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		regenerate: !!regenerate, impersonate: !!impersonate,
 	});
 
+	// Periodic checkpoint of the in-flight impersonation draft so a hard
+	// close → reopen still shows the partial response (otherwise the chat
+	// row only carries the empty placeholder until the completion path
+	// commits the final draft). Hoisted outside the try block so the
+	// catch and finalisation paths can call cancelImpDraftFlush().
+	let lastImpFlush = 0;
+	let impFlushTimer: ReturnType<typeof setTimeout> | null = null;
+	const flushImpDraft = () => {
+		impFlushTimer = null;
+		if (!impersonate || impIndex < 0) return;
+		lastImpFlush = Date.now();
+		impSwipes[impIndex] = {
+			...impSwipes[impIndex],
+			draft: fullResponse,
+			reasoning: fullReasoning,
+		};
+		try {
+			db.update(chats)
+				.set({ impersonationSwipes: JSON.stringify(impSwipes) })
+				.where(eq(chats.id, chatId))
+				.run();
+		} catch { /* best-effort checkpoint */ }
+	};
+	const scheduleImpDraftFlush = () => {
+		if (impFlushTimer) return;
+		const since = Date.now() - lastImpFlush;
+		const delay = since >= 2000 ? 0 : 2000 - since;
+		impFlushTimer = setTimeout(flushImpDraft, delay);
+	};
+	const cancelImpDraftFlush = () => {
+		if (impFlushTimer) { clearTimeout(impFlushTimer); impFlushTimer = null; }
+	};
+
 	try {
 		// Token stats first so the UI can render the prompt-size meter.
 		const tokenStatsPayload = {
@@ -177,6 +210,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 					activeGenerations.appendReasoning(chatId, text);
 					eventBus.emit({ type: 'reasoning', chatId, userId: chatUserId, data: { reasoning: text, isImpersonation: !!impersonate } });
 				}
+				if (impersonate) scheduleImpDraftFlush();
 			},
 			onContent: (text) => {
 				if (!text) return;
@@ -191,6 +225,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 					activeGenerations.appendToken(chatId, out);
 					eventBus.emit({ type: 'token', chatId, userId: chatUserId, data: { token: out, isImpersonation: !!impersonate } });
 				}
+				if (impersonate) scheduleImpDraftFlush();
 			},
 		});
 
@@ -214,6 +249,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			eventBus.emit({ type: 'token', chatId, userId: chatUserId, data: { token: fullResponse, isImpersonation: !!impersonate } });
 		}
 	} catch (err) {
+		cancelImpDraftFlush();
 		activeGenerations.clear(chatId);
 		const aborted = signal?.aborted === true;
 		if (aborted) {
@@ -390,6 +426,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	// Persist the impersonation draft to the chat row so any device opening
 	// the chat after the stream finishes lands on the same text.
 	if (impersonate) {
+		cancelImpDraftFlush();
 		const generatedAt = new Date().toISOString();
 		const status = (fullResponse || fullReasoning) ? 'done' : null;
 		if (impIndex >= 0) {

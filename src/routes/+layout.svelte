@@ -202,6 +202,43 @@
 		};
 	});
 
+	// Long-background recovery: if the tab was hidden for > 60s, the SSE
+	// stream has likely gone stale (mobile browsers freeze sockets) and the
+	// active chat may have drifted. Re-fetch the visible chat data and let
+	// connection.svelte.ts handle the SSE reconnect on its own visibility
+	// listener. Also drains any "while you were away" toast queue.
+	const STALE_THRESHOLD_MS = 60_000;
+	let hiddenSince: number | null = null;
+	let pendingAwayToasts: { chatId: number; characterName: string; characterAvatar: string | null; preview: string }[] = [];
+	function flushAwayToasts() {
+		if (pendingAwayToasts.length === 0) return;
+		const toShow = pendingAwayToasts;
+		pendingAwayToasts = [];
+		for (const t of toShow) {
+			// Suppress if the user is now actively viewing this chat —
+			// they don't need a "you missed something" pop-up for the
+			// thread already on screen.
+			if (t.chatId === activeChatId) continue;
+			addChatNotification(t.chatId, t.characterName, t.characterAvatar, t.preview);
+		}
+	}
+	onMount(() => {
+		const handler = () => {
+			if (document.hidden) {
+				hiddenSince = Date.now();
+				return;
+			}
+			const elapsed = hiddenSince ? Date.now() - hiddenSince : 0;
+			hiddenSince = null;
+			flushAwayToasts();
+			if (elapsed > STALE_THRESHOLD_MS && activeChatId) {
+				loadChat(activeChatId);
+			}
+		};
+		document.addEventListener('visibilitychange', handler);
+		return () => document.removeEventListener('visibilitychange', handler);
+	});
+
 	// Hydrate the chats store from SSR data so the sidebar paints instantly.
 	// After this, the store is the single source of truth — every chat
 	// mutation goes through chatsStore.{add,update,remove} and we never
@@ -693,8 +730,20 @@
 							: 'New message';
 						addChatNotification(chatId, chatInfo.characterName, chatInfo.characterAvatar, preview);
 					}
+				} else if (!tabFocused && !viewedElsewhere && settings.inAppNotifications !== false) {
+					// Tab is hidden — OS push covers the immediate notification,
+					// but we ALSO queue an in-app toast so when the user comes
+					// back the completion is visible without checking history.
+					const preview = (settings.notificationStyle === 'preview' && event.data?.preview)
+						? event.data.preview
+						: 'New message';
+					pendingAwayToasts.push({
+						chatId,
+						characterName: chatInfo.characterName,
+						characterAvatar: chatInfo.characterAvatar,
+						preview
+					});
 				}
-				// Tab hidden / closed → OS push fires from the server. Nothing to do here.
 			}
 		}
 

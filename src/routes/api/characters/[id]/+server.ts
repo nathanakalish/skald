@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { characters, chats, messages, lorebooks } from '$lib/db/schema.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { deleteCachedImagesFromContent } from '$lib/services/imageCache.js';
@@ -27,6 +27,16 @@ export const PUT: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
 	const body = await event.request.json();
+
+	// Capture the pre-update name so the editor can ask the user whether
+	// to also rename existing chats whose default title still references
+	// the old character name.
+	const previous = db
+		.select({ name: characters.name })
+		.from(characters)
+		.where(and(eq(characters.id, id), eq(characters.userId, user.id)))
+		.get();
+	const previousName = previous?.name ?? null;
 
 	// Cache any new remote images introduced via the editor
 	const cached = await cacheCharacterTextImages({
@@ -89,7 +99,18 @@ export const PUT: RequestHandler = async (event) => {
 		updatedAt: updated.updatedAt
 	} : null;
 	if (light) broadcast(user.id, { type: 'character:updated', id, character: light as any });
-	return json({ ...updated, light });
+	// Count chats currently using this character so the editor can offer
+	// to propagate the changes (chat title rename + a touch on updatedAt
+	// so they bubble in the sidebar). Live data like description/system
+	// prompt already flows through automatically — this is mostly for the
+	// "do you want this update reflected in your existing stories?" UX.
+	const chatCountRow = db
+		.select({ n: sql<number>`count(*)` })
+		.from(chats)
+		.where(and(eq(chats.userId, user.id), eq(chats.characterId, id)))
+		.get();
+	const chatCount = Number(chatCountRow?.n ?? 0);
+	return json({ ...updated, light, chatCount, previousName });
 };
 
 export const DELETE: RequestHandler = async (event) => {

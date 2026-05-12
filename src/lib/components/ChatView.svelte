@@ -715,13 +715,23 @@
 			// User-cancelled generation with no usable output: drop the
 			// placeholder bubble entirely instead of leaving a stuck
 			// "⚠ No response returned" message that has no DB id and
-			// can't be deleted.
+			// can't be deleted. EXCEPT for regenerates — there we want
+			// the previous swipe back, otherwise cancelling vanishes
+			// the message until the next page reload.
 			if (wasAbortedManually && !streamAccumulated) {
-				const idx = streamingAssistantIdx;
-				const removed = messageList[idx];
-				messageList = messageList.slice(0, idx).concat(messageList.slice(idx + 1));
-				if (removed) totalMsgCount = Math.max(0, totalMsgCount - 1);
-				streamingAssistantIdx = -1;
+				if (streamIsRegenerate && streamOriginalMessage) {
+					const restored = streamOriginalMessage;
+					updateMessagePreservingScroll(() => {
+						messageList[streamingAssistantIdx] = restored;
+					});
+					streamingAssistantIdx = -1;
+				} else {
+					const idx = streamingAssistantIdx;
+					const removed = messageList[idx];
+					messageList = messageList.slice(0, idx).concat(messageList.slice(idx + 1));
+					if (removed) totalMsgCount = Math.max(0, totalMsgCount - 1);
+					streamingAssistantIdx = -1;
+				}
 			} else if (!streamAccumulated && streamAccumulatedReasoning) {
 				// Reasoning-only output (model returned thoughts but no
 				// final text): surface a placeholder so the bubble isn't
@@ -1407,12 +1417,16 @@
 	let lastRenderMode: string | undefined;
 	let lastBlockExternal: boolean | undefined;
 
-	/** Replace external <img> srcs with a placeholder when external content is blocked. */
+	/** Strip external <img> tags entirely when external content is blocked.
+	 *  We remove the element rather than blanking the src so the browser
+	 *  never even queues a request, and there's no empty placeholder
+	 *  taking up layout space. */
 	function stripExternalImages(html: string): string {
 		if (!blockExternalContent) return html;
-		return html.replace(/<img\s([^>]*?)src="(https?:\/\/[^"]*)"([^>]*)>/gi, (match, before, src, after) => {
-			return `<img ${before}src="" data-blocked-src="${src.replace(/"/g, '&quot;')}" title="External image blocked"${after} style="display:none">`;
-		});
+		// Remove any <img> whose src points to a remote URL. Self-closed
+		// or not, with or without quotes — covers both renderer outputs
+		// (markdown -> double-quoted) and raw rp-format injections.
+		return html.replace(/<img\s[^>]*src=["']?https?:\/\/[^"'\s>]+["']?[^>]*>/gi, '');
 	}
 
 	function renderContent(content: string, skipCache = false): string {
@@ -1668,8 +1682,10 @@
 	async function navImpersonationSwipe(direction: -1 | 1) {
 		if (isStreaming) return;
 		if (chatImpersonationSwipes.length === 0) return;
-		const newIdx = chatImpersonationSwipeIndex + direction;
-		if (newIdx < 0 || newIdx >= chatImpersonationSwipes.length) return;
+		// Wrap around the ends so single-handed swiping never dead-ends.
+		const total = chatImpersonationSwipes.length;
+		const newIdx = ((chatImpersonationSwipeIndex + direction) % total + total) % total;
+		if (newIdx === chatImpersonationSwipeIndex) return;
 		haptic('light');
 
 		// Save current textarea contents into the active swipe in-place,
@@ -2160,8 +2176,10 @@
 
 	async function swipeMessage(messageIdx: number, direction: -1 | 1) {
 		const msg = messageList[messageIdx];
-		const newIndex = msg.swipeIndex + direction;
-		if (newIndex < 0 || newIndex >= msg.swipes.length) return;
+		const total = msg.swipes.length;
+		if (total <= 1) return;
+		const newIndex = ((msg.swipeIndex + direction) % total + total) % total;
+		if (newIndex === msg.swipeIndex) return;
 		haptic('light');
 
 		// Optimistic: show the swipe content immediately
@@ -2894,7 +2912,7 @@
 					<button
 						type="button"
 						onclick={() => { msgMenuScrollSuppressed = true; swipeMessage(menuMsgIdx, -1).finally(() => { msgMenuScrollSuppressed = false; }); }}
-						disabled={isStreaming || menuMsg.swipeIndex <= 0}
+						disabled={isStreaming || menuMsg.swipes.length <= 1}
 						class="flex h-7 w-7 items-center justify-center rounded text-foreground/60 transition-colors hover:text-foreground disabled:opacity-30"
 					>
 						<ChevronLeft class="h-4 w-4" />
@@ -2905,7 +2923,7 @@
 					<button
 						type="button"
 						onclick={() => { msgMenuScrollSuppressed = true; swipeMessage(menuMsgIdx, 1).finally(() => { msgMenuScrollSuppressed = false; }); }}
-						disabled={isStreaming || menuMsg.swipeIndex >= menuMsg.swipes.length - 1}
+						disabled={isStreaming || menuMsg.swipes.length <= 1}
 						class="flex h-7 w-7 items-center justify-center rounded text-foreground/60 transition-colors hover:text-foreground disabled:opacity-30"
 					>
 						<ChevronRight class="h-4 w-4" />
@@ -3091,7 +3109,7 @@
 				<button
 					type="button"
 					onclick={() => navImpersonationSwipe(-1)}
-					disabled={isStreaming || chatImpersonationSwipeIndex <= 0}
+					disabled={isStreaming || chatImpersonationSwipes.length <= 1}
 					class="flex h-7 w-7 items-center justify-center rounded text-foreground/60 transition-colors hover:text-foreground disabled:opacity-30"
 				>
 					<ChevronLeft class="h-4 w-4" />
@@ -3102,7 +3120,7 @@
 				<button
 					type="button"
 					onclick={() => navImpersonationSwipe(1)}
-					disabled={isStreaming || chatImpersonationSwipeIndex >= chatImpersonationSwipes.length - 1}
+					disabled={isStreaming || chatImpersonationSwipes.length <= 1}
 					class="flex h-7 w-7 items-center justify-center rounded text-foreground/60 transition-colors hover:text-foreground disabled:opacity-30"
 				>
 					<ChevronRight class="h-4 w-4" />
