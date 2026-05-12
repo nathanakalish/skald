@@ -342,11 +342,14 @@
 			msgLongPressTimer = null;
 		}
 	}
-	function endMsgLongPress() {
+	function endMsgLongPress(e?: TouchEvent) {
 		if (msgLongPressTimer) { clearTimeout(msgLongPressTimer); msgLongPressTimer = null; }
 		if (msgLongPressFired) {
+			// Stop the synthetic click that touchend fires from reaching the
+			// document click-outside listener — same fix as buttonContextHandlers.
+			e?.preventDefault();
 			msgSuppressNextClick = true;
-			setTimeout(() => { msgSuppressNextClick = false; msgLongPressFired = false; }, 500);
+			msgLongPressFired = false;
 		}
 	}
 	function closeMsgMenu() { msgMenuIdx = null; msgMenuPosition = null; }
@@ -923,6 +926,9 @@
 	$effect(() => {
 		if (msgMenuIdx === null) return;
 		const onClick = (e: Event) => {
+			// If the menu was opened by a long-press, endMsgLongPress set this
+			// flag. The touchend-generated click is stopped via preventDefault
+			// above, but on some browsers it still propagates — consume it once.
 			if (msgSuppressNextClick) { msgSuppressNextClick = false; return; }
 			if (!(e.target as HTMLElement).closest('[data-msg-menu]')) closeMsgMenu();
 		};
@@ -1716,18 +1722,21 @@
 
 	// Long-press / right-click handler factory for toolbar buttons (impersonate, send).
 	//
-	// After a long-press fires we briefly suppress *both* the button's own click
-	// (so we don't double-trigger the action) AND any document-level click-outside
-	// listener (so the synthetic `click` mobile browsers dispatch on `pointerup`
-	// doesn't immediately close the menu we just opened). The single timestamp
-	// covers both consumers — keeps the contract uniform across menus.
+	// When the long-press fires we open the menu, then need to swallow exactly
+	// two follow-up events that would otherwise tear it down again:
+	//   1. the synthetic `click` mobile browsers fire on the button after
+	//      `pointerup` (would re-trigger the button's primary action),
+	//   2. that same click bubbling to `document` (would hit the click-outside
+	//      listener and immediately close the menu we just opened).
+	// We can't use a time window — the user may hold for arbitrarily long after
+	// the timer fires. Instead we set a "consume next click" flag that's cleared
+	// by whichever consumer sees the click first.
 	function buttonContextHandlers(open: (x: number, y: number) => void) {
 		let timer: ReturnType<typeof setTimeout> | null = null;
 		let start = { x: 0, y: 0 };
-		let suppressUntil = 0;
-		const SUPPRESS_MS = 400;
+		let pending = false; // long-press fired; the next click should be swallowed
 		const trigger = (x: number, y: number) => {
-			suppressUntil = Date.now() + SUPPRESS_MS;
+			pending = true;
 			haptic('medium');
 			open(x, y);
 		};
@@ -1753,26 +1762,37 @@
 			},
 			onpointercancel() {
 				if (timer) { clearTimeout(timer); timer = null; }
+				pending = false;
 			},
 			oncontextmenu(e: MouseEvent) {
 				e.preventDefault();
 				e.stopPropagation();
 				if (timer) { clearTimeout(timer); timer = null; }
 				trigger(e.clientX, e.clientY);
+				// Right-click doesn't fire a follow-up `click`, so don't leave
+				// the flag armed — it'd swallow the user's next legitimate click.
+				pending = false;
 			},
-			// Used by the button's onclick to swallow the synthetic click that
-			// follows a long-press (would otherwise re-fire the primary action).
+			// Called from the button's own onclick. Returns true (and consumes
+			// the flag) if this click is the synthetic one following a long-press.
 			suppressClick() {
-				return Date.now() < suppressUntil;
+				if (!pending) return false;
+				pending = false;
+				return true;
 			},
-			// Used by the document-level click-outside listener to ignore the
-			// same synthetic click — without this the menu opens & closes in
-			// the same gesture on mobile.
+			// Called from the document-level click-outside listener. Peeks at
+			// the flag without consuming it — the button's onclick (which fires
+			// first because the click originated on the button) will consume it.
+			// If the click happened *outside* the button, the button's onclick
+			// never runs and we still see the flag set; clear it here so a
+			// stray click doesn't keep the menu wedged open.
 			isSuppressing() {
-				return Date.now() < suppressUntil;
+				if (!pending) return false;
+				pending = false;
+				return true;
 			},
 			reset() {
-				suppressUntil = 0;
+				pending = false;
 			}
 		};
 	}
@@ -2514,7 +2534,7 @@
 							oncontextmenu={(e) => { if (editingId !== message.id) openMsgMenu(i, e); }}
 							ontouchstart={(e) => { if (editingId !== message.id) startMsgLongPress(i, e); }}
 							ontouchmove={(e) => moveMsgLongPress(e)}
-							ontouchend={() => endMsgLongPress()}
+							ontouchend={(e) => endMsgLongPress(e)}
 							ontouchcancel={() => endMsgLongPress()}
 							title={messageTimestamps !== 'off' && message.createdAt ? getMessageTime(message.createdAt) : undefined}
 							data-reformatting={reformattingMessageId === message.id || (streamIsRegenerate && streamingAssistantIdx === i) ? '' : undefined}
@@ -2709,7 +2729,13 @@
 			</div>
 			<button
 				onclick={(e) => {
-					if (impersonateBtnHandlers.suppressClick()) { impersonateBtnHandlers.reset(); e.preventDefault(); return; }
+					if (impersonateBtnHandlers.suppressClick()) {
+						// Stop the synthetic post-long-press click from bubbling to the
+						// document click-outside listener (which would close the menu).
+						e.preventDefault();
+						e.stopPropagation();
+						return;
+					}
 					// Reuse the round's guidance so re-impersonating from
 					// the toolbar carries forward the user's last guide.
 					impersonateMessage(activeImpersonationSwipe?.guidance ?? undefined);
@@ -2740,7 +2766,11 @@
 				     give the textarea more room — Enter handles the send. -->
 				<button
 					onclick={(e) => {
-						if (sendBtnHandlers.suppressClick()) { sendBtnHandlers.reset(); e.preventDefault(); return; }
+						if (sendBtnHandlers.suppressClick()) {
+							e.preventDefault();
+							e.stopPropagation();
+							return;
+						}
 						sendMessage();
 					}}
 					onpointerdown={sendBtnHandlers.onpointerdown}
