@@ -299,27 +299,13 @@
 	function openMsgMenu(idx: number, e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
-		const winW = window.innerWidth;
-		const winH = window.innerHeight;
-		const flipUp = e.clientY + MSG_MENU_H > winH;
-		const x = Math.max(8, Math.min(winW - MSG_MENU_W - 8, e.clientX - MSG_MENU_W / 2));
-		const rawY = flipUp ? e.clientY - 8 : e.clientY + 8;
-		const y = flipUp
-			? Math.max(MSG_MENU_H + 8, Math.min(winH - 8, rawY))
-			: Math.max(8, Math.min(winH - MSG_MENU_H - 8, rawY));
-		msgMenuPosition = { x, y, flipUp };
+		const pos = positionForMenu(e.clientX, e.clientY, MSG_MENU_W, MSG_MENU_H);
+		msgMenuPosition = pos;
 		msgMenuIdx = idx;
 	}
 	function openMsgMenuAtPoint(idx: number, clientX: number, clientY: number) {
-		const winW = window.innerWidth;
-		const winH = window.innerHeight;
-		const flipUp = clientY + MSG_MENU_H > winH;
-		const x = Math.max(8, Math.min(winW - MSG_MENU_W - 8, clientX - MSG_MENU_W / 2));
-		const rawY = flipUp ? clientY - 8 : clientY + 8;
-		const y = flipUp
-			? Math.max(MSG_MENU_H + 8, Math.min(winH - 8, rawY))
-			: Math.max(8, Math.min(winH - MSG_MENU_H - 8, rawY));
-		msgMenuPosition = { x, y, flipUp };
+		const pos = positionForMenu(clientX, clientY, MSG_MENU_W, MSG_MENU_H);
+		msgMenuPosition = pos;
 		msgMenuIdx = idx;
 	}
 	function startMsgLongPress(idx: number, e: TouchEvent) {
@@ -1800,12 +1786,22 @@
 	function positionForMenu(clientX: number, clientY: number, menuW: number, menuH: number) {
 		const winW = window.innerWidth;
 		const winH = window.innerHeight;
-		const flipUp = clientY + menuH > winH;
-		const x = Math.max(8, Math.min(winW - menuW - 8, clientX - menuW / 2));
-		const rawY = flipUp ? clientY - 8 : clientY + 8;
+		const pad = 8;
+		// When flipUp=true the menu uses CSS `bottom` positioning, so y is the
+		// *bottom edge* of the menu (distance from viewport top). When false, y
+		// is the *top edge* (CSS `top`). Keep that in mind when clamping.
+		//
+		// Default: open above the finger (bottom edge just above touch point).
+		// Fallback: open below if there isn't enough room above.
+		const enoughRoomAbove = clientY - menuH - pad >= pad;
+		const flipUp = enoughRoomAbove;
+		// Clamp x so menu never clips left or right edge.
+		const x = Math.max(pad, Math.min(winW - menuW - pad, clientX - menuW / 2));
+		// y = bottom edge when flipUp, top edge when !flipUp.
+		// Clamp so the menu always stays fully on screen.
 		const y = flipUp
-			? Math.max(menuH + 8, Math.min(winH - 8, rawY))
-			: Math.max(8, Math.min(winH - menuH - 8, rawY));
+			? Math.max(menuH + pad, Math.min(winH - pad, clientY - pad))   // bottom edge ≥ menuH+pad so top stays on screen
+			: Math.max(pad, Math.min(winH - menuH - pad, clientY + pad));  // top edge, bottom stays on screen
 		return { x, y, flipUp };
 	}
 
