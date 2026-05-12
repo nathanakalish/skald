@@ -209,7 +209,7 @@
 							<Plus class="h-5 w-5" />
 						</button>
 					{/if}
-					<button onclick={onclose} class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"><X class="h-5 w-5" /></button>
+					<button onclick={onclose} class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close"><X class="h-5 w-5" /></button>
 				</div>
 			</div>
 
@@ -245,7 +245,7 @@
 										{#if lb.iconUrl}
 											<img src={lb.iconUrl} alt="" class="h-9 w-9 shrink-0 rounded-md object-cover" referrerpolicy="no-referrer" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
 										{:else if lb.characterAvatarPath}
-											<img src={lb.characterAvatarPath} alt="" class="h-9 w-9 shrink-0 rounded-md object-cover" />
+											<img src={lb.characterAvatarPath} alt="" loading="lazy" decoding="async" class="h-9 w-9 shrink-0 rounded-md object-cover" />
 										{:else}
 											<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground">
 												<BookOpen class="h-4.5 w-4.5" />

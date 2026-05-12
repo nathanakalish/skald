@@ -305,6 +305,7 @@
 					{/if}
 					<button
 						onclick={onclose}
+						aria-label="Close"
 						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
 					>
 						<X class="h-4 w-4" />

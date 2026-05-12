@@ -147,7 +147,7 @@
 								: 'bg-accent/30 hover:bg-accent/60'}"
 					>
 						{#if persona.avatarPath}
-							<img src={persona.avatarPath} alt="" class="h-9 w-9 shrink-0 rounded-full object-cover" />
+							<img src={persona.avatarPath} alt="" loading="lazy" decoding="async" class="h-9 w-9 shrink-0 rounded-full object-cover" />
 						{:else}
 							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full {persona.isDefault ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground'}">
 								{#if persona.isDefault}
@@ -200,6 +200,7 @@
 					</button>
 					<button
 						onclick={onclose}
+						aria-label="Close"
 						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
 					>
 						<X class="h-4 w-4" />

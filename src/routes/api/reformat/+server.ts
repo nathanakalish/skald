@@ -6,6 +6,8 @@ import { eq, and } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
 import { requireUser } from '$lib/server/auth.js';
 import type { ChatMessage, SamplerSettings } from '$lib/providers/base.js';
+import { humanizeAnyError } from '$lib/server/chatErrors.js';
+import { logger } from '$lib/server/logger.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a text formatter. Your job is to reformat roleplay character greetings to use consistent formatting conventions.
 
@@ -93,9 +95,9 @@ export const POST: RequestHandler = async (event) => {
 			}
 		}
 	} catch (err) {
-		return json({
-			error: `Failed to reformat: ${err instanceof Error ? err.message : 'Unknown error'}`
-		}, { status: 500 });
+		// Log the raw error for ops; only ship a humanised string back to the client.
+		logger.warn('reformat failed', { err: err instanceof Error ? err.message : String(err) });
+		return json({ error: `Failed to reformat: ${humanizeAnyError(err)}` }, { status: 500 });
 	}
 
 	return json({ reformatted: fullResponse.trimEnd() });

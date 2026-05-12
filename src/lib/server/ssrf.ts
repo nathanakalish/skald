@@ -52,7 +52,11 @@ export function isPrivateIP(ip: string): boolean {
 	// IPv6 — normalize lowercase first
 	const v6 = ip.toLowerCase();
 	if (v6 === '::' || v6 === '::1') return true;
-	if (v6.startsWith('fe80:') || v6.startsWith('fe80::')) return true; // link-local
+	// link-local fe80::/10 — first 10 bits of the address are 1111111010, so the
+	// first hex nibble is `f`, the second is `e`, and the third is in `8`–`b`.
+	// Earlier check only matched the `fe80:` prefix which silently let `fe90::`
+	// through.
+	if (/^fe[89ab][0-9a-f]:/.test(v6)) return true;
 	if (v6.startsWith('fc') || v6.startsWith('fd')) return true;        // unique-local fc00::/7
 	if (v6.startsWith('ff')) return true;                                // multicast
 	// IPv4-mapped IPv6 (::ffff:a.b.c.d) — unwrap and recurse.

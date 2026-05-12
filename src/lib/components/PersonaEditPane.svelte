@@ -284,7 +284,7 @@
 			<div class="flex items-center gap-4">
 				<div class="relative">
 					{#if avatarPath}
-						<img src={avatarPath} alt="Persona avatar" class="h-20 w-20 rounded-full object-cover ring-2 ring-border" />
+						<img src={avatarPath} alt="Persona avatar" loading="lazy" decoding="async" class="h-20 w-20 rounded-full object-cover ring-2 ring-border" />
 					{:else}
 						<div class="flex h-20 w-20 items-center justify-center rounded-full bg-secondary text-secondary-foreground ring-2 ring-border">
 							<UserIcon class="h-8 w-8" />

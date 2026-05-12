@@ -9,11 +9,24 @@
  */
 const LINK_VALIDATE_DEBOUNCE_MS = 500;
 const LINK_VALIDATE_DOM_SETTLE_MS = 50;
+// Long-lived chats with lots of unique URLs would otherwise grow this Map
+// without bound. Cap is a soft LRU: when full, drop the oldest insertion.
+const LINK_CACHE_MAX = 200;
 
 export class LinkValidator {
 	private cache = new Map<string, boolean>();
 	private pending = false;
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	private remember(url: string, valid: boolean): void {
+		// Re-insert to bump LRU position.
+		if (this.cache.has(url)) this.cache.delete(url);
+		this.cache.set(url, valid);
+		if (this.cache.size > LINK_CACHE_MAX) {
+			const oldest = this.cache.keys().next().value;
+			if (oldest !== undefined) this.cache.delete(oldest);
+		}
+	}
 
 	/** Single-URL fetch with cache. Public for callers that want a direct check. */
 	async checkLink(url: string): Promise<boolean> {
@@ -26,10 +39,10 @@ export class LinkValidator {
 				body: JSON.stringify({ url })
 			});
 			const data = await res.json();
-			this.cache.set(url, data.valid);
-			return data.valid;
+			this.remember(url, !!data.valid);
+			return !!data.valid;
 		} catch {
-			this.cache.set(url, false);
+			this.remember(url, false);
 			return false;
 		}
 	}

@@ -353,6 +353,9 @@
 	// long active chats (no message tree walk on the server's critical path).
 	let chatData: { chat: any; character: any; messages: any[]; messageSiblings: Record<number, { index: number; total: number }>; hiddenBranchCount: number; totalMessages?: number } | null = $state(null);
 	let chatLoading = $state(!!initialChatId);
+	// Gated visibility for the loading spinner — see loadChat() for the
+	// short delay that keeps quick fetches from flashing it on screen.
+	let showChatSpinner = $state(!!initialChatId);
 
 	// On mobile with no active chat, start sidebar open (no flash)
 	let mobileOpen = $state(initMobile && ((initialUiState.panel !== 'chat') || !initialChatId));
@@ -949,6 +952,9 @@
 			return;
 		}
 		if (!chatData) chatLoading = true;
+		// Delay the visible spinner so fast loads don't flash. The actual
+		// chat content swaps in on `chatData` regardless.
+		const spinnerDelay = setTimeout(() => { showChatSpinner = chatLoading; }, 180);
 		try {
 			const pageSize = settings.chatPageSize ?? 50;
 			const url = pageSize > 0 ? `/api/chats/${id}/data?limit=${pageSize}` : `/api/chats/${id}/data`;
@@ -964,7 +970,9 @@
 		} catch {
 			chatData = null;
 		} finally {
+			clearTimeout(spinnerDelay);
 			chatLoading = false;
+			showChatSpinner = false;
 		}
 	}
 
@@ -2397,7 +2405,7 @@
 								{/if}
 								<div class="relative pointer-events-none">
 									{#if rc.avatar}
-										<img src={rc.avatar} alt={rc.name} draggable="false" class="h-16 w-16 rounded-full object-cover {activeChatId === rc.chatId ? 'ring-2 ring-primary ring-offset-2 ring-offset-sidebar' : ''}" />
+										<img src={rc.avatar} alt={rc.name} draggable="false" loading="lazy" decoding="async" class="h-16 w-16 rounded-full object-cover {activeChatId === rc.chatId ? 'ring-2 ring-primary ring-offset-2 ring-offset-sidebar' : ''}" />
 									{:else}
 										<div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 text-base font-semibold text-primary {activeChatId === rc.chatId ? 'ring-2 ring-primary ring-offset-2 ring-offset-sidebar' : ''}">{rc.name[0]}</div>
 									{/if}
@@ -2642,7 +2650,7 @@
 						onclick={() => { dismissChatNotification(notif.id); openChat(notif.chatId); }}
 					>
 						{#if notif.characterAvatar}
-							<img src={notif.characterAvatar} alt="" class="h-9 w-9 shrink-0 rounded-full object-cover" />
+							<img src={notif.characterAvatar} alt="" loading="lazy" decoding="async" class="h-9 w-9 shrink-0 rounded-full object-cover" />
 						{:else}
 							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
 								<MessageSquare class="h-4 w-4" />
@@ -2908,7 +2916,9 @@
 			{/key}
 		{:else if chatLoading}
 			<div class="flex h-full flex-col items-center justify-center text-muted-foreground md:rounded-2xl md:bg-background">
-				<div class="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+				{#if showChatSpinner}
+					<div class="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent fade-in"></div>
+				{/if}
 			</div>
 		{:else}
 			<div class="fade-in flex h-full flex-col items-center justify-center text-muted-foreground md:rounded-2xl md:bg-background">

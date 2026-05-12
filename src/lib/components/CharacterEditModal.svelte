@@ -912,7 +912,7 @@
 		<div class="flex items-center justify-between border-b border-border px-4 py-3">
 			<div class="flex items-center gap-3 min-w-0">
 				{#if character.avatarPath}
-					<img src={character.avatarPath} alt={character.name} class="h-10 w-10 rounded-full object-cover" />
+					<img src={character.avatarPath} alt={character.name} loading="lazy" decoding="async" class="h-10 w-10 rounded-full object-cover" />
 				{:else}
 					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
 						{character.name?.[0] ?? '?'}
@@ -1146,6 +1146,7 @@
 					{/if}
 					<button
 						onclick={onclose}
+						aria-label="Close"
 						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
 					>
 						<X class="h-4 w-4" />

@@ -166,7 +166,7 @@
 								class="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent disabled:opacity-50"
 							>
 								{#if c.avatarPath}
-									<img src={c.avatarPath} alt="" class="h-7 w-7 rounded-full object-cover" />
+									<img src={c.avatarPath} alt="" loading="lazy" decoding="async" class="h-7 w-7 rounded-full object-cover" />
 								{:else}
 									<div class="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{c.name[0]}</div>
 								{/if}

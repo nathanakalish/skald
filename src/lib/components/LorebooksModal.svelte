@@ -250,7 +250,7 @@
 							{#if typeof lorebook.iconUrl === 'string' && lorebook.iconUrl}
 								<img src={lorebook.iconUrl} alt="" class="h-10 w-10 shrink-0 rounded-md object-cover" referrerpolicy="no-referrer" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
 							{:else if char?.avatarPath}
-								<img src={char.avatarPath} alt={char.name} class="h-10 w-10 shrink-0 rounded-md object-cover" />
+								<img src={char.avatarPath} alt={char.name} loading="lazy" decoding="async" class="h-10 w-10 shrink-0 rounded-md object-cover" />
 							{:else if char}
 								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">{char.name[0]}</div>
 							{:else}
@@ -319,6 +319,7 @@
 					</button>
 					<button
 						onclick={onclose}
+						aria-label="Close"
 						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
 					>
 						<X class="h-4 w-4" />
@@ -405,7 +406,7 @@
 								class="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:border-primary/30"
 							>
 								{#if char?.avatarPath}
-									<img src={char.avatarPath} alt={char.name} class="h-10 w-10 shrink-0 rounded-full object-cover" />
+									<img src={char.avatarPath} alt={char.name} loading="lazy" decoding="async" class="h-10 w-10 shrink-0 rounded-full object-cover" />
 								{:else if char}
 									<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">{char.name[0]}</div>
 								{:else}

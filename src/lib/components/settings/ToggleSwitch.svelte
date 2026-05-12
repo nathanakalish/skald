@@ -12,9 +12,12 @@
 
 <button
 	type="button"
+	role="switch"
+	aria-checked={checked}
+	aria-label={label}
 	{disabled}
 	onclick={() => onchange(!checked)}
-	class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
+	class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
 >
 	<div>
 		<span class="block text-sm font-medium">{label}</span>

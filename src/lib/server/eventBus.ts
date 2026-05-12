@@ -43,8 +43,10 @@ const BUFFER_TTL_MS = 5 * 60 * 1000; // 5 minutes
 class EventBus {
 	private listeners = new Set<Listener>();
 	private seq = 0;
-	private buffer: SequencedEvent[] = [];
-	private bufferTimestamps: number[] = [];
+	// Single combined ring of {event, ts}. Was previously two parallel arrays
+	// (`buffer` + `bufferTimestamps`) which had to stay length-synced — easy to
+	// drift if a listener re-entered emit() mid-prune.
+	private buffer: { event: SequencedEvent; ts: number }[] = [];
 
 	/** Subscribe to all chat events. Returns an unsubscribe function. */
 	subscribe(listener: Listener): () => void {
@@ -58,8 +60,7 @@ class EventBus {
 
 		// Buffer the important stuff (complete / unread / error) for replay on reconnect.
 		if (event.type === 'complete' || event.type === 'unread' || event.type === 'error') {
-			this.buffer.push(sequenced);
-			this.bufferTimestamps.push(Date.now());
+			this.buffer.push({ event: sequenced, ts: Date.now() });
 			this.pruneBuffer();
 		}
 
@@ -74,19 +75,21 @@ class EventBus {
 
 	/** Replay buffered events newer than `afterId` for one specific user. */
 	replay(afterId: number, userId: number): SequencedEvent[] {
-		return this.buffer.filter(e => e.id > afterId && e.userId === userId);
+		const out: SequencedEvent[] = [];
+		for (const entry of this.buffer) {
+			if (entry.event.id > afterId && entry.event.userId === userId) out.push(entry.event);
+		}
+		return out;
 	}
 
 	/** Drop expired or excess entries from the replay buffer. */
 	private pruneBuffer(): void {
-		const now = Date.now();
-		while (this.bufferTimestamps.length > 0 && now - this.bufferTimestamps[0] > BUFFER_TTL_MS) {
+		const cutoff = Date.now() - BUFFER_TTL_MS;
+		while (this.buffer.length > 0 && this.buffer[0].ts < cutoff) {
 			this.buffer.shift();
-			this.bufferTimestamps.shift();
 		}
 		while (this.buffer.length > BUFFER_MAX) {
 			this.buffer.shift();
-			this.bufferTimestamps.shift();
 		}
 	}
 }

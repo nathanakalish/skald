@@ -20,6 +20,12 @@ const COALESCE_WINDOW_MS = 50;
 type Pending = { timer: ReturnType<typeof setTimeout>; events: Map<string, RealtimeEvent> };
 const pending = new Map<number, Pending>();
 
+// Per-event-type counter so non-identifiable events still get a stable, unique
+// key within a coalesce window. Math.random() previously meant *every* enqueue
+// of an idless event got its own slot — that's fine for uniqueness but
+// unnecessarily noisy; a counter is just as unique without poisoning the cache.
+let _slotCounter = 0;
+
 function eventKey(event: RealtimeEvent): string {
 	// Most events have a stable identity via `id` or `chatId+id`; fall back
 	// to a unique key so non-identifiable events still get through.
@@ -30,7 +36,7 @@ function eventKey(event: RealtimeEvent): string {
 	if (e.chatId !== undefined) return `${event.type}:${e.chatId}`;
 	// `*:replaced` events have no id — collapse all of them into one slot.
 	if (/:replaced$/.test(event.type)) return event.type;
-	return `${event.type}:${Math.random()}`;
+	return `${event.type}:#${++_slotCounter}`;
 }
 
 function flush(userId: number) {
@@ -63,5 +69,7 @@ export function broadcast(userId: number, event: RealtimeEvent): void {
 		slot = { events: new Map(), timer: setTimeout(() => flush(userId), COALESCE_WINDOW_MS) };
 		pending.set(userId, slot);
 	}
-	slot.events.set(eventKey(event), event);
+	// Shallow-copy so callers can mutate `event` after broadcasting (e.g. attach
+	// derived fields) without quietly mutating what's queued for SSE flush.
+	slot.events.set(eventKey(event), { ...event });
 }

@@ -9,6 +9,7 @@ import { requireUser } from '$lib/server/auth.js';
 import { applyRegexScripts } from '$lib/services/regex.js';
 import { bumpChatTail, recomputeChatTail } from '$lib/db/chatTail.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { lengthError, MAX_MESSAGE_CHARS } from '$lib/utils/validate.js';
 
 /**
  * Fire-and-forget: save the user message, enqueue the LLM job, return immediately.
@@ -27,6 +28,22 @@ export const POST: RequestHandler = async (event) => {
 	} = await event.request.json();
 
 	if (!chatId) return json({ error: 'chatId required' }, { status: 400 });
+
+	// Cap obviously oversized payloads early — these strings are about to hit
+	// SQLite, the regex pipeline, and the LLM context budget calculator.
+	const lenErr =
+		lengthError('content', rawContent, MAX_MESSAGE_CHARS) ||
+		lengthError('guidance', rawGuidance, MAX_MESSAGE_CHARS);
+	if (lenErr) return json(lenErr, { status: 413 });
+	if (Array.isArray(rawImpersonationSwipes)) {
+		for (const s of rawImpersonationSwipes) {
+			const e =
+				lengthError('impersonation draft', s?.draft, MAX_MESSAGE_CHARS) ||
+				lengthError('impersonation reasoning', s?.reasoning, MAX_MESSAGE_CHARS) ||
+				lengthError('impersonation guidance', s?.guidance, MAX_MESSAGE_CHARS);
+			if (e) return json(e, { status: 413 });
+		}
+	}
 
 	// Verify ownership.
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();

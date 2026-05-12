@@ -300,7 +300,7 @@
 					{#if activeChat}
 						<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
 							{#if activeChat.characterAvatar}
-								<img src={activeChat.characterAvatar} alt="" class="h-5 w-5 rounded-full object-cover" />
+								<img src={activeChat.characterAvatar} alt="" loading="lazy" decoding="async" class="h-5 w-5 rounded-full object-cover" />
 							{/if}
 							<span class="truncate">{activeChat.title || activeChat.characterName || `Chat #${activeChat.id}`}</span>
 						</div>
@@ -474,7 +474,7 @@
 							class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent disabled:opacity-50"
 						>
 							{#if c.avatarPath}
-								<img src={c.avatarPath} alt="" class="h-9 w-9 rounded-full object-cover" />
+								<img src={c.avatarPath} alt="" loading="lazy" decoding="async" class="h-9 w-9 rounded-full object-cover" />
 							{:else}
 								<div class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">{c.name[0]}</div>
 							{/if}

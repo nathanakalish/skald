@@ -77,14 +77,16 @@
 					{#if isEditing}
 						<button
 							onclick={saveEdit}
-							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+							aria-label="Save reasoning"
+							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							title="Save"
 						>
 							<Check class="h-4 w-4" />
 						</button>
 						<button
 							onclick={cancelEdit}
-							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+							aria-label="Cancel edit"
+							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							title="Cancel edit"
 						>
 							<X class="h-4 w-4" />
@@ -93,7 +95,8 @@
 						{#if messageId > 0}
 							<button
 								onclick={startEdit}
-								class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								aria-label="Edit reasoning"
+								class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								title="Edit reasoning"
 							>
 								<Pencil class="h-3.5 w-3.5" />
@@ -101,7 +104,8 @@
 						{/if}
 						<button
 							onclick={() => { open = false; }}
-							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+							aria-label="Close reasoning"
+							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							title="Close"
 						>
 							<X class="h-4 w-4" />

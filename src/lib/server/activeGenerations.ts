@@ -73,3 +73,16 @@ export const activeGenerations = {
 		return out;
 	},
 };
+
+// Safety net for crashed/abandoned generations: anything older than an hour is
+// almost certainly orphaned (the LLM call would have timed out long before).
+// Without this the registry leaks one entry per crashed stream until restart.
+const STALE_GENERATION_MS = 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const sweep = setInterval(() => {
+	const cutoff = Date.now() - STALE_GENERATION_MS;
+	for (const [chatId, gen] of _byChatId) {
+		if (gen.startedAt < cutoff) _byChatId.delete(chatId);
+	}
+}, SWEEP_INTERVAL_MS);
+sweep.unref?.();

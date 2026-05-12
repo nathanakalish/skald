@@ -158,7 +158,7 @@
 						</div>
 					{/if}
 				</div>
-				<button onclick={onclose} class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"><X class="h-5 w-5" /></button>
+				<button onclick={onclose} class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close"><X class="h-5 w-5" /></button>
 			</div>
 
 			<!-- Greeting label -->

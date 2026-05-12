@@ -22,6 +22,17 @@ import { toasts } from '$lib/stores/toast.svelte.js';
 
 declare const __APP_VERSION__: string;
 
+// Module-scoped so multiple effect runs (or two callers in the same tab)
+// can't each trigger their own reload toast. Once we've decided to reload
+// for a given server version, every other call short-circuits.
+let reloadingForUpdate = false;
+let versionCheckInFlight = false;
+
+// Hard cap: only ever reload ONCE per loaded shell, per server version.
+// If a stale service-worker keeps handing back the old bundle after the
+// reload, we'd otherwise loop forever (toast → reload → still stale → toast).
+const RELOAD_MARKER_KEY = 'skald:reloadedForVersion';
+
 interface CreateRealtimeConnectionOptions {
 	/** Usually `() => !!data.user` — when false, no SSE / presence calls fire. */
 	getEnabled: () => boolean;
@@ -76,8 +87,6 @@ export function createRealtimeConnection({
 		const RECONNECT_INTERVAL = 5000;
 		const GIVE_UP_AFTER = 3 * 60 * 1000;
 
-		let reloadingForUpdate = false;
-		let versionCheckInFlight = false;
 		async function checkVersion() {
 			if (reloadingForUpdate || versionCheckInFlight) return;
 			versionCheckInFlight = true;
@@ -97,7 +106,18 @@ export function createRealtimeConnection({
 					// already had the new version when an old cached shell loaded, the
 					// first check just stored the new value and never reloaded.
 					if (current && current !== __APP_VERSION__) {
+						// Don't loop: if we already reloaded once for this server version
+						// but the cached bundle is still on the old version (likely a
+						// stuck service worker), just stop nagging the user. Settling on
+						// the next foreground / poll cycle is fine once the SW finally
+						// swaps in the new build.
+						let alreadyReloaded = false;
+						try { alreadyReloaded = sessionStorage.getItem(RELOAD_MARKER_KEY) === current; }
+						catch { /* sessionStorage may be blocked */ }
+						if (alreadyReloaded) return;
 						reloadingForUpdate = true;
+						try { sessionStorage.setItem(RELOAD_MARKER_KEY, current); }
+						catch { /* ignore */ }
 						toasts.info('New version detected, reloading...', 3000);
 						// Best-effort: poke the service worker to grab the new build
 						// before we reload, so the next page load isn't served from
@@ -107,6 +127,11 @@ export function createRealtimeConnection({
 							await reg?.update();
 						} catch { /* non-fatal */ }
 						setTimeout(() => window.location.reload(), 1500);
+					} else if (current && current === __APP_VERSION__) {
+						// Bundle matches server again — clear the marker so a future
+						// deploy in this same tab session can prompt another reload.
+						try { sessionStorage.removeItem(RELOAD_MARKER_KEY); }
+						catch { /* ignore */ }
 					}
 				}
 			} catch { /* version check failed, not the end of the world */ }

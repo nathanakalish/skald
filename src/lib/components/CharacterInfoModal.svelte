@@ -99,6 +99,7 @@
 				</div>
 				<button
 					onclick={onclose}
+					aria-label="Close"
 					class="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
 				>
 					<X class="h-4 w-4" />

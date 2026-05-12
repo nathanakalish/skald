@@ -268,7 +268,7 @@
 					<h2 class="text-lg font-semibold">Chat Settings</h2>
 					<p class="text-xs text-muted-foreground">Override defaults for this chat</p>
 				</div>
-				<button onclick={onclose} class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent">
+				<button onclick={onclose} aria-label="Close" class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent">
 					<X class="h-4 w-4" />
 				</button>
 			</div>
