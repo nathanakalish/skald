@@ -113,6 +113,16 @@ export const chats = sqliteTable('chats', {
 	// message that owned it. Prefills the chat-bar's "Guide impersonation…"
 	// modal next time it's opened, then clears once the user impersonates.
 	pendingImpersonationGuidance: text('pending_impersonation_guidance'),
+	// Server-mirrored unsent textarea draft + inline edit buffer. Drives
+	// cross-device "pick up where I left off" sync. The *_at fields are
+	// epoch-ms timestamps used for last-write-wins resolution when two
+	// devices race. All five clear when the message is sent (api/chat/send)
+	// or saved/cancelled (api/messages/[id]).
+	pendingDraft: text('pending_draft'),
+	pendingDraftAt: integer('pending_draft_at'),
+	editingMessageId: integer('editing_message_id'),
+	editingMessageContent: text('editing_message_content'),
+	editingMessageAt: integer('editing_message_at'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`),
 	updatedAt: text('updated_at').default(sql`(datetime('now'))`)
 });

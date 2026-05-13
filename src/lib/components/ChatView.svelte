@@ -20,7 +20,7 @@
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
 
-	let { chat, character, initialMessages, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true }: {
+	let { chat, character, initialMessages, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
 		chat: any;
 		character: any;
 		initialMessages: any[];
@@ -45,6 +45,7 @@
 		reduceMotion?: boolean;
 		blockExternalContent?: boolean;
 		nestedEmphasisInSpeech?: boolean;
+		connectionState?: 'connected' | 'disconnected' | 'failed';
 	} = $props();
 
 	// Resolve the active provider for this chat
@@ -186,22 +187,24 @@
 		return --placeholderIdSeq;
 	}
 
-	// Pick the right initial textarea value for a chat. Server-persisted
-	// impersonation drafts beat the local draft when they're newer than
-	// what this device last picked up — that's how the same generated text
-	// shows up across devices. We track the last-seen `generatedAt` per
-	// chat in localStorage so re-mounts on the same device don't keep
-	// clobbering edits the user already made on top of the draft.
+	// Pick the right initial textarea value for a chat. Priority order:
+	//   1. Live impersonation stream — start blank so streaming tokens fill it.
+	//   2. Fresh impersonation draft (status=done) we haven't seen — gates on
+	//      generatedAt to avoid clobbering local edits on remount.
+	//   3. Server-persisted unsent draft (chat.pendingDraft) when it's newer
+	//      than this device's local draft — cross-device sync entry point.
+	//   4. Local draft from localStorage — offline-survival fallback.
 	function pickDraftForChat(c: typeof chat): string {
-		const local = (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function')
+		const localStr = (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function')
 			? localStorage.getItem(`skald-draft-${c.id}`) || ''
 			: '';
+		const localAt = (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function')
+			? Number(localStorage.getItem(`skald-draft-${c.id}-at`) || '0')
+			: 0;
+
 		const status = (c as any).impersonationStatus as string | null | undefined;
-		if (status === 'streaming') {
-			// Live tokens will arrive via the generations store and overwrite
-			// `input`. Start blank so we don't briefly flash an empty/stale draft.
-			return '';
-		}
+		if (status === 'streaming') return '';
+
 		const swipes = parseImpersonationSwipes((c as any).impersonationSwipes);
 		const idx = (c as any).impersonationSwipeIndex ?? 0;
 		const active = swipes[idx];
@@ -212,7 +215,15 @@
 				return active.draft;
 			}
 		}
-		return local;
+
+		// Server draft beats local when its timestamp is newer (i.e. another
+		// device typed something more recently than this one). Equal timestamps
+		// favour local — avoids a no-op clobber on the same device's remount.
+		const serverDraft = (c as any).pendingDraft as string | null | undefined;
+		const serverAt = (c as any).pendingDraftAt ?? 0;
+		if (serverAt > localAt && serverDraft != null) return serverDraft;
+
+		return localStr;
 	}
 
 	function parseMessage(m: any): Message {
@@ -269,7 +280,7 @@
 	let hasMore = $derived(messageList.length < totalMsgCount);
 
 	let confirmingDeleteIdx: number | null = $state(null);
-	let input = $state(untrack(() => (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function' ? localStorage.getItem(`skald-draft-${chat.id}`) : null) || ''));
+	let input = $state(untrack(() => pickDraftForChat(chat)));
 	let isStreaming = $state(false);
 	let messagesContainer: HTMLDivElement | undefined = $state();
 	let bottomSentinel: HTMLDivElement | undefined = $state();
@@ -299,11 +310,16 @@
 	function openMsgMenu(idx: number, e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
+		// Only one context menu on screen at a time — dismiss the others.
+		showImpersonateMenu = false;
+		showSendMenu = false;
 		const pos = positionForMenu(e.clientX, e.clientY, MSG_MENU_W, MSG_MENU_H);
 		msgMenuPosition = pos;
 		msgMenuIdx = idx;
 	}
 	function openMsgMenuAtPoint(idx: number, clientX: number, clientY: number) {
+		showImpersonateMenu = false;
+		showSendMenu = false;
 		const pos = positionForMenu(clientX, clientY, MSG_MENU_W, MSG_MENU_H);
 		msgMenuPosition = pos;
 		msgMenuIdx = idx;
@@ -647,6 +663,17 @@
 							streamingAssistantIdx = placeholderIdx;
 						}
 					} else if (msg.role === 'user') {
+						// Cross-device user send: a message arrived that wasn't from
+						// our optimistic placeholder. Clear our local draft + textarea
+						// + impersonation reasoning so this device doesn't keep around
+						// a now-stale draft (the server has already cleared impersonation
+						// swipes + pendingDraft, and our $effects pick that up).
+						input = '';
+						impersonateReasoning = '';
+						try {
+							localStorage.removeItem(`skald-draft-${chat.id}`);
+							localStorage.removeItem(`skald-draft-${chat.id}-at`);
+						} catch { /* ignore */ }
 						if (streamingAssistantIdx >= 0 && streamingAssistantIdx === messageList.length - 1) {
 							// Splice before the streaming tail placeholder.
 							const next = messageList.slice();
@@ -1327,7 +1354,22 @@
 		streamOriginalMessage = null;
 	}
 
-	// Persist input draft per conversation
+	// Persist input draft per conversation. Two stores layered:
+	//   - localStorage  → offline survival; works even when SSE is dead
+	//   - chat.pendingDraft (server) → cross-device sync; debounced PATCH below
+	// We track the wall-clock time of the most recent local edit so the
+	// server's last-write-wins logic and the on-reconnect push both work
+	// with a single source of truth.
+	let lastLocalDraftAt = $state(untrack(() => {
+		if (typeof localStorage === 'undefined') return 0;
+		return Number(localStorage.getItem(`skald-draft-${chat.id}-at`) || '0');
+	}));
+	// What we last received from the server (or just sent up). Used to
+	// suppress feedback loops: if the new value matches this, the change
+	// came FROM the server and shouldn't be PATCHed back.
+	let lastSyncedDraft = $state<string>(untrack(() => ((chat as any).pendingDraft as string | null) ?? ''));
+	let lastSyncedDraftAt = $state<number>(untrack(() => (chat as any).pendingDraftAt ?? 0));
+
 	$effect(() => {
 		const draft = input;
 		const chatId = chat.id;
@@ -1335,7 +1377,147 @@
 			localStorage.setItem(`skald-draft-${chatId}`, draft);
 		} else {
 			localStorage.removeItem(`skald-draft-${chatId}`);
+			localStorage.removeItem(`skald-draft-${chatId}-at`);
 		}
+		// Bump the local timestamp ONLY when the value actually diverges from
+		// the last server snapshot — otherwise an SSE-driven assignment to
+		// `input` would falsely look like a local edit and ping-pong with
+		// the server.
+		if (draft !== untrack(() => lastSyncedDraft)) {
+			lastLocalDraftAt = Date.now();
+			localStorage.setItem(`skald-draft-${chatId}-at`, String(lastLocalDraftAt));
+		}
+	});
+
+	// Debounced server save for the textarea draft. 1.5s after the last edit
+	// — also fires immediately when the tab is hidden or the textarea blurs.
+	let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	const DRAFT_SAVE_DEBOUNCE_MS = 1500;
+	async function flushDraftSave() {
+		if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null; }
+		const draft = input;
+		if (draft === lastSyncedDraft) return;
+		const at = lastLocalDraftAt || Date.now();
+		const chatId = chat.id;
+		try {
+			await fetch(`/api/chats/${chatId}/draft`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ draft: draft || null, draftAt: at })
+			});
+			lastSyncedDraft = draft;
+			lastSyncedDraftAt = at;
+		} catch { /* offline; localStorage retains it for the reconnect push */ }
+	}
+	$effect(() => {
+		void input; // track
+		const chatId = chat.id;
+		void chatId;
+		if (draftSaveTimer) clearTimeout(draftSaveTimer);
+		// Skip when the change came FROM the server (suppresses loops).
+		if (input === untrack(() => lastSyncedDraft)) return;
+		// Skip when offline; rely on the reconnect push instead.
+		if (untrack(() => connectionState) !== 'connected') return;
+		draftSaveTimer = setTimeout(flushDraftSave, DRAFT_SAVE_DEBOUNCE_MS);
+	});
+
+	// Mirror server-side draft into the textarea when another device has
+	// typed something more recent than this device's latest local edit.
+	$effect(() => {
+		const remote = ((chat as any).pendingDraft as string | null) ?? '';
+		const remoteAt = ((chat as any).pendingDraftAt as number | null) ?? 0;
+		// Same snapshot we last reconciled — nothing to do.
+		if (remoteAt === untrack(() => lastSyncedDraftAt) && remote === untrack(() => lastSyncedDraft)) return;
+		// Server is older than our latest local edit — our pending PATCH will
+		// replace it. Don't clobber what the user is currently typing.
+		if (remoteAt < untrack(() => lastLocalDraftAt)) return;
+		lastSyncedDraft = remote;
+		lastSyncedDraftAt = remoteAt;
+		if (input !== remote) input = remote;
+	});
+
+	// Inline message-edit buffer sync — same pattern as the textarea draft.
+	let lastSyncedEditId = $state<number | null>(untrack(() => (chat as any).editingMessageId ?? null));
+	let lastSyncedEditContent = $state<string>(untrack(() => (chat as any).editingMessageContent ?? ''));
+	let lastSyncedEditAt = $state<number>(untrack(() => (chat as any).editingMessageAt ?? 0));
+	let lastLocalEditAt = $state(0);
+	let editSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	const EDIT_SAVE_DEBOUNCE_MS = 1500;
+	async function flushEditSave() {
+		if (editSaveTimer) { clearTimeout(editSaveTimer); editSaveTimer = null; }
+		const id = editingId;
+		const content = editContent;
+		if (id === lastSyncedEditId && content === lastSyncedEditContent) return;
+		const at = lastLocalEditAt || Date.now();
+		const chatId = chat.id;
+		try {
+			await fetch(`/api/chats/${chatId}/draft`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					editingMessageId: id,
+					editingMessageContent: id == null ? null : content,
+					editingAt: at
+				})
+			});
+			lastSyncedEditId = id;
+			lastSyncedEditContent = id == null ? '' : content;
+			lastSyncedEditAt = at;
+		} catch { /* offline; reconnect-push will cover it */ }
+	}
+	$effect(() => {
+		void editingId; void editContent;
+		// Bump local timestamp whenever local diverges from last sync.
+		if (editingId !== untrack(() => lastSyncedEditId) || editContent !== untrack(() => lastSyncedEditContent)) {
+			lastLocalEditAt = Date.now();
+		}
+		if (editSaveTimer) clearTimeout(editSaveTimer);
+		if (editingId === untrack(() => lastSyncedEditId) && editContent === untrack(() => lastSyncedEditContent)) return;
+		if (untrack(() => connectionState) !== 'connected') return;
+		// Clearing the edit (cancel/save) flushes immediately — feels nicer
+		// when the matching device drops the ghost edit right away.
+		const delay = editingId == null ? 0 : EDIT_SAVE_DEBOUNCE_MS;
+		editSaveTimer = setTimeout(flushEditSave, delay);
+	});
+	$effect(() => {
+		const remoteId = ((chat as any).editingMessageId as number | null) ?? null;
+		const remoteContent = ((chat as any).editingMessageContent as string | null) ?? '';
+		const remoteAt = ((chat as any).editingMessageAt as number | null) ?? 0;
+		if (remoteAt === untrack(() => lastSyncedEditAt) && remoteId === untrack(() => lastSyncedEditId) && remoteContent === untrack(() => lastSyncedEditContent)) return;
+		if (remoteAt < untrack(() => lastLocalEditAt)) return;
+		lastSyncedEditId = remoteId;
+		lastSyncedEditContent = remoteContent;
+		lastSyncedEditAt = remoteAt;
+		if (editingId !== remoteId) editingId = remoteId;
+		if (editContent !== remoteContent) editContent = remoteContent;
+	});
+
+	// Flush pending saves when the tab becomes hidden or the page is about to
+	// unload — covers the "I composed a message then closed the laptop" case.
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		const onHide = () => { if (document.hidden) { flushDraftSave(); flushEditSave(); } };
+		const onPageHide = () => { flushDraftSave(); flushEditSave(); };
+		document.addEventListener('visibilitychange', onHide);
+		window.addEventListener('pagehide', onPageHide);
+		return () => {
+			document.removeEventListener('visibilitychange', onHide);
+			window.removeEventListener('pagehide', onPageHide);
+		};
+	});
+
+	// On reconnect, push any local-only edits that happened while offline.
+	// localStorage already preserved the draft text across the disconnect;
+	// we just need to get it up to the server so other devices see it.
+	let prevConnectionState: typeof connectionState = $state(untrack(() => connectionState));
+	$effect(() => {
+		const cs = connectionState;
+		const prev = untrack(() => prevConnectionState);
+		prevConnectionState = cs;
+		if (cs !== 'connected' || prev === 'connected') return;
+		// Just reconnected. Push if local diverges from last known server snapshot.
+		if (input !== untrack(() => lastSyncedDraft)) flushDraftSave();
+		if (editingId !== untrack(() => lastSyncedEditId) || editContent !== untrack(() => lastSyncedEditContent)) flushEditSave();
 	});
 
 	async function generateGreeting() {
@@ -1811,10 +1993,15 @@
 	const SEND_MENU_H = 80;
 
 	const impersonateBtnHandlers = buttonContextHandlers((x, y) => {
+		// Only one context menu on screen at a time.
+		closeMsgMenu();
+		showSendMenu = false;
 		impersonateMenuPosition = positionForMenu(x, y, IMPERSONATE_MENU_W, IMPERSONATE_MENU_H);
 		showImpersonateMenu = true;
 	});
 	const sendBtnHandlers = buttonContextHandlers((x, y) => {
+		closeMsgMenu();
+		showImpersonateMenu = false;
 		sendMenuPosition = positionForMenu(x, y, SEND_MENU_W, SEND_MENU_H);
 		showSendMenu = true;
 	});

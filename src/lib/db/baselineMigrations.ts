@@ -507,6 +507,23 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		if (!names.has('pending_impersonation_guidance')) {
 			sqlite.exec('ALTER TABLE chats ADD COLUMN pending_impersonation_guidance TEXT');
 		}
+		// Cross-device draft sync: persist the unsent textarea + inline edit
+		// buffer on the chat row so reopening on another device picks them up.
+		if (!names.has('pending_draft')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN pending_draft TEXT');
+		}
+		if (!names.has('pending_draft_at')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN pending_draft_at INTEGER');
+		}
+		if (!names.has('editing_message_id')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN editing_message_id INTEGER');
+		}
+		if (!names.has('editing_message_content')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN editing_message_content TEXT');
+		}
+		if (!names.has('editing_message_at')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN editing_message_at INTEGER');
+		}
 	}
 	
 	// Add background_path column to characters (idempotent)

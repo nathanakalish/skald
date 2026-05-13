@@ -136,6 +136,10 @@ export const POST: RequestHandler = async (event) => {
 				impersonationSwipes: null,
 				impersonationSwipeIndex: 0,
 				impersonationStatus: null,
+				// Clear cross-device draft mirrors too — the message is now
+				// in flight, so any composing state is by definition done.
+				pendingDraft: null,
+				pendingDraftAt: Date.now(),
 			}).where(eq(chats.id, chatId)).run();
 			return id;
 		});
@@ -152,6 +156,12 @@ export const POST: RequestHandler = async (event) => {
 			status: null,
 			swipes: [],
 			swipeIndex: 0
+		});
+		// Mirror the draft clear into the realtime stream so other devices'
+		// chat-bar textareas drop the now-stale composing state.
+		broadcast(user.id, {
+			type: 'chat:patched', id: chatId,
+			patch: { pendingDraft: null, pendingDraftAt: Date.now() }
 		});
 	}
 

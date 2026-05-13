@@ -593,6 +593,19 @@
 			}
 		}
 
+		// chat:patched can arrive without an `event.chatId` (the affected chat's
+		// id lives in `payload.id`). Mirror it into the active ChatView's cache
+		// so cross-device draft / inline-edit sync lands without a round-trip.
+		if (chatData && event.type === 'chat:patched') {
+			const payload = event.data;
+			if (payload?.id === chatData.chat?.id && payload?.patch && typeof payload.patch === 'object') {
+				chatData = {
+					...chatData,
+					chat: { ...chatData.chat, ...payload.patch }
+				};
+			}
+		}
+
 		const chatId = event.chatId;
 
 		// Track streaming state
@@ -2912,6 +2925,7 @@
 					reduceMotion={settings.reduceMotion ?? false}
 					blockExternalContent={!(settings.allowExternalCreatorNotes ?? false)}
 					nestedEmphasisInSpeech={settings.nestedEmphasisInSpeech ?? true}
+					connectionState={realtime.connectionState}
 				/>
 			{/key}
 		{:else if chatLoading}
