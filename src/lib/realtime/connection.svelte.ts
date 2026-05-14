@@ -176,6 +176,15 @@ export function createRealtimeConnection({
 				failedAttempts = 0;
 				disconnectToastShown = false;
 				connectionState = 'connected';
+				// Resync full presence to the server immediately. Without this, the
+				// server-side session re-registered for this SSE has stale focus/chat
+				// state until the next focus event or 30s heartbeat — long enough to
+				// fire a "you're away" push for a message that arrives right as the
+				// user returns to the tab.
+				reportPresence({
+					focused: typeof document !== 'undefined' && document.hasFocus() && !document.hidden,
+					activeChatId: getActiveChatId()
+				});
 			};
 
 			eventSource.onmessage = (e) => {
@@ -251,7 +260,11 @@ export function createRealtimeConnection({
 				checkVersion();
 				connect();
 			}
-			reportPresence({ focused: !document.hidden });
+			// Send full presence (focus + active chat) so the server can't end up
+			// with a stale activeChatId after a long background period. The SSE
+			// onopen will repeat this once the new connection lands; the upsert in
+			// presence.update() makes either ordering safe.
+			reportPresence({ focused: !document.hidden, activeChatId: getActiveChatId() });
 		};
 		document.addEventListener('visibilitychange', visibilityHandler);
 
@@ -276,12 +289,12 @@ export function createRealtimeConnection({
 		checkVersion();
 
 		// Window focus/blur is more granular than visibilitychange, hence the second pair.
-		const focusHandler = () => reportPresence({ focused: true });
+		const focusHandler = () => reportPresence({ focused: true, activeChatId: getActiveChatId() });
 		const blurHandler = () => reportPresence({ focused: false });
 		window.addEventListener('focus', focusHandler);
 		window.addEventListener('blur', blurHandler);
 
-		reportPresence({ focused: document.hasFocus() });
+		reportPresence({ focused: document.hasFocus(), activeChatId: getActiveChatId() });
 
 		// Heartbeat so the server can evict sessions that died without saying goodbye.
 		const presenceHeartbeat = setInterval(() => {

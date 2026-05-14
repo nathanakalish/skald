@@ -476,11 +476,16 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			.run();
 		eventBus.emit({ type: 'unread', chatId, userId: chatUserId, data: { count: newUnread } });
 
-		// Web push (fire-and-forget). Gated to: app closed, OR all open tabs
-		// background, OR no device currently focused on this chat. The focused-tab
-		// check is `viewedElsewhere` — always suppress when that's true. Also
-		// suppressed for muted chats and during quiet hours.
+		// Web push (fire-and-forget). Only fires when nobody has the app open at all
+		// (every device backgrounded or closed). If any device has the app in the
+		// foreground — even on a different chat — the in-app toast on that device is
+		// the notification; we don't need to also buzz the phone.
+		//   viewedElsewhere      → someone is watching this exact chat → nothing
+		//   appOpenSomewhere     → app is focused somewhere (different chat) → toast only, no push
+		//   neither              → everything closed/backgrounded → push
+		// Also suppressed for muted chats and during quiet hours.
 		const chatMuted = currentChat?.muted === true;
+		const appOpenSomewhere = presence.hasAnyFocusedSession(chatUserId);
 
 		// Quiet hours: skip push entirely while in window (computed in user's tz).
 		const qhEnabledRow = db.select().from(userSettings)
@@ -511,7 +516,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			withinQuiet = isWithinQuietHours(qhStart, qhEnd, userNow);
 		}
 
-		const shouldSendPush = !chatMuted && !viewedElsewhere && !withinQuiet;
+		const shouldSendPush = !chatMuted && !viewedElsewhere && !appOpenSomewhere && !withinQuiet;
 
 		if (shouldSendPush) {
 			const character = db.select().from(characters).where(eq(characters.id, chat.characterId)).get();

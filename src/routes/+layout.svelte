@@ -757,14 +757,18 @@
 		//   • Muted chat                                          → nothing
 		//   • Active chat + tab focused                            → only an
 		//     in-chat indicator (dispatched as `new-message` so
-		//     ChatView can show it on the scroll-to-bottom button)
+		//   • App focused, THIS chat                               → nothing
+		//     (ChatView can show it on the scroll-to-bottom button)
 		//   • App focused, different chat                          → in-app toast
 		//     (+ sound if enabled). No OS push.
-		//   • Tab hidden / app closed                              → OS push only,
-		//     handled server-side via web-push. Skip foreground notif here
-		//     since the SW will fire the push notification.
+		//   • App backgrounded/closed everywhere                   → OS push only,
+		//     handled server-side via web-push.
+		//   • App backgrounded here, open on a different chat on
+		//     another device                                       → in-app toast
+		//     on the OTHER device (server sees appOpenSomewhere,
+		//     skips push). This device queues an away toast anyway.
 		//   • Another device focused on this chat                  → suppress here
-		//     (the focused device handles it). Other devices still get in-app.
+		//     (viewedElsewhere=true, server also skips push).
 		//   • Quiet hours                                          → suppress OS
 		//     push only (server-side); in-app toasts/sound still happen.
 		if (event.type === 'complete') {
