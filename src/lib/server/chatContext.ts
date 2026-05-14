@@ -194,7 +194,13 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 
 			const trimmedNonSystem = trimmed.filter(m => m.role !== 'system').length;
 			const keepCount = Math.min(trimmedNonSystem, chatMessages.length);
-			const trimmedChatMessages = chatMessages.slice(-keepCount);
+			// Array.slice(-0) === slice(0) === the WHOLE array, not an empty
+			// one. So when the trim decided to drop everything (context too
+			// full to fit any history alongside system + guidance + nudge)
+			// we'd accidentally keep the entire history, the prompt would
+			// still overflow, and most providers respond by truncating from
+			// the front — silently nuking the system prompt and guidance.
+			const trimmedChatMessages = keepCount > 0 ? chatMessages.slice(-keepCount) : [];
 
 			const secondPass = buildPromptWithSlots({
 				character,

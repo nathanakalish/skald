@@ -18,6 +18,7 @@ interface DeviceRow {
 	fingerprint: string;
 	endpoint: string;
 	userAgent: string | null;
+	sessionId: string | null;
 	createdAt: string | null;
 }
 
@@ -28,6 +29,7 @@ export const GET: RequestHandler = async (event) => {
 			id: pushSubscriptions.id,
 			endpoint: pushSubscriptions.endpoint,
 			userAgent: pushSubscriptions.userAgent,
+			sessionId: pushSubscriptions.sessionId,
 			createdAt: pushSubscriptions.createdAt
 		})
 		.from(pushSubscriptions)
@@ -39,6 +41,7 @@ export const GET: RequestHandler = async (event) => {
 		fingerprint: r.endpoint.slice(-12),
 		endpoint: r.endpoint,
 		userAgent: r.userAgent,
+		sessionId: r.sessionId,
 		createdAt: r.createdAt
 	}));
 

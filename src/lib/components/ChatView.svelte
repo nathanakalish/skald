@@ -298,7 +298,7 @@
 
 	// Message context menu (right-click / long-press)
 	let msgMenuIdx: number | null = $state(null);
-	let msgMenuPosition: { x: number; y: number; flipUp: boolean } | null = $state(null);
+	let msgMenuPosition: { x: number; y: number; flipUp: boolean; viewportH: number } | null = $state(null);
 	const MSG_MENU_W = 200;
 	const MSG_MENU_H = 300;
 	let msgLongPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -498,9 +498,9 @@
 
 	// Long-press / right-click menus for the impersonate + send buttons.
 	let showImpersonateMenu = $state(false);
-	let impersonateMenuPosition = $state<{ x: number; y: number; flipUp: boolean } | null>(null);
+	let impersonateMenuPosition = $state<{ x: number; y: number; flipUp: boolean; viewportH: number } | null>(null);
 	let showSendMenu = $state(false);
-	let sendMenuPosition = $state<{ x: number; y: number; flipUp: boolean } | null>(null);
+	let sendMenuPosition = $state<{ x: number; y: number; flipUp: boolean; viewportH: number } | null>(null);
 
 	// Character theme: parse character.theme JSON into CSS variable overrides
 	const ALLOWED_THEME_KEYS = new Set([
@@ -1226,14 +1226,21 @@
 						impersonateReasoning = gen.accumulatedReasoning;
 						streamingReasoning = gen.accumulatedReasoning;
 					} else if (gen.isRegenerate && gen.originalMessageId != null) {
-						// Regenerate: keep the original content visible (it gets
-						// blurred under the spinner overlay, like reformat). The
-						// real content (or the new swipe) lands on finishStreaming.
+						// Regenerate: stash the previous swipe so we can restore it
+						// on abort, then blank out the bubble content so the typing
+						// indicator (and live tokens) replace it instead of sitting
+						// behind a blur overlay. finishStreaming uses
+						// streamOriginalMessage to compose the new swipe array.
 						const idx = messageList.findIndex(m => m.id === gen.originalMessageId);
 						if (idx >= 0) {
 							streamOriginalMessage = { ...messageList[idx] };
 							streamingAssistantIdx = idx;
 							streamIsRegenerate = true;
+							messageList[idx] = {
+								...messageList[idx],
+								content: gen.accumulated,
+								reasoning: [gen.accumulatedReasoning]
+							};
 						} else {
 							// Original missing (very rare race) — fall back
 							// to a tail placeholder so the user at least sees
@@ -1280,12 +1287,12 @@
 			if (gen.accumulated.length > untrack(() => streamAccumulated).length) {
 				isReasoning = false;
 				streamAccumulated = gen.accumulated;
-				// For NEW sends, mirror tokens onto the placeholder so the
-				// user sees text appear as it streams. For REGEN, keep the
-				// bubble blank (typing dots only) until finishStreaming
-				// performs the swap — per the chosen UX.
+				// Mirror tokens onto the bubble so the user sees text appear
+				// as it streams — for both fresh sends AND regenerates. For
+				// regen, finishStreaming still composes the new swipe at the
+				// end using streamOriginalMessage.
 				const idx = untrack(() => streamingAssistantIdx);
-				if (!untrack(() => streamIsRegenerate) && !isTexting && !reduceMotion && idx >= 0) {
+				if (!isTexting && !reduceMotion && idx >= 0) {
 					untrack(() => {
 						updateMessagePreservingScroll(() => {
 							messageList[idx] = {
@@ -1297,6 +1304,15 @@
 					});
 				}
 				resetStreamTimeout();
+			}
+			// Catch-up finalize: if the generation finished while we were
+			// backgrounded (or otherwise missed the live `complete` SSE
+			// event), the mirror would otherwise leave isStreaming stuck on
+			// — bubble shows tokens with the typing indicator forever. Run
+			// finishStreaming here so the bubble settles into its final
+			// state without waiting for a fresh user action.
+			if (gen.status === 'done' || gen.status === 'error') {
+				untrack(() => { finishStreaming(); });
 			}
 		}
 
@@ -1966,8 +1982,18 @@
 	}
 
 	function positionForMenu(clientX: number, clientY: number, menuW: number, menuH: number) {
-		const winW = window.innerWidth;
-		const winH = window.innerHeight;
+		// On mobile with the soft keyboard up, position:fixed elements track
+		// the visual viewport, but Touch.clientY is relative to the layout
+		// viewport. Without translating, the menu drifts up by the keyboard's
+		// offset and its bounds are clamped against the wrong height. Use
+		// visualViewport when available to keep both coord spaces in sync.
+		const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+		const offX = vv?.offsetLeft ?? 0;
+		const offY = vv?.offsetTop ?? 0;
+		const winW = vv?.width ?? window.innerWidth;
+		const winH = vv?.height ?? window.innerHeight;
+		const localX = clientX - offX;
+		const localY = clientY - offY;
 		const pad = 8;
 		// When flipUp=true the menu uses CSS `bottom` positioning, so y is the
 		// *bottom edge* of the menu (distance from viewport top). When false, y
@@ -1975,16 +2001,16 @@
 		//
 		// Default: open above the finger (bottom edge just above touch point).
 		// Fallback: open below if there isn't enough room above.
-		const enoughRoomAbove = clientY - menuH - pad >= pad;
+		const enoughRoomAbove = localY - menuH - pad >= pad;
 		const flipUp = enoughRoomAbove;
 		// Clamp x so menu never clips left or right edge.
-		const x = Math.max(pad, Math.min(winW - menuW - pad, clientX - menuW / 2));
+		const x = Math.max(pad, Math.min(winW - menuW - pad, localX - menuW / 2));
 		// y = bottom edge when flipUp, top edge when !flipUp.
 		// Clamp so the menu always stays fully on screen.
 		const y = flipUp
-			? Math.max(menuH + pad, Math.min(winH - pad, clientY - pad))   // bottom edge ≥ menuH+pad so top stays on screen
-			: Math.max(pad, Math.min(winH - menuH - pad, clientY + pad));  // top edge, bottom stays on screen
-		return { x, y, flipUp };
+			? Math.max(menuH + pad, Math.min(winH - pad, localY - pad))   // bottom edge ≥ menuH+pad so top stays on screen
+			: Math.max(pad, Math.min(winH - menuH - pad, localY + pad));  // top edge, bottom stays on screen
+		return { x, y, flipUp, viewportH: winH };
 	}
 
 	const IMPERSONATE_MENU_W = 220;
@@ -2456,9 +2482,17 @@
 		// Wait before showing typing indicator
 		if (isTexting) await initialTypingDelay();
 
-		// Keep the existing content visible — the bubble overlay (blur +
-		// spinner) will indicate that a new response is being generated.
+		// Blank the bubble immediately so the typing indicator (and then
+		// the live tokens) replaces the old reply rather than sitting under
+		// a blur overlay. streamOriginalMessage holds the previous swipe
+		// for restore-on-abort and for composing the new swipe in
+		// finishStreaming.
 		streamingAssistantIdx = lastAssistantIdx;
+		messageList[lastAssistantIdx] = {
+			...messageList[lastAssistantIdx],
+			content: '',
+			reasoning: ['']
+		};
 		await scrollToBottom(true);
 
 		try {
@@ -2720,7 +2754,7 @@
 							ontouchend={(e) => endMsgLongPress(e)}
 							ontouchcancel={() => endMsgLongPress()}
 							title={messageTimestamps !== 'off' && message.createdAt ? getMessageTime(message.createdAt) : undefined}
-							data-reformatting={reformattingMessageId === message.id || (streamIsRegenerate && streamingAssistantIdx === i) ? '' : undefined}
+							data-reformatting={reformattingMessageId === message.id ? '' : undefined}
 						>
 							{#if editingId === message.id}
 								<textarea
@@ -2747,7 +2781,7 @@
 										<X class="h-3.5 w-3.5" />
 									</button>
 								</div>
-							{:else if isStreaming && !isImpersonating && i === messageList.length - 1 && message.role === 'assistant' && !streamIsRegenerate && (!message.content || isReasoning)}
+							{:else if isStreaming && !isImpersonating && i === messageList.length - 1 && message.role === 'assistant' && (!message.content || isReasoning)}
 								{#if !message.content}
 									<div class="flex items-center justify-center gap-2.5 py-2 px-1 min-h-[36px]">
 										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 0ms"></span>
@@ -2812,22 +2846,13 @@
 										</button>
 									{/if}
 							{/if}
-							{#if reformattingMessageId === message.id || (streamIsRegenerate && streamingAssistantIdx === i)}
+							{#if reformattingMessageId === message.id}
 								<div class="reformatting-overlay pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-[inherit] bg-black/10 backdrop-blur-[1px]">
 									<div class="flex items-center justify-center gap-2.5 drop-shadow">
 										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 0ms"></span>
 										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 160ms"></span>
 										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 320ms"></span>
 									</div>
-									{#if streamIsRegenerate && streamingAssistantIdx === i && (isReasoning || streamAccumulatedReasoning)}
-										<button
-											onclick={() => { reasoningModalIsImpersonation = false; reasoningModalIsLive = true; showReasoningModal = true; }}
-											class="pointer-events-auto flex items-center justify-center rounded-md p-1 text-foreground hover:text-primary hover:bg-accent transition-colors drop-shadow"
-											aria-label="View reasoning"
-										>
-											<Brain class="h-5 w-5" />
-										</button>
-									{/if}
 								</div>
 							{/if}
 						</div>
@@ -3138,7 +3163,7 @@
 		<div
 			data-msg-menu
 			class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
-			style="--popup-origin: {msgMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {msgMenuPosition.x}px; {msgMenuPosition.flipUp ? 'bottom' : 'top'}: {msgMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - msgMenuPosition.y : 0) + 'px' : msgMenuPosition.y + 'px'}"
+			style="--popup-origin: {msgMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {msgMenuPosition.x}px; {msgMenuPosition.flipUp ? 'bottom' : 'top'}: {msgMenuPosition.flipUp ? (msgMenuPosition.viewportH - msgMenuPosition.y) + 'px' : msgMenuPosition.y + 'px'}"
 		>
 			{#if menuMsg.swipes.length > 1}
 				<div class="flex items-center justify-center gap-1 px-3 py-1.5">
@@ -3335,7 +3360,7 @@
 	<div
 		data-impersonate-menu
 		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
-		style="--popup-origin: {impersonateMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {impersonateMenuPosition.x}px; {impersonateMenuPosition.flipUp ? 'bottom' : 'top'}: {impersonateMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - impersonateMenuPosition.y : 0) + 'px' : impersonateMenuPosition.y + 'px'}"
+		style="--popup-origin: {impersonateMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {impersonateMenuPosition.x}px; {impersonateMenuPosition.flipUp ? 'bottom' : 'top'}: {impersonateMenuPosition.flipUp ? (impersonateMenuPosition.viewportH - impersonateMenuPosition.y) + 'px' : impersonateMenuPosition.y + 'px'}"
 	>
 		{#if chatImpersonationSwipes.length > 1}
 			<div class="flex items-center justify-center gap-1 px-3 py-1.5">
@@ -3408,7 +3433,7 @@
 	<div
 		data-send-menu
 		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
-		style="--popup-origin: {sendMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {sendMenuPosition.x}px; {sendMenuPosition.flipUp ? 'bottom' : 'top'}: {sendMenuPosition.flipUp ? (typeof window !== 'undefined' ? window.innerHeight - sendMenuPosition.y : 0) + 'px' : sendMenuPosition.y + 'px'}"
+		style="--popup-origin: {sendMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {sendMenuPosition.x}px; {sendMenuPosition.flipUp ? 'bottom' : 'top'}: {sendMenuPosition.flipUp ? (sendMenuPosition.viewportH - sendMenuPosition.y) + 'px' : sendMenuPosition.y + 'px'}"
 	>
 		<button
 			type="button"

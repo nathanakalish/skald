@@ -34,6 +34,7 @@
 		fingerprint: string;
 		endpoint: string;
 		userAgent: string | null;
+		sessionId: string | null;
 		createdAt: string | null;
 	}
 
@@ -102,15 +103,24 @@
 		const out: DeviceRow[] = [];
 		const usedPushIds = new Set<number>();
 
-		// First pass: each session, optionally paired with a push device that
-		// has a matching user-agent and isn't already claimed.
+		// First pass: each session, optionally paired with the push device
+		// that was registered by this very session. We used to UA-match here
+		// but identical user-agents (two iPhones, two Chromes on Windows)
+		// silently cross-linked rows. Push subs carry their owning sessionId
+		// now, so use that as the authoritative pairing key. Fall back to UA
+		// only for legacy rows whose sessionId was never set.
 		for (const sess of sessions) {
-			const ua = sess.userAgent ?? '';
-			const matchPush = pushDevices.find(
-				(d) => !usedPushIds.has(d.id) && (d.userAgent ?? '') === ua
+			let matchPush = pushDevices.find(
+				(d) => !usedPushIds.has(d.id) && d.sessionId === sess.id
 			) ?? null;
+			if (!matchPush) {
+				const ua = sess.userAgent ?? '';
+				matchPush = pushDevices.find(
+					(d) => !usedPushIds.has(d.id) && !d.sessionId && (d.userAgent ?? '') === ua
+				) ?? null;
+			}
 			if (matchPush) usedPushIds.add(matchPush.id);
-			const isCurrent = sess.current || (matchPush?.endpoint === localEndpoint);
+			const isCurrent = sess.current;
 			out.push({
 				key: `s:${sess.fingerprint}`,
 				session: sess,
