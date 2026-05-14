@@ -11,7 +11,7 @@ export const ALLOWED_SETTING_KEYS = [
 	'sendWithEnterDesktop', 'sendWithEnterMobile', 'autoScrollThreshold', 'confirmDeletions',
 	'messageTimestamps', 'showReasoning', 'notificationSound',
 	'notificationStyle', 'notificationAvatar',
-	'inAppNotifications',
+	'inAppNotifications', 'notificationDuration',
 	'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd',
 	'userTimezone',
 	'chatPageSize', 'renderMode',

@@ -1,23 +1,71 @@
-export interface Toast {
+// Unified toast store. Renders both small system toasts (success / error /
+// info) and richer "chat" toasts (avatar + character name + message preview)
+// from a single queue at the top-right of the screen. The chat-toast kind is
+// what +layout.svelte uses to surface "new message in another chat" alerts
+// when the user is focused on a different chat. They share the same physical
+// stack so they don't fight for screen space.
+
+export interface BaseToast {
 	id: number;
-	message: string;
-	type: 'success' | 'error' | 'info';
+	/** Auto-dismiss after this many ms. 0 = sticky (manual dismiss only). */
 	duration: number;
 }
 
-let nextId = 0;
-const _toasts = $state<Toast[]>([]);
+export interface SimpleToast extends BaseToast {
+	kind: 'simple';
+	type: 'success' | 'error' | 'info';
+	message: string;
+}
 
-function add(message: string, type: Toast['type'] = 'success', duration = 2500) {
+export interface ChatToast extends BaseToast {
+	kind: 'chat';
+	chatId: number;
+	characterName: string;
+	characterAvatar: string | null;
+	preview: string;
+	/** Fired when the user clicks the body of the toast (not the X button). */
+	onclick?: (chatId: number) => void;
+}
+
+export type ToastItem = SimpleToast | ChatToast;
+
+let nextId = 0;
+const _toasts = $state<ToastItem[]>([]);
+const _timers = new Map<number, ReturnType<typeof setTimeout>>();
+
+function scheduleDismiss(id: number, duration: number) {
+	if (duration <= 0) return; // sticky
+	const timer = setTimeout(() => remove(id), duration);
+	_timers.set(id, timer);
+}
+
+function add(message: string, type: SimpleToast['type'] = 'success', duration = 2500) {
 	const id = ++nextId;
-	_toasts.push({ id, message, type, duration });
-	setTimeout(() => remove(id), duration);
+	_toasts.push({ id, kind: 'simple', message, type, duration });
+	scheduleDismiss(id, duration);
+	return id;
+}
+
+function chat(opts: Omit<ChatToast, 'id' | 'kind' | 'duration'>, duration = 5000) {
+	const id = ++nextId;
+	_toasts.push({ id, kind: 'chat', duration, ...opts });
+	scheduleDismiss(id, duration);
 	return id;
 }
 
 function remove(id: number) {
 	const idx = _toasts.findIndex(t => t.id === id);
 	if (idx >= 0) _toasts.splice(idx, 1);
+	const t = _timers.get(id);
+	if (t) { clearTimeout(t); _timers.delete(id); }
+}
+
+/** Drop every chat toast for a given chat (e.g. user opened the chat on another device). */
+function removeChat(chatId: number) {
+	for (let i = _toasts.length - 1; i >= 0; i--) {
+		const t = _toasts[i];
+		if (t.kind === 'chat' && t.chatId === chatId) remove(t.id);
+	}
 }
 
 export const toasts = {
@@ -25,5 +73,7 @@ export const toasts = {
 	success: (message: string, duration?: number) => add(message, 'success', duration),
 	error: (message: string, duration?: number) => add(message, 'error', duration ?? 4000),
 	info: (message: string, duration?: number) => add(message, 'info', duration),
-	remove
+	chat,
+	remove,
+	removeChat,
 };

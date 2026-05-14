@@ -1,37 +1,50 @@
 <script lang="ts">
-	import { toasts } from '$lib/stores/toast.svelte.js';
-	import { Check, AlertCircle, Info } from 'lucide-svelte';
-	import { fade } from 'svelte/transition';
+	import { toasts, type ToastItem } from '$lib/stores/toast.svelte.js';
+	import NotificationCard from './NotificationCard.svelte';
 
-	const iconMap = {
-		success: Check,
-		error: AlertCircle,
-		info: Info
-	};
-
-	const colorMap = {
-		success: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-		error: 'bg-destructive/15 text-destructive border-destructive/30',
-		info: 'bg-primary/15 text-primary border-primary/30'
-	};
-
-	const iconColorMap = {
-		success: 'text-emerald-400',
-		error: 'text-destructive',
-		info: 'text-primary'
-	};
+	function accentForSimple(type: 'success' | 'error' | 'info') {
+		return type === 'success' ? 'success' as const
+			: type === 'error' ? 'error' as const
+			: 'info' as const;
+	}
+	function iconForSimple(type: 'success' | 'error' | 'info') {
+		return type === 'success' ? 'check' as const
+			: type === 'error' ? 'error' as const
+			: 'info' as const;
+	}
 </script>
 
+<!--
+  Single overlay for every transient notification: "Reconnected to server",
+  "Chat renamed", and the in-app new-message toasts. Stacking them in one
+  fixed column at the top-right keeps them from fighting the same screen
+  real estate.
+-->
 {#if toasts.all.length > 0}
-	<div class="fixed bottom-4 left-1/2 z-[200] flex -translate-x-1/2 flex-col items-center gap-2" role="status" aria-live="polite">
-		{#each toasts.all as toast (toast.id)}
-			<div
-				class="toast-spring-enter flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium shadow-lg backdrop-blur-md {colorMap[toast.type]}"
-				out:fade={{ duration: 150 }}
-			>
-				<svelte:component this={iconMap[toast.type]} class="h-4 w-4 shrink-0 {iconColorMap[toast.type]}" />
-				{toast.message}
-			</div>
+	<div
+		class="fixed right-4 top-4 z-[200] flex flex-col gap-2 md:right-6 md:top-6"
+		role="region"
+		aria-label="Notifications"
+	>
+		{#each toasts.all as t (t.id)}
+			{#if t.kind === 'simple'}
+				<NotificationCard
+					accent={accentForSimple(t.type)}
+					iconName={iconForSimple(t.type)}
+					title={t.message}
+					ondismiss={() => toasts.remove(t.id)}
+				/>
+			{:else}
+				<NotificationCard
+					accent="primary"
+					iconName="message"
+					avatarUrl={t.characterAvatar}
+					title={t.characterName}
+					body={t.preview}
+					onclick={t.onclick ? () => { t.onclick!(t.chatId); toasts.remove(t.id); } : null}
+					ondismiss={() => toasts.remove(t.id)}
+				/>
+			{/if}
 		{/each}
 	</div>
 {/if}

@@ -30,6 +30,8 @@ export interface Settings {
 	notificationStyle: string;
 	notificationAvatar: boolean;
 	inAppNotifications: boolean;
+	/** Seconds an in-app notification stays up. 0 = sticky (manual dismiss only). 1-30 = that many seconds. */
+	notificationDuration: number;
 	quietHoursEnabled: boolean;
 	quietHoursStart: string;
 	quietHoursEnd: string;
@@ -89,6 +91,7 @@ const defaults: Settings = {
 	notificationStyle: 'generic',
 	notificationAvatar: true,
 	inAppNotifications: true,
+	notificationDuration: 5,
 	quietHoursEnabled: false,
 	quietHoursStart: '22:00',
 	quietHoursEnd: '07:00',

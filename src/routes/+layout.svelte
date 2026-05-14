@@ -281,6 +281,7 @@
 			notificationStyle: data.notificationStyle ?? 'generic',
 			notificationAvatar: data.notificationAvatar ?? true,
 			inAppNotifications: data.inAppNotifications ?? true,
+			notificationDuration: (data as any).notificationDuration ?? 5,
 			quietHoursEnabled: data.quietHoursEnabled ?? false,
 			quietHoursStart: data.quietHoursStart ?? '22:00',
 			quietHoursEnd: data.quietHoursEnd ?? '07:00',
@@ -355,6 +356,7 @@
 				notificationStyle: data.notificationStyle ?? 'generic',
 				notificationAvatar: data.notificationAvatar ?? true,
 				inAppNotifications: data.inAppNotifications ?? true,
+				notificationDuration: (data as any).notificationDuration ?? 5,
 				quietHoursEnabled: data.quietHoursEnabled ?? false,
 				quietHoursStart: data.quietHoursStart ?? '22:00',
 				quietHoursEnd: data.quietHoursEnd ?? '07:00',
@@ -563,17 +565,6 @@
 	// Realtime SSE / presence / version-check connection lives in a composable.
 	// Exposed below the event handler is defined.
 
-	// In-app chat notification queue
-	interface ChatNotification {
-		id: number;
-		chatId: number;
-		characterName: string;
-		characterAvatar: string | null;
-		preview: string;
-	}
-	let chatNotifications: ChatNotification[] = $state([]);
-	let chatNotifSeq = 0;
-
 	// Per-device "silence this device" toggle (local-only, set in SettingsModal).
 	// Guard against SSR: Node 25 ships a partial localStorage global without
 	// .getItem, so the typeof check alone is no longer sufficient.
@@ -591,15 +582,16 @@
 	});
 
 	function addChatNotification(chatId: number, characterName: string, characterAvatar: string | null, preview: string) {
-		const id = ++chatNotifSeq;
-		chatNotifications = [...chatNotifications, { id, chatId, characterName, characterAvatar, preview }];
-		setTimeout(() => {
-			chatNotifications = chatNotifications.filter(n => n.id !== id);
-		}, 5000);
-	}
-
-	function dismissChatNotification(id: number) {
-		chatNotifications = chatNotifications.filter(n => n.id !== id);
+		// Slider value: 1-30 = seconds, 31 = sticky (pass 0 to the toast store).
+		const dur = Number((settings as any).notificationDuration ?? 5);
+		const ms = dur >= 31 ? 0 : Math.max(1, Math.min(30, dur)) * 1000;
+		toasts.chat({
+			chatId,
+			characterName,
+			characterAvatar,
+			preview,
+			onclick: (id) => openChat(id),
+		}, ms);
 	}
 
 	// Single SSE event handler — applies the event to client stores, the
@@ -743,7 +735,7 @@
 			// Cross-device dismissal: when unread drops to 0 (e.g. read on another device),
 			// clear any pending in-app toast and close OS notifications for this chat.
 			if (count === 0) {
-				chatNotifications = chatNotifications.filter(n => n.chatId !== chatId);
+				toasts.removeChat(chatId);
 				navigator.serviceWorker?.ready.then((reg) => {
 					reg.getNotifications({ tag: `skald-chat-${chatId}` }).then(notifs => {
 						notifs.forEach(n => n.close());
@@ -2725,30 +2717,9 @@
 			</div>
 		{/if}
 
-		<!-- In-app chat notifications (floating toasts for other chats when app is focused) -->
-		{#if chatNotifications.length > 0}
-			<div class="pointer-events-none absolute right-4 top-4 z-50 flex flex-col gap-2 md:right-6 md:top-6">
-				{#each chatNotifications as notif (notif.id)}
-					<button
-						class="pointer-events-auto notif-enter flex w-72 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-lg transition-all hover:bg-accent/50 active:scale-[0.98]"
-						onclick={() => { dismissChatNotification(notif.id); openChat(notif.chatId); }}
-					>
-						{#if notif.characterAvatar}
-							<img src={notif.characterAvatar} alt="" loading="lazy" decoding="async" class="h-9 w-9 shrink-0 rounded-full object-cover" />
-						{:else}
-							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-								<MessageSquare class="h-4 w-4" />
-							</div>
-						{/if}
-						<div class="min-w-0 flex-1 text-left">
-							<p class="truncate text-sm font-medium">{notif.characterName}</p>
-							<p class="truncate text-xs text-muted-foreground">{notif.preview}</p>
-						</div>
-						<X class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-					</button>
-				{/each}
-			</div>
-		{/if}
+		<!-- In-app chat notifications now flow through the unified <Toast />
+		     overlay (toasts.chat) so they share the same top-right stack as
+		     system success/error toasts. -->
 
 		<!-- Mobile header bar (only shown when no chat or view is active) -->
 		{#if !(activeChatId && chatData) && !(isMobile && (showCharacters || showLorebooks || showSettings))}
@@ -2806,6 +2777,7 @@
 					notificationStyle={settings.notificationStyle ?? 'generic'}
 					notificationAvatar={settings.notificationAvatar ?? true}
 					inAppNotifications={settings.inAppNotifications ?? true}
+					notificationDuration={(settings as any).notificationDuration ?? 5}
 					quietHoursEnabled={settings.quietHoursEnabled ?? false}
 					quietHoursStart={settings.quietHoursStart ?? '22:00'}
 					quietHoursEnd={settings.quietHoursEnd ?? '07:00'}

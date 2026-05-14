@@ -44,6 +44,7 @@
 		notificationStyle: string;
 		notificationAvatar: boolean;
 		inAppNotifications: boolean;
+		notificationDuration: number;
 		quietHoursEnabled: boolean;
 		quietHoursStart: string;
 		quietHoursEnd: string;
@@ -88,7 +89,7 @@
 		fontSize = 'medium', compactMode = false, reduceMotion = false,
 		sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true,
 		messageTimestamps = 'relative', showReasoning = false, notificationSound = false, notificationStyle = 'generic', notificationAvatar = true,
-		inAppNotifications = true,
+		inAppNotifications = true, notificationDuration = 5,
 		quietHoursEnabled = false, quietHoursStart = '22:00', quietHoursEnd = '07:00',
 		renderMode = 'roleplay',
 		chatPageSize = 50,
@@ -124,6 +125,7 @@
 	let localNotifStyle = $state('generic');
 	let localNotifAvatar = $state(true);
 	let localInAppNotif = $state(true);
+	let localNotifDuration = $state(5);
 	let localDeviceSilent = $state(false);
 	let localQuietEnabled = $state(false);
 	let localQuietStart = $state('22:00');
@@ -196,6 +198,7 @@
 				localNotifStyle = notificationStyle;
 				localNotifAvatar = notificationAvatar;
 				localInAppNotif = inAppNotifications;
+				localNotifDuration = notificationDuration;
 				localQuietEnabled = quietHoursEnabled;
 				localQuietStart = quietHoursStart;
 				localQuietEnd = quietHoursEnd;
@@ -1754,6 +1757,30 @@
 									checked={localInAppNotif}
 									onchange={() => toggleBoolSetting('inAppNotifications', () => localInAppNotif, (v) => { localInAppNotif = v; })}
 								/>
+
+								<!-- Toast duration: 1-30 seconds, plus a 31st position that means "stay until dismissed". -->
+								<div class="rounded-lg border border-border px-4 py-3 space-y-2 {!localInAppNotif ? 'opacity-50 pointer-events-none' : ''}">
+									<div class="flex items-center justify-between gap-4">
+										<div>
+											<span class="block text-sm font-medium">Toast duration</span>
+											<span class="block text-xs text-muted-foreground">How long in-app notifications stay on screen.</span>
+										</div>
+										<span class="shrink-0 text-sm font-medium tabular-nums text-foreground">
+											{localNotifDuration >= 31 ? 'Until dismissed' : `${localNotifDuration}s`}
+										</span>
+									</div>
+									<input
+										type="range"
+										min="1"
+										max="31"
+										step="1"
+										bind:value={localNotifDuration}
+										onchange={() => saveSetting('notificationDuration', String(localNotifDuration))}
+										class="w-full"
+										aria-label="In-app notification duration"
+									/>
+								</div>
+
 								<!-- Silence this device (per-device, local-only) -->
 								<button
 									type="button"
