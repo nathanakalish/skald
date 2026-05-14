@@ -324,16 +324,81 @@
 	);
 	const settings = $derived(settingsStore.settings);
 
-	// settingsStore.hydrate() above is gated by `_loaded`, so it only runs
-	// once. After a login flow (e.g. OIDC popup → invalidateAll), `data` is
-	// re-fetched but hydrate is a no-op — leaving the slot themes stuck on
-	// whatever was loaded for the unauthenticated session. This effect keeps
-	// settingsStore in sync with whatever the layout server load returns.
-	// The theme-application $effect downstream then writes the CSS variables
-	// onto <html> automatically.
+	// settingsStore.hydrate() is gated by `_loaded` and only runs once. After
+	// a login flow (invalidateAll), `data` is re-fetched with the real user
+	// settings but hydrate is a no-op — leaving all settings stale. Force a
+	// full re-hydrate whenever `data.user` becomes non-null (i.e., on login)
+	// so every setting, including sidebar dimensions, renders correctly without
+	// a page reload. Also sync sidebarWidth/sidebarCollapsed directly so the
+	// layout state (which doesn't read from settingsStore) updates too.
 	$effect(() => {
-		settingsStore.setSystemDarkTheme((data as any).systemDarkTheme ?? null);
-		settingsStore.setSystemLightTheme((data as any).systemLightTheme ?? null);
+		if (!data.user) return;
+		settingsStore.hydrate(
+			{
+				colorMode: data.colorMode,
+				alwaysUseCharacterThemes: data.alwaysUseCharacterThemes,
+				allowExternalCreatorNotes: data.allowExternalCreatorNotes,
+				colorCharacterCards: data.colorCharacterCards ?? false,
+				sidebarWidth: data.sidebarWidth ?? 320,
+				sidebarCollapsed: data.sidebarCollapsed ?? false,
+				fontSize: data.fontSize ?? 'medium',
+				compactMode: data.compactMode ?? false,
+				reduceMotion: data.reduceMotion ?? false,
+				sendWithEnterDesktop: data.sendWithEnterDesktop ?? true,
+				sendWithEnterMobile: data.sendWithEnterMobile ?? true,
+				autoScrollThreshold: data.autoScrollThreshold ?? 'normal',
+				confirmDeletions: data.confirmDeletions ?? true,
+				messageTimestamps: data.messageTimestamps ?? 'relative',
+				showReasoning: data.showReasoning ?? false,
+				chatPageSize: data.chatPageSize ?? 50,
+				notificationSound: data.notificationSound ?? false,
+				notificationStyle: data.notificationStyle ?? 'generic',
+				notificationAvatar: data.notificationAvatar ?? true,
+				inAppNotifications: data.inAppNotifications ?? true,
+				quietHoursEnabled: data.quietHoursEnabled ?? false,
+				quietHoursStart: data.quietHoursStart ?? '22:00',
+				quietHoursEnd: data.quietHoursEnd ?? '07:00',
+				userTimezone: (data as any).userTimezone ?? '',
+				renderMode: data.renderMode ?? 'roleplay',
+				promptSlotOrder: data.promptSlotOrder ?? '',
+				reformatterProviderId: data.reformatterProviderId ?? '',
+				reformatterModel: data.reformatterModel ?? '',
+				reformatterPrompt: data.reformatterPrompt ?? '',
+				characterCreatorProviderId: (data as any).characterCreatorProviderId ?? '',
+				characterCreatorModel: (data as any).characterCreatorModel ?? '',
+				characterCreatorPrompt: (data as any).characterCreatorPrompt ?? '',
+				compactionEnabled: (data as any).compactionEnabled ?? false,
+				compactionThreshold: (data as any).compactionThreshold ?? 80,
+				compactionMode: (data as any).compactionMode ?? 'threshold',
+				compactionTargetPercent: (data as any).compactionTargetPercent ?? 50,
+				compactionFixedCount: (data as any).compactionFixedCount ?? 20,
+				compactionProviderId: (data as any).compactionProviderId ?? '',
+				compactionModel: (data as any).compactionModel ?? '',
+				compactionPrompt: (data as any).compactionPrompt ?? '',
+				speechOpacity: (data as any).speechOpacity ?? 100,
+				speechBold: (data as any).speechBold ?? true,
+				speechItalic: (data as any).speechItalic ?? false,
+				thoughtOpacity: (data as any).thoughtOpacity ?? 75,
+				thoughtBold: (data as any).thoughtBold ?? false,
+				thoughtItalic: (data as any).thoughtItalic ?? true,
+				linkOpacity: (data as any).linkOpacity ?? 100,
+				linkBold: (data as any).linkBold ?? false,
+				linkItalic: (data as any).linkItalic ?? false,
+				narrationOpacity: (data as any).narrationOpacity ?? 100,
+				narrationBold: (data as any).narrationBold ?? false,
+				narrationItalic: (data as any).narrationItalic ?? false,
+				nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
+				systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
+				systemLightThemeId: (data as any).systemLightThemeId ?? null
+			},
+			{
+				force: true,
+				systemDarkTheme: (data as any).systemDarkTheme ?? null,
+				systemLightTheme: (data as any).systemLightTheme ?? null
+			}
+		);
+		sidebarWidth = data.sidebarWidth ?? 320;
+		sidebarCollapsed = data.sidebarCollapsed ?? false;
 	});
 
 	// Kick off lazy loads for every per-resource store. Runs once on mount
@@ -542,6 +607,21 @@
 	// notifications. The connection lifecycle (reconnect, version-check,
 	// presence, etc.) lives in createRealtimeConnection.
 	function handleRealtimeEvent(event: any) {
+		// chat:patched can arrive without an `event.chatId` (the affected chat's
+		// id lives in `payload.id`). Mirror it into the active ChatView's cache
+		// so cross-device draft / inline-edit sync lands without a round-trip.
+		// Must run BEFORE the applyRealtimeEvent early-return below, which
+		// handles chat:patched for the sidebar store and exits immediately.
+		if (chatData && event.type === 'chat:patched') {
+			const payload = event.data;
+			if (payload?.id === chatData.chat?.id && payload?.patch && typeof payload.patch === 'object') {
+				chatData = {
+					...chatData,
+					chat: { ...chatData.chat, ...payload.patch }
+				};
+			}
+		}
+
 		// Realtime resource events (chat:*, character:*, provider:*,
 		// lorebook:*, persona:*, theme:*, message:*) — dispatched
 		// to the matching client store. Stops further processing
@@ -589,19 +669,6 @@
 						impersonationSwipeIndex: payload?.swipeIndex ?? 0,
 						impersonationStatus: payload?.status ?? null,
 					}
-				};
-			}
-		}
-
-		// chat:patched can arrive without an `event.chatId` (the affected chat's
-		// id lives in `payload.id`). Mirror it into the active ChatView's cache
-		// so cross-device draft / inline-edit sync lands without a round-trip.
-		if (chatData && event.type === 'chat:patched') {
-			const payload = event.data;
-			if (payload?.id === chatData.chat?.id && payload?.patch && typeof payload.patch === 'object') {
-				chatData = {
-					...chatData,
-					chat: { ...chatData.chat, ...payload.patch }
 				};
 			}
 		}
