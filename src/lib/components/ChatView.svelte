@@ -1171,15 +1171,38 @@
 			}
 			const currentList = untrack(() => messageList);
 			const oldById = new Map(currentList.map(m => [m.id, m]));
-			const needsUpdate = incoming.length !== currentList.length ||
+			const incomingIds = new Set(incoming.map(m => m.id));
+
+			// If the user has scrolled back to load earlier pages, preserve
+			// them when the server refresh only returns the tail window.
+			// We do this only when the chains connect: the oldest incoming
+			// message's parent is already in our list (i.e. the path didn't
+			// change), so the earlier portion is still valid.
+			const keptEarlier = currentList.filter(m => !incomingIds.has(m.id));
+			const firstIncoming = incoming[0];
+			const safeMerge =
+				keptEarlier.length > 0 &&
+				firstIncoming != null &&
+				firstIncoming.parentId !== null &&
+				oldById.has(firstIncoming.parentId);
+
+			const needsUpdate = safeMerge
+				? incoming.some(m => {
+					const old = oldById.get(m.id);
+					return !old || old.content !== m.content || old.swipeIndex !== m.swipeIndex
+						|| (old.guidance ?? null) !== (m.guidance ?? null)
+						|| (old.impersonationGuidance ?? null) !== (m.impersonationGuidance ?? null);
+				})
+				: incoming.length !== currentList.length ||
 				incoming.some((m, idx) => {
 					const old = currentList[idx];
 					return !old || old.id !== m.id || old.content !== m.content || old.swipeIndex !== m.swipeIndex
 						|| (old.guidance ?? null) !== (m.guidance ?? null)
 						|| (old.impersonationGuidance ?? null) !== (m.impersonationGuidance ?? null);
 				});
+
 			if (needsUpdate) {
-				messageList = incoming.map(m => {
+				const merged = incoming.map(m => {
 					const old = oldById.get(m.id);
 					if (old && old.content === m.content && old.swipeIndex === m.swipeIndex &&
 						old.swipes.length === m.swipes.length && old.reasoning.length === m.reasoning.length &&
@@ -1189,10 +1212,16 @@
 					}
 					return m;
 				});
+				messageList = safeMerge ? [...keptEarlier, ...merged] : merged;
 				totalMsgCount = nextTotal;
 				for (const m of incoming) knownMessageIds.add(m.id);
 			}
-			messageSiblings = newSiblings;
+			// Merge siblings so earlier-page swipe counts survive a tail refresh.
+			if (safeMerge) {
+				Object.assign(messageSiblings, newSiblings);
+			} else {
+				messageSiblings = newSiblings;
+			}
 		}
 		// Streaming branch: leave messageList alone.
 
@@ -2360,11 +2389,11 @@
 		const res = await fetch(`/api/messages/${lastMsg.id}/switch-branch`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ direction: 0 })
+			body: JSON.stringify({ direction: 0, limit: chatPageSize })
 		});
 
 		if (res.ok) {
-			await onrefresh();
+			applyBranchData(await res.json());
 		}
 	}
 
@@ -2372,7 +2401,6 @@
 		const siblings = messageSiblings[messageId];
 		if (!siblings || siblings.total <= 1) return;
 
-		// Find sibling IDs by looking at all messages that share this parent
 		const msg = messageList.find(m => m.id === messageId);
 		if (!msg) return;
 
@@ -2380,16 +2408,16 @@
 		if (newIndex < 0 || newIndex >= siblings.total) return;
 		haptic('selection');
 
-		// We need to call the server to find the actual sibling and switch
-		// The server will resolve sibling by parent + index, then walk to deepest leaf
+		// Server resolves the sibling by parent+index, walks to deepest leaf,
+		// and returns the new message window inline — no second round-trip needed.
 		const res = await fetch(`/api/messages/${messageId}/switch-branch`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ direction })
+			body: JSON.stringify({ direction, limit: chatPageSize })
 		});
 
 		if (res.ok) {
-			await onrefresh();
+			applyBranchData(await res.json());
 		}
 	}
 
@@ -2406,13 +2434,29 @@
 		const res = await fetch(`/api/chats/${chat.id}/branch`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ activeLeafId: branchPointId })
+			body: JSON.stringify({ activeLeafId: branchPointId, limit: chatPageSize })
 		});
 
 		if (res.ok) {
-			await onrefresh();
+			applyBranchData(await res.json());
 		}
 	}
+
+	// Apply an inline message window returned by a branch-switch or branchFromHere
+	// endpoint. Renders the new branch immediately without waiting for onrefresh()
+	// to round-trip through the layout. The background onrefresh() keeps
+	// chatData in layout consistent but its diff-sync will be a no-op.
+	function applyBranchData(data: any) {
+		if (!data?.messages) return;
+		messageList = data.messages.map(parseMessage);
+		messageSiblings = data.messageSiblings ?? {};
+		if (data.totalMessages != null) totalMsgCount = data.totalMessages;
+		scrollToBottom(true);
+		// Sync layout state in the background — no await so the user sees
+		// the new branch immediately.
+		onrefresh?.();
+	}
+
 
 	function handleEditKeydown(e: KeyboardEvent, msgIdx: number) {
 		if (e.key === 'Escape') {

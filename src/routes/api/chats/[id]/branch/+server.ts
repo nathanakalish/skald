@@ -4,12 +4,15 @@ import { db } from '$lib/db/index.js';
 import { chats, messages } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { loadActivePathPage, loadSiblingsScoped } from '$lib/server/chatTree.js';
 
 // PATCH: Set activeLeafId directly (used for "continue from here" to start a branch)
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const chatId = Number(event.params.id);
-	const { activeLeafId } = await event.request.json();
+	const body = await event.request.json();
+	const { activeLeafId } = body;
+	const limit = typeof body.limit === 'number' && body.limit > 0 ? body.limit : 50;
 
 	if (typeof activeLeafId !== 'number') {
 		return json({ error: 'activeLeafId must be a number' }, { status: 400 });
@@ -27,5 +30,26 @@ export const PATCH: RequestHandler = async (event) => {
 
 	db.update(chats).set({ activeLeafId }).where(eq(chats.id, chatId)).run();
 
-	return json({ success: true, activeLeafId });
+	// Return the new message window inline so the client can render immediately
+	// without a second GET to /api/chats/[id]/data.
+	const page = loadActivePathPage(activeLeafId, limit, 0);
+	const siblingsByParent = loadSiblingsScoped(chatId, page.messages);
+
+	const messageSiblings: Record<number, { index: number; total: number }> = {};
+	for (const m of page.messages) {
+		const siblings = siblingsByParent.get(m.parentId ?? null) ?? [m.id];
+		messageSiblings[m.id] = { index: siblings.indexOf(m.id), total: siblings.length };
+	}
+
+	const lastMsg = page.messages[page.messages.length - 1];
+	const hiddenBranchCount = lastMsg ? (siblingsByParent.get(lastMsg.id)?.length ?? 0) : 0;
+
+	return json({
+		success: true,
+		activeLeafId,
+		messages: page.messages,
+		messageSiblings,
+		hiddenBranchCount,
+		totalMessages: page.total,
+	});
 };

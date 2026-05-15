@@ -5,7 +5,13 @@ import { chats, characters, messages } from '$lib/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { cacheImage } from '$lib/services/imageCache.js';
 import { requireUser } from '$lib/server/auth.js';
-import { loadActivePath, loadSiblings, type MessageRow } from '$lib/server/chatTree.js';
+import {
+	loadActivePath,
+	loadActivePathPage,
+	loadSiblings,
+	loadSiblingsScoped,
+	type MessageRow,
+} from '$lib/server/chatTree.js';
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 import { logger } from '$lib/server/logger.js';
 
@@ -50,12 +56,26 @@ export const GET: RequestHandler = async (event) => {
 		} catch (err) { logger.warn('chat data: malformed character.extensions JSON', { characterId: character.id, err: String(err) }); }
 	}
 
-	// Build active path. Recursive CTE walks only the branch we need;
-	// sibling info is fetched separately with id+parent_id only (lightweight).
+	// Build active path + sibling info.
+	//
+	// When limit is set we use the optimised pair: loadActivePathPage walks
+	// only limit+offset+1 steps from the leaf (instead of all N messages),
+	// and loadSiblingsScoped queries only the parent_ids that are actually
+	// visible in the returned window (instead of the full chat). For a
+	// 2000-message chat with pageSize=50 this goes from ~2000 row reads to
+	// ~51 — a 40× reduction in data loaded from disk.
 	let messageList: MessageRow[] = [];
+	let totalMessages = 0;
 
 	if (chat.activeLeafId) {
-		messageList = loadActivePath(chat.activeLeafId);
+		if (limit) {
+			const page = loadActivePathPage(chat.activeLeafId, limit, offset);
+			messageList = page.messages;
+			totalMessages = page.total;
+		} else {
+			messageList = loadActivePath(chat.activeLeafId);
+			totalMessages = messageList.length;
+		}
 	} else {
 		// No active leaf — fall back to walking children from the root via the leftmost branch.
 		// This is rare; do the small chat-wide load to preserve existing behavior.
@@ -77,46 +97,25 @@ export const GET: RequestHandler = async (event) => {
 				db.update(chats).set({ activeLeafId: leafId }).where(eq(chats.id, chatId)).run();
 			}
 		}
+		totalMessages = messageList.length;
 	}
 
-	// Sibling info: per message id, which sibling index and total siblings under same parent.
-	const { siblingsByParent } = loadSiblings(chatId);
+	// Sibling info: scoped to the visible window when paginated, full chat otherwise.
+	const siblingsByParent = limit
+		? loadSiblingsScoped(chatId, messageList)
+		: loadSiblings(chatId).siblingsByParent;
 
 	const messageSiblings: Record<number, { index: number; total: number }> = {};
 	for (const m of messageList) {
 		const siblings = siblingsByParent.get(m.parentId ?? null) ?? [m.id];
 		messageSiblings[m.id] = {
 			index: siblings.indexOf(m.id),
-			total: siblings.length
+			total: siblings.length,
 		};
 	}
 
 	const lastMsg = messageList[messageList.length - 1];
 	const hiddenBranchCount = lastMsg ? (siblingsByParent.get(lastMsg.id)?.length ?? 0) : 0;
-
-	const totalMessages = messageList.length;
-
-	// Apply pagination: slice the active path
-	if (limit) {
-		const end = offset > 0 ? -offset : undefined;
-		const start = -(offset + limit);
-		messageList = messageList.slice(start, end);
-
-		// Recompute sibling info for the sliced set
-		const slicedSiblings: Record<number, { index: number; total: number }> = {};
-		for (const m of messageList) {
-			if (messageSiblings[m.id]) slicedSiblings[m.id] = messageSiblings[m.id];
-		}
-
-		return json({
-			chat,
-			character,
-			messages: messageList,
-			messageSiblings: slicedSiblings,
-			hiddenBranchCount,
-			totalMessages
-		});
-	}
 
 	return json({
 		chat,
@@ -124,6 +123,6 @@ export const GET: RequestHandler = async (event) => {
 		messages: messageList,
 		messageSiblings,
 		hiddenBranchCount,
-		totalMessages
+		totalMessages,
 	});
 };
