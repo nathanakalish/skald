@@ -182,6 +182,7 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 	const budget = computeTokenBudget(firstPass.slots, contextSize, maxResponseTokens);
 	let llmMessages = firstPass.messages;
 	let tokenStats = budget;
+	let activeSlots = firstPass.slots;
 
 	if (budget.overflow > 0) {
 		const nonHistoryTokens = firstPass.slots
@@ -221,6 +222,59 @@ export function buildChatContext(chatId: number, opts: ProcessOptions) {
 
 			llmMessages = secondPass.messages;
 			tokenStats = computeTokenBudget(secondPass.slots, contextSize, maxResponseTokens);
+			activeSlots = secondPass.slots;
+		}
+	}
+
+	// Third pass: if non-history alone is so big that even after we threw out
+	// the entire chat history we're still over budget, drop optional slots
+	// progressively. Without this, we'd ship an over-budget prompt and let
+	// the provider truncate from the front — which silently nukes the system
+	// prompt, character card, and (because reply guidance lives near the end
+	// but the model loses all framing) effectively kills guidance too. The
+	// user reports this as "guidance not applying at the context limit".
+	//
+	// Drop order: least-essential first. We never drop `system`, `guidance`,
+	// `customPrompt`, `character`, `persona`, `nudge`, `starterNudge`, or
+	// `history` here — those are load-bearing for the model's behaviour.
+	if (tokenStats.overflow > 0) {
+		const dropOrder = ['examples', 'compactionSummary', 'timeline', 'postHistory', 'greetingContext'];
+		const slotsArr = [...activeSlots];
+
+		for (const dropName of dropOrder) {
+			if (tokenStats.overflow <= 0) break;
+			const idx = slotsArr.findIndex(s => s.name === dropName);
+			if (idx === -1) continue;
+			const dropped = slotsArr.splice(idx, 1)[0];
+			const newStats = computeTokenBudget(slotsArr, contextSize, maxResponseTokens);
+			logger.warn('chatContext: dropped optional slot to fit context budget', {
+				chatId,
+				slot: dropName,
+				freedTokens: tokenStats.promptTokens - newStats.promptTokens,
+				overflowBefore: tokenStats.overflow,
+				overflowAfter: newStats.overflow,
+				droppedMessages: dropped.messages.length,
+			});
+			tokenStats = newStats;
+		}
+
+		llmMessages = slotsArr.flatMap(s => s.messages);
+
+		if (tokenStats.overflow > 0) {
+			// At this point even dropping every optional slot didn't help —
+			// the user's static content (system + character + customPrompt +
+			// guidance + lorebook) alone is bigger than their context budget.
+			// Log loudly so it shows up in the chat error stream / logs;
+			// the provider is about to truncate or reject.
+			logger.warn('chatContext: prompt exceeds context budget after all trimming — provider may truncate or error', {
+				chatId,
+				promptTokens: tokenStats.promptTokens,
+				availableForPrompt: tokenStats.availableForPrompt,
+				contextSize,
+				maxResponseTokens,
+				overflow: tokenStats.overflow,
+				breakdown: tokenStats.breakdown,
+			});
 		}
 	}
 

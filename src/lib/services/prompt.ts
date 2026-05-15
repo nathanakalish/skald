@@ -659,6 +659,14 @@ export function buildPromptWithSlots(ctx: PromptContext): {
 			timeline: { parent: 'history', offset: -1 },
 			greetingContext: { parent: 'history', offset: 200 },
 			starterNudge: { parent: 'history', offset: 210 },
+			// Runtime-added slots: pin them near the right neighbour so they
+			// keep their intended position even when the user reshuffles the
+			// main slot order. Without this, `guidance` keeps its default
+			// 750 and `compactionSummary` keeps 105, which can land them in
+			// weird spots once the user-defined orders are remapped to
+			// (i+1)*100.
+			guidance: { parent: 'history', offset: 250 },
+			compactionSummary: { parent: 'system', offset: 5 },
 		};
 
 		for (const slot of slots) {
