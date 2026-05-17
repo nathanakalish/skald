@@ -88,10 +88,26 @@ export const generationsStore = {
 		gen.lastEventAt = Date.now();
 		bump();
 	},
+	// Used for catch-up events on reconnect: the server sends the full
+	// accumulated text as a single blob, not a delta.
+	setAccumulated(chatId: number, text: string) {
+		const gen = ensureStreamingState(chatId);
+		if (gen.status !== 'streaming') gen.status = 'streaming';
+		gen.accumulated = text;
+		gen.lastEventAt = Date.now();
+		bump();
+	},
 	pushReasoning(chatId: number, reasoning: string) {
 		const gen = ensureStreamingState(chatId);
 		if (gen.status !== 'streaming') gen.status = 'streaming';
 		gen.accumulatedReasoning += reasoning;
+		gen.lastEventAt = Date.now();
+		bump();
+	},
+	setAccumulatedReasoning(chatId: number, text: string) {
+		const gen = ensureStreamingState(chatId);
+		if (gen.status !== 'streaming') gen.status = 'streaming';
+		gen.accumulatedReasoning = text;
 		gen.lastEventAt = Date.now();
 		bump();
 	},

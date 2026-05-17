@@ -704,9 +704,17 @@
 		// the user is on another view (or another chat) can be resumed
 		// when re-entered.
 		if (event.type === 'token' && typeof event.data?.token === 'string') {
-			generationsStore.pushToken(chatId, event.data.token);
+			if (event.data.catchup) {
+				generationsStore.setAccumulated(chatId, event.data.token);
+			} else {
+				generationsStore.pushToken(chatId, event.data.token);
+			}
 		} else if (event.type === 'reasoning' && typeof event.data?.reasoning === 'string') {
-			generationsStore.pushReasoning(chatId, event.data.reasoning);
+			if (event.data.catchup) {
+				generationsStore.setAccumulatedReasoning(chatId, event.data.reasoning);
+			} else {
+				generationsStore.pushReasoning(chatId, event.data.reasoning);
+			}
 		} else if (event.type === 'tokenStats') {
 			generationsStore.setTokenStats(chatId, event.data);
 		} else if (event.type === 'error') {

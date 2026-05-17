@@ -95,13 +95,15 @@ export const GET: RequestHandler = (requestEvent) => {
 				if (gen.accumulatedReasoning) {
 					send(0, JSON.stringify({
 						id: 0, type: 'reasoning', ...base,
-						data: { reasoning: gen.accumulatedReasoning, isImpersonation: gen.isImpersonation }
+						// catchup: true tells the client to replace accumulated state
+						// rather than append — avoids doubling on tab-switch reconnects.
+						data: { reasoning: gen.accumulatedReasoning, isImpersonation: gen.isImpersonation, catchup: true }
 					}));
 				}
 				if (gen.accumulated) {
 					send(0, JSON.stringify({
 						id: 0, type: 'token', ...base,
-						data: { token: gen.accumulated, isImpersonation: gen.isImpersonation }
+						data: { token: gen.accumulated, isImpersonation: gen.isImpersonation, catchup: true }
 					}));
 				}
 			}
