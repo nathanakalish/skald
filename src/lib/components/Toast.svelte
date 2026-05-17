@@ -32,6 +32,7 @@
 					accent={accentForSimple(t.type)}
 					iconName={iconForSimple(t.type)}
 					title={t.message}
+					onclick={t.onclick ? () => { t.onclick!(); toasts.remove(t.id); } : null}
 					ondismiss={() => toasts.remove(t.id)}
 				/>
 			{:else}

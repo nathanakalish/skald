@@ -623,6 +623,17 @@
 		// because they're not chat-stream events and the legacy
 		// branch below would no-op anyway.
 		if (typeof event.type === 'string' && event.type.includes(':')) {
+			if (event.type === 'export:ready') {
+				toasts.info('Backup ready — click to download', 0, () => {
+					showSettings = true;
+					settingsActiveTab = 'account';
+				});
+				return;
+			}
+			if (event.type === 'export:failed') {
+				toasts.error('Backup export failed');
+				return;
+			}
 			if (applyRealtimeEvent(event)) return;
 		}
 

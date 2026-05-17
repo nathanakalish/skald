@@ -65,9 +65,11 @@ export type RealtimeEvent =
 				generatedAt: string | null;
 			}>;
 			swipeIndex: number;
-	  };
+	  }
+	| { type: 'export:ready' }
+	| { type: 'export:failed' };
 
 // Type guard used by the client dispatcher.
 export function isRealtimeEvent(t: string): boolean {
-	return /^(chat|character|provider|lorebook|persona|theme|message):/.test(t);
+	return /^(chat|character|provider|lorebook|persona|theme|message|export):/.test(t);
 }

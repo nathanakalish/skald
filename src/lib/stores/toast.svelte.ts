@@ -15,6 +15,8 @@ export interface SimpleToast extends BaseToast {
 	kind: 'simple';
 	type: 'success' | 'error' | 'info';
 	message: string;
+	/** Optional click handler. When set, the toast becomes clickable and auto-dismisses on click. */
+	onclick?: () => void;
 }
 
 export interface ChatToast extends BaseToast {
@@ -39,9 +41,9 @@ function scheduleDismiss(id: number, duration: number) {
 	_timers.set(id, timer);
 }
 
-function add(message: string, type: SimpleToast['type'] = 'success', duration = 2500) {
+function add(message: string, type: SimpleToast['type'] = 'success', duration = 2500, onclick?: () => void) {
 	const id = ++nextId;
-	_toasts.push({ id, kind: 'simple', message, type, duration });
+	_toasts.push({ id, kind: 'simple', message, type, duration, ...(onclick ? { onclick } : {}) });
 	scheduleDismiss(id, duration);
 	return id;
 }
@@ -70,9 +72,9 @@ function removeChat(chatId: number) {
 
 export const toasts = {
 	get all() { return _toasts; },
-	success: (message: string, duration?: number) => add(message, 'success', duration),
+	success: (message: string, duration?: number, onclick?: () => void) => add(message, 'success', duration, onclick),
 	error: (message: string, duration?: number) => add(message, 'error', duration ?? 4000),
-	info: (message: string, duration?: number) => add(message, 'info', duration),
+	info: (message: string, duration?: number, onclick?: () => void) => add(message, 'info', duration, onclick),
 	chat,
 	remove,
 	removeChat,

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Download, Upload, Package, MessageSquare, User, Search, AlertCircle, CheckCircle2, X, Loader2 } from 'lucide-svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
@@ -79,51 +80,75 @@
 	}
 
 	// ── Export everything ──────────────────────────────────────────────────
-	let exportingEverything = $state(false);
-	let exportProgress = $state(0); // 0..100, indeterminate when -1
+	let backupReady = $state(false);
+	let backupRunning = $state(false);
 	let includePersonas = $state(true);
 	let includeSettings = $state(true);
 	let includeThemes = $state(true);
 	let includeProviders = $state(false);
 	let showProvidersWarning = $state(false);
 
-	async function exportEverything() {
-		if (exportingEverything) return;
-		exportingEverything = true;
-		exportProgress = 5;
-		// Simulate progress while the server builds the zip — we don't get real progress,
-		// but a moving bar feels better than a spinner for a long-ish operation.
-		const tick = setInterval(() => {
-			if (exportProgress < 90) exportProgress = Math.min(90, exportProgress + Math.random() * 12);
-		}, 250);
+	const stamp = () => new Date().toISOString().slice(0, 10);
+
+	async function checkBackupStatus() {
 		try {
-			const params = new URLSearchParams({
-				personas: String(includePersonas),
-				settings: String(includeSettings),
-				themes: String(includeThemes),
-				providers: String(includeProviders)
+			const res = await fetch('/api/export/everything/status');
+			if (!res.ok) return;
+			const data = await res.json();
+			backupReady = !!data.ready;
+			backupRunning = !!data.running;
+		} catch { /* ignore */ }
+	}
+
+	onMount(() => { void checkBackupStatus(); });
+
+	async function exportEverything() {
+		if (backupRunning) return;
+		try {
+			const res = await fetch('/api/export/everything', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					personas: includePersonas,
+					settings: includeSettings,
+					themes: includeThemes,
+					providers: includeProviders
+				})
 			});
-			const res = await fetch(`/api/export/everything?${params}`);
 			if (!res.ok) {
-				toasts.error('Backup export failed');
+				const body = await res.json().catch(() => ({}));
+				if (body.reason === 'already_running') {
+					toasts.info('A backup is already building — you\'ll get a notification when it\'s done.');
+				} else {
+					toasts.error('Failed to start backup');
+				}
 				return;
 			}
-			exportProgress = 95;
+			backupReady = false;
+			backupRunning = true;
+			toasts.info('Building backup in background — you\'ll get a notification when it\'s done.');
+		} catch {
+			toasts.error('Failed to start backup');
+		}
+	}
+
+	async function downloadBackup() {
+		try {
+			const res = await fetch('/api/export/everything/download');
+			if (!res.ok) {
+				toasts.error('Backup file not found — try building a new one.');
+				backupReady = false;
+				return;
+			}
 			const blob = await res.blob();
-			exportProgress = 100;
 			const link = document.createElement('a');
 			link.href = URL.createObjectURL(blob);
-			const stamp = new Date().toISOString().slice(0, 10);
-			link.download = `skald-backup-${stamp}.skald.zip`;
+			link.download = `skald-backup-${stamp()}.skald.zip`;
 			link.click();
 			URL.revokeObjectURL(link.href);
 			toasts.success('Backup downloaded');
 		} catch {
-			toasts.error('Backup failed');
-		} finally {
-			clearInterval(tick);
-			exportingEverything = false;
-			setTimeout(() => { exportProgress = 0; }, 800);
+			toasts.error('Download failed');
 		}
 	}
 
@@ -394,17 +419,25 @@
 				<button
 					type="button"
 					onclick={exportEverything}
-					disabled={exportingEverything}
+					disabled={backupRunning}
 					class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					<Download class="h-4 w-4" /> {exportingEverything ? 'Building backup…' : 'Download backup'}
+					{#if backupRunning}
+						<Loader2 class="h-4 w-4 animate-spin" /> Building in background…
+					{:else}
+						<Download class="h-4 w-4" /> Start backup
+					{/if}
 				</button>
+				{#if backupReady}
+					<button
+						type="button"
+						onclick={downloadBackup}
+						class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+					>
+						<Download class="h-4 w-4" /> Download ready backup
+					</button>
+				{/if}
 			</div>
-			{#if exportingEverything || exportProgress > 0}
-				<div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-					<div class="h-full bg-primary transition-all duration-200" style="width: {exportProgress}%"></div>
-				</div>
-			{/if}
 		</div>
 	</div>
 

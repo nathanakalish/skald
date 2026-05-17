@@ -1,7 +1,10 @@
 import type { RequestHandler } from './$types.js';
+import { json } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth.js';
 import { buildEverythingBundle } from '$lib/server/bundle.js';
+import { startExportJob, isExportRunning } from '$lib/server/exportJobs.js';
 
+/** Legacy sync export — still works but may be slow for large DBs. */
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const url = event.url;
@@ -26,4 +29,24 @@ export const GET: RequestHandler = async (event) => {
 			'X-Bundle-Counts': JSON.stringify(result.counts)
 		}
 	});
+};
+
+/** Kick off a background export job for the authenticated user. */
+export const POST: RequestHandler = async (event) => {
+	const user = requireUser(event);
+	const body = await event.request.json().catch(() => ({}));
+
+	const opts = {
+		includePersonas: body.personas !== false,
+		includeSettings: body.settings !== false,
+		includeThemes: body.themes !== false,
+		includeProviders: body.providers !== false,
+	};
+
+	if (isExportRunning(user.id)) {
+		return json({ ok: false, reason: 'already_running' }, { status: 409 });
+	}
+
+	startExportJob(user.id, opts);
+	return json({ ok: true });
 };
