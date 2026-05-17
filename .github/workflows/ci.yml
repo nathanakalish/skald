@@ -1,12 +1,21 @@
 name: CI
 
+run-name: "CI · ${{ github.sha }}"
+
 on:
   push:
     branches: [master, beta]
   pull_request:
     branches: [master, beta]
 
+permissions:
+  contents: write
+  security-events: write
+  pull-requests: write
+  actions: write
+
 jobs:
+  # ── 1. Type check + tests ─────────────────────────────────────────────────
   check:
     runs-on: ubuntu-latest
     steps:
@@ -25,3 +34,219 @@ jobs:
 
       - name: Run tests
         run: npm run test
+
+  # ── 2. CodeQL (gated on check passing) ───────────────────────────────────
+  analyze:
+    name: CodeQL
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
+
+  # ── 3. Detect push context ────────────────────────────────────────────────
+  # Uses always() so it still runs when check/analyze fail — required for the
+  # Dependabot revert job to fire on CI failure.
+  # Skipped entirely on pull_request events; only acts on branch pushes.
+  detect:
+    needs: [check, analyze]
+    if: always() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      ci-passed: ${{ steps.ctx.outputs.ci-passed }}
+      is-dependabot: ${{ steps.ctx.outputs.is-dependabot }}
+      version-bumped: ${{ steps.ctx.outputs.version-bumped }}
+      version: ${{ steps.ctx.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Detect context
+        id: ctx
+        run: |
+          CHECK="${{ needs.check.result }}"
+          ANALYZE="${{ needs.analyze.result }}"
+          [[ "$CHECK" == "success" && "$ANALYZE" == "success" ]] \
+            && echo "ci-passed=true"  >> $GITHUB_OUTPUT \
+            || echo "ci-passed=false" >> $GITHUB_OUTPUT
+
+          AUTHOR=$(git log -1 --format='%an' HEAD)
+          [[ "$AUTHOR" == "dependabot[bot]" ]] \
+            && echo "is-dependabot=true"  >> $GITHUB_OUTPUT \
+            || echo "is-dependabot=false" >> $GITHUB_OUTPUT
+
+          PREV=$(git show HEAD~1:package.json \
+            | node -e "let d=''; \
+                process.stdin.on('data', c => d += c); \
+                process.stdin.on('end', () => process.stdout.write(JSON.parse(d).version))")
+          CURR=$(node -p "require('./package.json').version")
+          [[ "$PREV" != "$CURR" ]] \
+            && echo "version-bumped=true"  >> $GITHUB_OUTPUT \
+            || echo "version-bumped=false" >> $GITHUB_OUTPUT
+
+          echo "version=$CURR" >> $GITHUB_OUTPUT
+
+  # ── 4a. Dependabot merge + CI passed → bump version, changelog, release ──
+  bump-and-build:
+    needs: detect
+    if: needs.detect.outputs.is-dependabot == 'true' && needs.detect.outputs.ci-passed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version
+        id: ver
+        run: |
+          npm version patch --no-git-tag-version
+          echo "new=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag v${{ steps.ver.outputs.new }} --output CHANGELOG.md
+
+      - name: Commit and push
+        run: |
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore: bump version [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.ver.outputs.new }}"
+          PRERELEASE_FLAG=""
+          [[ "${{ github.ref_name }}" == "beta" ]] && PRERELEASE_FLAG="--prerelease"
+          # Use cliff's output so release notes and CHANGELOG.md come from the
+          # same source rather than GitHub's PR-title scraper.
+          NOTES=$(git cliff --config cliff.toml --tag "v${NEW_VERSION}" --latest --strip all 2>/dev/null || echo "")
+          gh release create "v${NEW_VERSION}" \
+            --target "${{ github.ref_name }}" \
+            --title "v${NEW_VERSION}" \
+            --notes "${NOTES}" \
+            $PRERELEASE_FLAG
+
+      - name: Trigger docker build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docker.yml --ref ${{ github.ref_name }} -f version=${{ steps.ver.outputs.new }}
+
+  # ── 4b. Dependabot merge + CI failed → revert + open PR ──────────────────
+  revert-on-failure:
+    needs: detect
+    if: needs.detect.outputs.is-dependabot == 'true' && needs.detect.outputs.ci-passed == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          REVERT_BRANCH="revert/dependabot-${SHA_SHORT}"
+
+          git checkout -b "$REVERT_BRANCH"
+          git revert HEAD --no-edit
+          git push origin "$REVERT_BRANCH"
+
+          gh pr create \
+            --base  "${{ github.ref_name }}" \
+            --head  "$REVERT_BRANCH" \
+            --title "Revert Dependabot update — CI failed ($SHA_SHORT)" \
+            --body  "CI failed after merging a Dependabot update. This PR reverts that merge.
+
+          **Failed run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Commit:** \`${{ github.sha }}\`
+
+          Review the CI failure linked above before deciding whether to re-apply the update."
+
+  # ── 4c. Manual push with version bump + CI passed → changelog, release ────
+  build-on-version-bump:
+    needs: detect
+    if: |
+      needs.detect.outputs.is-dependabot == 'false' &&
+      needs.detect.outputs.version-bumped == 'true' &&
+      needs.detect.outputs.ci-passed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag v${{ needs.detect.outputs.version }} --output CHANGELOG.md
+
+      - name: Commit changelog
+        run: |
+          git diff --quiet CHANGELOG.md 2>/dev/null || {
+            git add CHANGELOG.md
+            git commit -m "docs: update changelog [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.detect.outputs.version }}"
+          PRERELEASE_FLAG=""
+          [[ "${{ github.ref_name }}" == "beta" ]] && PRERELEASE_FLAG="--prerelease"
+          NOTES=$(git cliff --config cliff.toml --tag "v${VERSION}" --latest --strip all 2>/dev/null || echo "")
+          gh release create "v${VERSION}" \
+            --target "${{ github.ref_name }}" \
+            --title "v${VERSION}" \
+            --notes "${NOTES}" \
+            $PRERELEASE_FLAG
+
+      - name: Trigger docker build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docker.yml --ref ${{ github.ref_name }} -f version=${{ needs.detect.outputs.version }}
+

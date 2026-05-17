@@ -1,12 +1,11 @@
-name: CodeQL
+name: CodeQL (scheduled)
 
+run-name: "CodeQL · weekly scan"
+
+# Push/PR coverage is handled by the analyze job in ci.yml.
+# This workflow exists only for the weekly deep scan.
 on:
-  push:
-    branches: [master, beta]
-  pull_request:
-    branches: [master, beta]
   schedule:
-    # Weekly scan on Monday mornings regardless of pushes.
     - cron: '30 7 * * 1'
 
 jobs:

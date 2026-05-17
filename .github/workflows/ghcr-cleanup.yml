@@ -1,8 +1,15 @@
 name: GHCR cleanup
 
-# Deletes untagged container image versions older than 30 days.
-# Untagged digests pile up with every push — each build produces one and
-# only the named tags (latest, beta, version number) get retained by default.
+# Retention rules (applied independently per channel):
+#   - "latest" and "beta" tagged versions are NEVER deleted (they point to the
+#     current live image for each channel).
+#   - The 5 newest versioned images per channel are ALWAYS kept, regardless of age.
+#   - Anything beyond that window AND older than 30 days is deleted.
+#
+# Channels:
+#   master  — versions whose tags include a semver without a -beta suffix
+#   beta    — versions whose tags include a -beta semver
+#   untagged — BuildKit attestation/cache digests with no tags at all
 on:
   schedule:
     # First of every month at 03:00 UTC
@@ -16,27 +23,68 @@ jobs:
       packages: write
 
     steps:
-      - name: Delete untagged images older than 30 days
+      - name: Delete old image versions outside keep-5 window
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PACKAGE_NAME="${GITHUB_REPOSITORY#*/}"
           CUTOFF=$(date -d '30 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
+          KEEP=5
 
-          echo "Pruning untagged versions of ${PACKAGE_NAME} older than ${CUTOFF}"
+          echo "Package : ${PACKAGE_NAME}"
+          echo "Cutoff  : ${CUTOFF}"
+          echo "Keep min: ${KEEP} per channel"
 
-          gh api "/user/packages/container/${PACKAGE_NAME}/versions" \
-            --paginate \
-            --jq \
-              --arg cutoff "$CUTOFF" \
-              '[.[] | select(.metadata.container.tags | length == 0)
-                    | select(.updated_at < $cutoff)
-                    | .id]' \
-          | jq -r '.[]' \
-          | while read -r version_id; do
-              echo "  Deleting version id ${version_id}"
-              gh api --method DELETE \
-                "/user/packages/container/${PACKAGE_NAME}/versions/${version_id}"
-            done
+          ALL=$(gh api "/user/packages/container/${PACKAGE_NAME}/versions" --paginate)
+
+          # Classify each version into a channel, rank within that channel
+          # (0 = newest), then select candidates for deletion.
+          TO_DELETE=$(echo "$ALL" | jq -r \
+            --arg cutoff "$CUTOFF" \
+            --argjson keep "$KEEP" '
+            def channel:
+              .metadata.container.tags as $t
+              | if ($t | map(. == "latest" or . == "beta") | any)
+                  then "protected"
+                elif ($t | length == 0)
+                  then "untagged"
+                elif ($t | map(test("^[0-9]+.*-beta")) | any)
+                  then "beta"
+                elif ($t | map(test("^[0-9]+\\.")) | any)
+                  then "master"
+                else "untagged"
+                end;
+
+            # Attach channel label to each version
+            map(. + {ch: (. | channel)})
+
+            # Group, sort newest-first within each group, attach rank
+            | group_by(.ch)
+            | map(
+                sort_by(.updated_at) | reverse
+                | to_entries
+                | map(.value + {rank: .key})
+              )
+            | flatten
+
+            # Delete if: not protected, outside keep window, older than cutoff
+            | map(select(
+                .ch != "protected" and
+                .rank >= $keep and
+                .updated_at < $cutoff
+              ))
+            | .[].id
+          ')
+
+          if [[ -z "$TO_DELETE" ]]; then
+            echo "Nothing to delete."
+            exit 0
+          fi
+
+          echo "$TO_DELETE" | while read -r version_id; do
+            echo "  Deleting version id ${version_id}"
+            gh api --method DELETE \
+              "/user/packages/container/${PACKAGE_NAME}/versions/${version_id}"
+          done
 
           echo "Done."
