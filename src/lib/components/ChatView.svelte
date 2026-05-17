@@ -2689,6 +2689,9 @@
 								<Archive class="h-4 w-4 {chat.compactionSummary ? 'text-primary' : ''}" /> Compact now
 							{/if}
 						</button>
+						<button onclick={() => { closeHeaderMenu(); openCompactionEditor(); }} disabled={!chat.compactionSummary} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50 disabled:pointer-events-none">
+							<Archive class="h-4 w-4 {chat.compactionSummary ? 'text-primary' : ''}" /> View compaction summary
+						</button>
 						<button onclick={() => { closeHeaderMenu(); showChatSettings = true; }} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent">
 							<SlidersHorizontal class="h-4 w-4 {hasOverrides ? 'text-primary' : ''}" /> Chat settings
 							{#if hasOverrides}<span class="ml-auto h-1.5 w-1.5 rounded-full bg-primary"></span>{/if}
@@ -2741,7 +2744,7 @@
 			{#each messageList as message, i (message.id)}
 				{#if message.role !== 'system'}
 					<!-- Compaction indicator: shown right BEFORE the first uncompacted visible message -->
-					{#if chat.compactionSummary && (chat.compactedUpToMessageId ?? 0) > 0 && !isMessageCompacted(message.id) && (i === 0 || isMessageCompacted(messageList[i - 1]?.id))}
+					{#if chat.compactionSummary && (chat.compactedUpToMessageId ?? 0) > 0 && !isMessageCompacted(message.id) && ((i === 0 && !hasMore) || isMessageCompacted(messageList[i - 1]?.id))}
 						<div class="flex items-center gap-3 py-2">
 							<div class="h-px flex-1 bg-primary/30"></div>
 							<button

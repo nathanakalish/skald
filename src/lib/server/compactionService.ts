@@ -325,6 +325,9 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 	const lastCompactedId = toCompact[toCompact.length - 1].id;
 	db.update(chats)
 		.set({
+			// Snapshot current state so re-processing is possible.
+			previousCompactionSummary: chat.compactionSummary ?? null,
+			previousCompactedUpToMessageId: chat.compactedUpToMessageId ?? null,
 			compactionSummary: summary,
 			compactedUpToMessageId: lastCompactedId,
 			compactionLastRunAt: sql`datetime('now')`,
@@ -355,6 +358,140 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 		summary,
 		compactedUpToMessageId: lastCompactedId,
 		compactedCount: toCompact.length,
+	};
+}
+
+/**
+ * Re-process the last compaction batch — same message window, fresh LLM pass.
+ *
+ * Reconstructs the exact transcript that the last run saw (previousCompactionSummary
+ * + messages from previousCompactedUpToMessageId+1 → compactedUpToMessageId) and
+ * submits it to the summarizer again. `compactedUpToMessageId` does NOT change;
+ * only the summary text is overwritten (the previous snapshot is updated too so
+ * a second re-process still works).
+ */
+export async function runReprocess(chatId: number): Promise<CompactionResult> {
+	if (inFlight.has(chatId)) return { ran: false, reason: 'already-running' };
+	inFlight.add(chatId);
+	const startedAt = Date.now();
+	logger.info('compaction: reprocess triggered', { chatId });
+	try {
+		const result = await runReprocessInner(chatId);
+		if (result.ran) {
+			logger.info('compaction: reprocess completed', { chatId, durationMs: Date.now() - startedAt });
+		} else {
+			logger.debug('compaction: reprocess skipped', { chatId, reason: result.reason });
+		}
+		return result;
+	} finally {
+		inFlight.delete(chatId);
+	}
+}
+
+async function runReprocessInner(chatId: number): Promise<CompactionResult> {
+	const chat = db.select().from(chats).where(eq(chats.id, chatId)).get();
+	if (!chat) return { ran: false, reason: 'chat-not-found' };
+	if (!chat.compactedUpToMessageId) return { ran: false, reason: 'no-previous-compaction' };
+
+	const settings = resolveCompactionSettings(chat, chat.userId!);
+
+	const leafId = chat.activeLeafId;
+	if (!leafId) return { ran: false, reason: 'no-active-leaf' };
+	const activePath = loadActivePath(leafId);
+
+	// Reconstruct the exact batch from the last run.
+	const batchStart = chat.previousCompactedUpToMessageId ?? 0;
+	const batchEnd = chat.compactedUpToMessageId;
+	const batch = activePath.filter(m => m.id > batchStart && m.id <= batchEnd);
+	if (batch.length === 0) return { ran: false, reason: 'batch-not-found' };
+
+	let summarizer = settings.providerId
+		? db.select().from(providers).where(and(eq(providers.id, settings.providerId), eq(providers.userId, chat.userId!))).get()
+		: null;
+	if (!summarizer) {
+		summarizer = chat.overrideProviderId
+			? db.select().from(providers).where(eq(providers.id, chat.overrideProviderId)).get()
+			: db.select().from(providers).where(and(eq(providers.userId, chat.userId!), eq(providers.enabled, true))).get();
+	}
+	if (!summarizer) return { ran: false, reason: 'no-provider' };
+
+	const chatProvider = chat.overrideProviderId
+		? db.select().from(providers).where(eq(providers.id, chat.overrideProviderId)).get() ?? summarizer
+		: db.select().from(providers).where(and(eq(providers.userId, chat.userId!), eq(providers.enabled, true))).get() ?? summarizer;
+	const targetContextSize = chatProvider.contextSize ?? 32768;
+	const highlightsCap = computeHighlightsCap(targetContextSize);
+	const model = settings.model || summarizer.defaultModel || '';
+
+	const transcriptLines: string[] = [];
+	if (chat.previousCompactionSummary?.trim()) {
+		transcriptLines.push('--- PREVIOUS HIGHLIGHTS ---');
+		transcriptLines.push(chat.previousCompactionSummary.trim());
+		transcriptLines.push('');
+	}
+	transcriptLines.push('--- NEW MESSAGES ---');
+	for (const m of batch) {
+		const who = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System';
+		transcriptLines.push(`${who}: ${m.content}`);
+	}
+
+	const llm = createProvider(summarizer.type as ProviderType, {
+		endpoint: summarizer.endpoint,
+		apiKey: summarizer.apiKey || '',
+		model,
+	});
+	const samplerSettings: SamplerSettings = {
+		temperature: 0.4,
+		topP: 1.0,
+		topK: 0,
+		maxTokens: highlightsCap,
+		repetitionPenalty: 1.0,
+		frequencyPenalty: 0.0,
+		presencePenalty: 0.0,
+		reasoningEffort: 'off',
+	};
+	const llmMessages: ChatMessage[] = [
+		{ role: 'system', content: settings.prompt },
+		{ role: 'user', content: transcriptLines.join('\n') },
+	];
+
+	let summary = '';
+	try {
+		for await (const chunk of llm.stream(llmMessages, samplerSettings)) {
+			if (chunk.type === 'content') summary += chunk.text;
+		}
+	} catch (err) {
+		logger.warn('compaction: reprocess provider stream failed', { chatId, err: String(err) });
+		return { ran: false, reason: 'provider-error' };
+	}
+
+	summary = summary.trim();
+	if (!summary) return { ran: false, reason: 'empty-summary' };
+
+	const summaryTokens = countTokens(summary);
+	if (summaryTokens > highlightsCap) {
+		const ratio = highlightsCap / summaryTokens;
+		summary = summary.slice(0, Math.max(64, Math.floor(summary.length * ratio))).trimEnd() + '\n[...highlights truncated to fit budget...]';
+	}
+
+	// Keep `compactedUpToMessageId` unchanged — we're redoing the same batch.
+	db.update(chats)
+		.set({
+			previousCompactionSummary: chat.previousCompactionSummary ?? null,
+			previousCompactedUpToMessageId: chat.previousCompactedUpToMessageId ?? null,
+			compactionSummary: summary,
+			compactionLastRunAt: sql`datetime('now')`,
+		})
+		.where(eq(chats.id, chatId))
+		.run();
+
+	const fresh = db.select().from(chats).where(eq(chats.id, chatId)).get();
+	if (fresh) broadcast(chat.userId!, { type: 'chat:updated', id: chatId, chat: fresh as any });
+
+	return {
+		ran: true,
+		summary,
+		compactedUpToMessageId: batchEnd,
+		compactedCount: batch.length,
 	};
 }
 

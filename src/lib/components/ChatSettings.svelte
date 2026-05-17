@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X, RotateCcw, ChevronDown, Loader2, Monitor, Server, Sliders, UserPen, Archive } from 'lucide-svelte';
+	import { X, RotateCcw, ChevronDown, Loader2, Monitor, Server, Sliders, UserPen, Archive, MoreHorizontal, RefreshCw } from 'lucide-svelte';
 	import Combobox, { type ComboboxItem } from '$lib/components/Combobox.svelte';
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
@@ -32,6 +32,7 @@
 			overrideCompactionModel?: string | null;
 			compactionSummary?: string | null;
 			compactedUpToMessageId?: number | null;
+			previousCompactedUpToMessageId?: number | null;
 			compactionLastRunAt?: string | null;
 		};
 		characterHasTheme?: boolean;
@@ -66,6 +67,8 @@
 	let compactionModelList = $state<string[]>([]);
 	let compactionModelLoading = $state(false);
 	let compactingNow = $state(false);
+	let reprocessingNow = $state(false);
+	let showSummaryMenu = $state(false);
 	let saving = $state(false);
 
 	// Model list
@@ -179,6 +182,30 @@
 
 	function clearCompactionState() {
 		compactionSummaryDraft = '';
+	}
+
+	async function reprocessLastBatch() {
+		if (reprocessingNow) return;
+		reprocessingNow = true;
+		showSummaryMenu = false;
+		try {
+			const res = await fetch(`/api/chats/${chatId}/compact`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ redo: true }),
+			});
+			if (res.ok) {
+				const data = await res.json();
+				compactionSummaryDraft = data.summary ?? compactionSummaryDraft;
+				toasts.success('Re-processed last batch');
+				await onrefresh?.();
+			} else {
+				const data = await res.json().catch(() => ({}));
+				toasts.error(data.reason ? `Re-process failed: ${data.reason}` : 'Re-process failed');
+			}
+		} finally {
+			reprocessingNow = false;
+		}
 	}
 
 	async function save() {
@@ -807,11 +834,42 @@
 							<div class="space-y-1.5 border-t border-border pt-5">
 								<div class="flex items-center justify-between">
 									<span class="text-sm font-medium">Current summary</span>
-									{#if compactionSummaryDraft.trim()}
-										<button onclick={clearCompactionState} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
-											<RotateCcw class="h-3 w-3" /> Clear
-										</button>
-									{/if}
+									<div class="flex items-center gap-1">
+										{#if compactionSummaryDraft.trim()}
+											<button onclick={clearCompactionState} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
+												<RotateCcw class="h-3 w-3" /> Clear
+											</button>
+										{/if}
+										<!-- ... overflow menu -->
+										<div class="relative">
+											<button
+												onclick={(e) => { e.stopPropagation(); showSummaryMenu = !showSummaryMenu; }}
+												class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+												aria-label="More options"
+											>
+												<MoreHorizontal class="h-3.5 w-3.5" />
+											</button>
+											{#if showSummaryMenu}
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="absolute right-0 top-full z-10 mt-1 w-52 rounded-xl border border-border bg-popover py-1 shadow-xl"
+													onmouseleave={() => { showSummaryMenu = false; }}
+												>
+													<button
+														onclick={reprocessLastBatch}
+														disabled={!chat.compactedUpToMessageId || reprocessingNow}
+														class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+													>
+														{#if reprocessingNow}
+															<Loader2 class="h-4 w-4 animate-spin" /> Re-processing…
+														{:else}
+															<RefreshCw class="h-4 w-4" /> Re-process last batch
+														{/if}
+													</button>
+												</div>
+											{/if}
+										</div>
+									</div>
 								</div>
 								<textarea
 									bind:value={compactionSummaryDraft}

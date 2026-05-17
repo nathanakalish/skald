@@ -81,6 +81,9 @@ export const chats = sqliteTable('chats', {
 	compactionSummary: text('compaction_summary'),
 	compactedUpToMessageId: integer('compacted_up_to_message_id'),
 	compactionLastRunAt: text('compaction_last_run_at'),
+	// Previous-run snapshot so the user can re-process the last batch.
+	previousCompactionSummary: text('previous_compaction_summary'),
+	previousCompactedUpToMessageId: integer('previous_compacted_up_to_message_id'),
 	overrideCompactionEnabled: integer('override_compaction_enabled', { mode: 'boolean' }),
 	overrideCompactionThreshold: integer('override_compaction_threshold'),
 	overrideCompactionMode: text('override_compaction_mode'),

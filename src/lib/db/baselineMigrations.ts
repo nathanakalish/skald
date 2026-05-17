@@ -443,6 +443,8 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			['compaction_summary', 'TEXT'],
 			['compacted_up_to_message_id', 'INTEGER'],
 			['compaction_last_run_at', 'TEXT'],
+			['previous_compaction_summary', 'TEXT'],
+			['previous_compacted_up_to_message_id', 'INTEGER'],
 			['override_compaction_enabled', 'INTEGER'],
 			['override_compaction_threshold', 'INTEGER'],
 			['override_compaction_mode', 'TEXT'],
