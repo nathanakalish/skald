@@ -1,0 +1,42 @@
+name: GHCR cleanup
+
+# Deletes untagged container image versions older than 30 days.
+# Untagged digests pile up with every push — each build produces one and
+# only the named tags (latest, beta, version number) get retained by default.
+on:
+  schedule:
+    # First of every month at 03:00 UTC
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete untagged images older than 30 days
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACKAGE_NAME="${GITHUB_REPOSITORY#*/}"
+          CUTOFF=$(date -d '30 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "Pruning untagged versions of ${PACKAGE_NAME} older than ${CUTOFF}"
+
+          gh api "/user/packages/container/${PACKAGE_NAME}/versions" \
+            --paginate \
+            --jq \
+              --arg cutoff "$CUTOFF" \
+              '[.[] | select(.metadata.container.tags | length == 0)
+                    | select(.updated_at < $cutoff)
+                    | .id]' \
+          | jq -r '.[]' \
+          | while read -r version_id; do
+              echo "  Deleting version id ${version_id}"
+              gh api --method DELETE \
+                "/user/packages/container/${PACKAGE_NAME}/versions/${version_id}"
+            done
+
+          echo "Done."

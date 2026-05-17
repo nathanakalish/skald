@@ -1,0 +1,38 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [master, beta]
+  pull_request:
+    branches: [master, beta]
+  schedule:
+    # Weekly scan on Monday mornings regardless of pushes.
+    - cron: '30 7 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # Built-in query suites: security-extended catches more than the
+          # default set, including injection and path traversal patterns.
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

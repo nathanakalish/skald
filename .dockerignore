@@ -23,3 +23,5 @@ static/avatars/
 *.md
 .env
 .env.*
+.github/
+docker-compose.yml
