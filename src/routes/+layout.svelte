@@ -299,8 +299,8 @@
 			characterCreatorPrompt: (data as any).characterCreatorPrompt ?? '',
 			compactionEnabled: (data as any).compactionEnabled ?? false,
 			compactionThreshold: (data as any).compactionThreshold ?? 80,
-			compactionMode: (data as any).compactionMode ?? 'threshold',
-			compactionTargetPercent: (data as any).compactionTargetPercent ?? 50,
+			compactionMode: (data as any).compactionMode ?? 'window',
+			compactionWindowPercent: (data as any).compactionWindowPercent ?? 30,
 			compactionFixedCount: (data as any).compactionFixedCount ?? 20,
 			compactionProviderId: (data as any).compactionProviderId ?? '',
 			compactionModel: (data as any).compactionModel ?? '',
@@ -374,8 +374,8 @@
 				characterCreatorPrompt: (data as any).characterCreatorPrompt ?? '',
 				compactionEnabled: (data as any).compactionEnabled ?? false,
 				compactionThreshold: (data as any).compactionThreshold ?? 80,
-				compactionMode: (data as any).compactionMode ?? 'threshold',
-				compactionTargetPercent: (data as any).compactionTargetPercent ?? 50,
+				compactionMode: (data as any).compactionMode ?? 'window',
+				compactionWindowPercent: (data as any).compactionWindowPercent ?? 30,
 				compactionFixedCount: (data as any).compactionFixedCount ?? 20,
 				compactionProviderId: (data as any).compactionProviderId ?? '',
 				compactionModel: (data as any).compactionModel ?? '',
@@ -2812,8 +2812,8 @@
 					characterCreatorPrompt={settings.characterCreatorPrompt ?? ''}
 					compactionEnabled={(settings as any).compactionEnabled ?? false}
 					compactionThreshold={(settings as any).compactionThreshold ?? 80}
-					compactionMode={(settings as any).compactionMode ?? 'threshold'}
-					compactionTargetPercent={(settings as any).compactionTargetPercent ?? 50}
+					compactionMode={(settings as any).compactionMode ?? 'window'}
+					compactionWindowPercent={(settings as any).compactionWindowPercent ?? 30}
 					compactionFixedCount={(settings as any).compactionFixedCount ?? 20}
 					compactionProviderId={(settings as any).compactionProviderId ?? ''}
 					compactionModel={(settings as any).compactionModel ?? ''}

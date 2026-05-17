@@ -1,13 +1,23 @@
 /**
- * Conversation compaction — i.e. "summarize the old stuff so we stop blowing the context window".
+ * Conversation compaction — collapse old turns into a rolling "highlights"
+ * note so chats can keep going past the context window without dropping the
+ * narrative.
  *
- * Periodically (or on demand) we collapse the oldest stretch of an active chat
- * path into a short prose summary, then mark those messages as archived via
- * `chats.compactedUpToMessageId`. The summary gets injected into the prompt
- * right after the system prompt so the LLM still has narrative continuity even
- * though the raw turns aren't being sent anymore.
+ * The flow:
+ *   1. Auto-trigger fires when prompt usage crosses `threshold%`. Skipped for
+ *      impersonate (one-shots) and for chats below the minimum tail.
+ *   2. Pick which messages to fold in:
+ *        - `window` mode (default for auto): take oldest messages whose tokens
+ *          add up to `windowPercent × contextSize`. Keeps each run bounded.
+ *        - `fixed` mode (default for manual): take exactly N oldest messages.
+ *   3. Feed previous highlights + the chosen turns to the summarizer LLM.
+ *      Output is bounded by `highlightsCap = clamp(round(0.025 × contextSize), 256, 4096)`.
+ *   4. Truncate the returned summary to `highlightsCap` tokens if it overshot,
+ *      log a warning, then persist + advance `compactedUpToMessageId`.
  *
- * Subsequent runs feed the previous summary back in so it stays a single rolling summary.
+ * `highlightsCap` governs BOTH the LLM `maxTokens` AND the post-hoc truncation
+ * so the injected slot can never exceed the budget we promised the prompt
+ * pipeline. Single source of truth.
  */
 import { db } from '$lib/db/index.js';
 import { chats, messages, providers, userSettings } from '$lib/db/schema.js';
@@ -15,29 +25,36 @@ import { eq, and, sql } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
 import type { ChatMessage, SamplerSettings } from '$lib/providers/base.js';
 import { loadActivePath, type MessageRow } from '$lib/server/chatTree.js';
-import { buildChatContext } from '$lib/server/chatContext.js';
 import { countTokens } from '$lib/services/tokenizer.js';
 import { logger } from '$lib/server/logger.js';
 import { broadcast } from '$lib/server/realtime.js';
 
-export const DEFAULT_COMPACTION_PROMPT = `You are a story summarizer. Your job is to compress the EARLIER portion of a roleplay/chat into a concise but information-dense summary that the storytelling AI can use as context for what has happened so far.
+/**
+ * Terse fact-list summarizer prompt. Earlier versions asked for a prose
+ * paragraph, which the model would happily inflate to 800+ tokens of
+ * "in this conversation" filler. The terse format keeps highlights dense
+ * and lets the cap-truncation be lossless in practice.
+ */
+export const DEFAULT_COMPACTION_PROMPT = `You compress the EARLIER portion of a roleplay/chat into a terse highlights list. The list is shown to the storytelling AI in place of the original messages — every line you write is a fact it can rely on.
 
-Focus on, in this order:
-1. Setting and location (where the characters are, what's around them, time of day, season)
-2. Important objects, items, or props introduced
-3. Key relationships and dynamics between characters
-4. Plot-relevant events, decisions, secrets, promises, or unresolved threads
-5. Emotional state and recent mood shifts
-6. Anything explicitly established about the world
+If a PREVIOUS HIGHLIGHTS block is provided, you MUST carry every still-relevant fact forward into the new list. Do NOT lose information.
 
-If a previous summary is provided, INCORPORATE it — do not lose facts that were summarized before. The previous summary plus the new messages must collapse into one cohesive new summary.
+Output format — ONLY lines of "Category: fact". One fact per line. No prose, no preamble, no markdown.
+
+Categories to use (skip any with no facts):
+- Setting: location, time of day, season, surroundings
+- Item: notable objects, gifts, props the characters interact with
+- Relationship: dynamics, attractions, conflicts, history between characters
+- Event: things that happened, choices made, promises, secrets revealed
+- State: current emotional state or mood, physical condition, what someone is wearing
+- World: established rules, lore, abilities, world details
 
 Rules:
-- Write in past tense, third-person, prose paragraphs (NOT a bulleted list).
-- Be terse. Aim for the shortest summary that preserves all important context.
-- Do NOT invent details. Only summarize what is in the messages or previous summary.
-- Do NOT include meta-commentary (e.g. "in this conversation"). Just narrate the events.
-- Output ONLY the summary text — no headers, no preamble, no closing remarks.`;
+- Each line stands alone. Past tense, third-person where possible.
+- Be terse. "Setting: rainy bus stop at night" beats "It was raining and they were at a bus stop late at night."
+- Do NOT invent details. Every fact must come from the messages or the previous highlights.
+- Do NOT include meta-commentary or note that this is a summary.
+- Output ONLY the highlight lines.`;
 
 function getUserSetting(userId: number, key: string): string | undefined {
 	const row = db.select().from(userSettings)
@@ -46,30 +63,39 @@ function getUserSetting(userId: number, key: string): string | undefined {
 	return row?.value ?? undefined;
 }
 
-export type CompactionMode = 'threshold' | 'fixed';
+export type CompactionMode = 'window' | 'fixed';
 
 export interface EffectiveCompactionSettings {
 	enabled: boolean;
 	threshold: number;          // % of context window at which auto-trigger fires
 	mode: CompactionMode;
-	targetPercent: number;      // % of prompt budget to aim for after compaction (mode=threshold)
-	fixedCount: number;         // how many oldest messages to compact each run (mode=fixed)
-	providerId: number | null;  // provider for the summarization call — null means "use chat's provider"
-	model: string;              // model override (empty = provider default)
-	prompt: string;             // system prompt for the summarizer
+	/** Window mode: how much of contextSize (token-wise) to fold per run. */
+	windowPercent: number;
+	/** Fixed mode: how many oldest messages to fold per run. */
+	fixedCount: number;
+	providerId: number | null;
+	model: string;
+	prompt: string;
 }
 
 /**
- * Resolve effective compaction settings for a chat: per-chat overrides win over user globals.
+ * Normalize the stored mode. Legacy rows carrying the old `threshold` value
+ * are treated as `window` — the closest match in the new model. Anything
+ * unrecognised also falls back to `window`.
  */
+function normalizeMode(raw: string | null | undefined): CompactionMode {
+	if (raw === 'fixed') return 'fixed';
+	return 'window';
+}
+
 export function resolveCompactionSettings(
 	chat: typeof chats.$inferSelect,
-	userId: number
+	userId: number,
 ): EffectiveCompactionSettings {
 	const enabledGlobal = getUserSetting(userId, 'compactionEnabled') === 'true';
 	const thresholdGlobal = Number(getUserSetting(userId, 'compactionThreshold') ?? '80');
-	const modeGlobal = (getUserSetting(userId, 'compactionMode') ?? 'threshold') as CompactionMode;
-	const targetGlobal = Number(getUserSetting(userId, 'compactionTargetPercent') ?? '50');
+	const modeGlobal = normalizeMode(getUserSetting(userId, 'compactionMode'));
+	const windowGlobal = Number(getUserSetting(userId, 'compactionWindowPercent') ?? '30');
 	const fixedGlobal = Number(getUserSetting(userId, 'compactionFixedCount') ?? '20');
 	const providerIdGlobalRaw = getUserSetting(userId, 'compactionProviderId') ?? '';
 	const providerIdGlobal = providerIdGlobalRaw ? Number(providerIdGlobalRaw) : null;
@@ -79,8 +105,8 @@ export function resolveCompactionSettings(
 	return {
 		enabled: chat.overrideCompactionEnabled ?? enabledGlobal,
 		threshold: chat.overrideCompactionThreshold ?? thresholdGlobal,
-		mode: (chat.overrideCompactionMode as CompactionMode | null) ?? modeGlobal,
-		targetPercent: chat.overrideCompactionTargetPercent ?? targetGlobal,
+		mode: chat.overrideCompactionMode ? normalizeMode(chat.overrideCompactionMode) : modeGlobal,
+		windowPercent: chat.overrideCompactionWindowPercent ?? windowGlobal,
 		fixedCount: chat.overrideCompactionFixedCount ?? fixedGlobal,
 		providerId: chat.overrideCompactionProviderId ?? providerIdGlobal,
 		model: chat.overrideCompactionModel ?? modelGlobal,
@@ -89,7 +115,8 @@ export function resolveCompactionSettings(
 }
 
 /**
- * Decide whether the current prompt usage warrants kicking off an auto-compaction.
+ * Auto-trigger predicate. Compaction fires when the live prompt is using at
+ * least `thresholdPct` of the available prompt budget.
  */
 export function shouldAutoCompact(promptTokens: number, availableForPrompt: number, thresholdPct: number): boolean {
 	if (availableForPrompt <= 0) return false;
@@ -97,64 +124,51 @@ export function shouldAutoCompact(promptTokens: number, availableForPrompt: numb
 }
 
 /**
- * Pick which oldest non-compacted messages to feed into this compaction run.
+ * Compute the highlights token cap. Scales with the model's context so big
+ * windows get richer summaries and small windows stay disciplined.
  *
- * Mode `fixed`: take exactly N oldest.
- * Mode `threshold`: take enough so the remaining tail PLUS the eventual summary
- * fits under `targetPercent` of the context window.
+ * Lower bound: 256 — anything less can't fit meaningful highlights.
+ * Upper bound: 4096 — past this we're spending more on the summary than we'd
+ * save by compacting.
+ */
+export function computeHighlightsCap(contextSize: number): number {
+	return Math.max(256, Math.min(Math.round(contextSize * 0.025), 4096));
+}
+
+/**
+ * Pick which oldest uncompacted messages to fold in this run.
+ *
+ * `window` mode: walk forward from the oldest, accumulating tokens until the
+ *   running total crosses `windowPercent × contextSize`. Always folds at
+ *   least one message so progress is guaranteed even if a single turn is huge.
+ *
+ * `fixed` mode: take exactly N oldest, clamped to leave `minTailKeep` live.
  */
 function pickMessagesToCompact(
 	uncompacted: MessageRow[],
 	settings: EffectiveCompactionSettings,
-	availableForPrompt: number,
-	summaryReserveTokens: number,
-	nonHistoryTokens: number,
+	contextSize: number,
 	minTailKeep: number,
 ): MessageRow[] {
 	if (uncompacted.length === 0) return [];
+	const maxAllowed = Math.max(0, uncompacted.length - minTailKeep);
+	if (maxAllowed === 0) return [];
 
 	if (settings.mode === 'fixed') {
-		const n = Math.max(1, Math.min(settings.fixedCount, uncompacted.length));
-		const maxAllowed = Math.max(0, uncompacted.length - minTailKeep);
-		return uncompacted.slice(0, Math.min(n, maxAllowed));
+		const n = Math.max(1, Math.min(settings.fixedCount, maxAllowed));
+		return uncompacted.slice(0, n);
 	}
 
-	// threshold mode: collapse enough so tail + summary + non-history overhead
-	// fits under target% of the prompt budget the model can actually use.
-	const budgetForTail = Math.max(
-		0,
-		Math.floor((settings.targetPercent / 100) * availableForPrompt)
-			- summaryReserveTokens
-			- nonHistoryTokens,
-	);
-	// Walk backwards from the end accumulating tail tokens. Once the tail busts
-	// the budget, everything before that index is fair game to compact.
-	let tailTokens = 0;
-	let firstKeptIdx = uncompacted.length;
-	for (let i = uncompacted.length - 1; i >= 0; i--) {
+	const budget = Math.max(1, Math.floor((settings.windowPercent / 100) * contextSize));
+	let total = 0;
+	let lastIdx = 0;
+	for (let i = 0; i < maxAllowed; i++) {
 		const t = countTokens(uncompacted[i].content) + 4;
-		if (tailTokens + t > budgetForTail) break;
-		tailTokens += t;
-		firstKeptIdx = i;
+		if (total + t > budget && i > 0) break;
+		total += t;
+		lastIdx = i + 1;
 	}
-	// Never compact the entire chat — keep a small live tail so the model has
-	// something concrete to react to.
-	if (uncompacted.length - firstKeptIdx < minTailKeep) {
-		firstKeptIdx = Math.max(0, uncompacted.length - minTailKeep);
-	}
-	return uncompacted.slice(0, firstKeptIdx);
-}
-
-function estimateNonHistoryTokens(chatId: number): number {
-	try {
-		const ctx = buildChatContext(chatId, { chatId });
-		return ctx.tokenStats.breakdown
-			.filter((slot) => slot.name !== 'history')
-			.reduce((sum, slot) => sum + slot.tokens, 0);
-	} catch (err) {
-		logger.warn('compaction: failed to estimate non-history tokens', { chatId, err: String(err) });
-		return 0;
-	}
+	return uncompacted.slice(0, Math.max(1, lastIdx));
 }
 
 export interface CompactionResult {
@@ -166,23 +180,18 @@ export interface CompactionResult {
 }
 
 export interface RunCompactionOptions {
-	/** Force run even if compaction is disabled. Used for the manual button. */
+	/** Bypass the `enabled` gate. Used by the manual button. */
 	force?: boolean;
 }
 
 /**
- * Per-chat in-flight mutex. Without this, the auto-trigger inside chatProcessor
- * and the manual /api/chats/[id]/compact endpoint can both fire runCompaction
- * for the same chat at the same time \u2014 each summarizes the same window, both
- * writes race on `compactedUpToMessageId`, and the user pays the LLM bill twice.
- * Surprise.
+ * Per-chat in-flight mutex. Without this, the auto-trigger in chatProcessor
+ * and the manual endpoint can both fire for the same chat — each would summarize
+ * the same window, both writes race on `compactedUpToMessageId`, and we pay
+ * the LLM bill twice.
  */
 const inFlight = new Set<number>();
 
-/**
- * Run a compaction pass on the given chat. Synchronous \u2014 awaits the LLM call.
- * Returns ran=false (with a reason) when there's nothing to do.
- */
 export async function runCompaction(chatId: number, opts: RunCompactionOptions = {}): Promise<CompactionResult> {
 	if (inFlight.has(chatId)) return { ran: false, reason: 'already-running' };
 	inFlight.add(chatId);
@@ -211,23 +220,18 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 	if (!chat) return { ran: false, reason: 'chat-not-found' };
 
 	const settings = resolveCompactionSettings(chat, chat.userId!);
-	if (!settings.enabled && !opts.force) {
-		return { ran: false, reason: 'disabled' };
-	}
+	if (!settings.enabled && !opts.force) return { ran: false, reason: 'disabled' };
 
-	// Walk the active path. Skip messages already covered by a prior compaction.
 	const leafId = chat.activeLeafId;
 	if (!leafId) return { ran: false, reason: 'no-active-leaf' };
 	const activePath = loadActivePath(leafId);
 	const cutoff = chat.compactedUpToMessageId ?? 0;
 	const uncompacted = activePath.filter(m => m.id > cutoff);
 	const minTailKeep = opts.force ? 1 : 2;
-	if (uncompacted.length <= minTailKeep) {
-		return { ran: false, reason: 'too-short' };
-	}
+	if (uncompacted.length <= minTailKeep) return { ran: false, reason: 'too-short' };
 
-	// Resolve provider for the summarization call. Fall back to chat's
-	// active provider if no compaction provider is configured.
+	// Pick the summarization provider. Falls back to the chat's active provider
+	// when no compaction-specific provider is configured.
 	let summarizer = settings.providerId
 		? db.select().from(providers).where(and(eq(providers.id, settings.providerId), eq(providers.userId, chat.userId!))).get()
 		: null;
@@ -238,38 +242,29 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 	}
 	if (!summarizer) return { ran: false, reason: 'no-provider' };
 
-	// Sizing for the threshold-mode budget should track whatever provider the
-	// CHAT actually generates with (that's what the auto-trigger threshold and
-	// the avatar context ring are measured against). The summarizer may be a
-	// different model with a different window.
+	// Size off the CHAT's provider, not the summarizer — the auto-trigger
+	// threshold and the avatar context ring are both measured against the
+	// chat provider's window. The summarizer might use a smaller model.
 	const chatProvider = chat.overrideProviderId
 		? db.select().from(providers).where(eq(providers.id, chat.overrideProviderId)).get() ?? summarizer
 		: db.select().from(providers).where(and(eq(providers.userId, chat.userId!), eq(providers.enabled, true))).get() ?? summarizer;
 	const targetContextSize = chatProvider.contextSize ?? 32768;
-	const targetMaxResponse = chat.overrideMaxTokens ?? chatProvider.maxTokens ?? 1024;
-	const availableForPrompt = Math.max(1024, targetContextSize - targetMaxResponse);
-	const nonHistoryTokens = estimateNonHistoryTokens(chatId);
-	const summaryReserveTokens = Math.max(512, Math.min(summarizer.maxTokens ?? 1024, 2048));
-	const toCompact = pickMessagesToCompact(
-		uncompacted,
-		settings,
-		availableForPrompt,
-		summaryReserveTokens,
-		nonHistoryTokens,
-		minTailKeep,
-	);
+
+	const highlightsCap = computeHighlightsCap(targetContextSize);
+	const toCompact = pickMessagesToCompact(uncompacted, settings, targetContextSize, minTailKeep);
 	if (toCompact.length === 0) return { ran: false, reason: 'nothing-to-pick' };
 
 	const model = settings.model || summarizer.defaultModel || '';
 
-	// Build the summarizer input: previous summary (if any) followed by the new transcript.
+	// Rolling input: previous highlights → new messages. The summarizer prompt
+	// instructs the model to merge them into a single fresh highlights list.
 	const transcriptLines: string[] = [];
 	if (chat.compactionSummary?.trim()) {
-		transcriptLines.push('--- PREVIOUS SUMMARY ---');
+		transcriptLines.push('--- PREVIOUS HIGHLIGHTS ---');
 		transcriptLines.push(chat.compactionSummary.trim());
 		transcriptLines.push('');
-		transcriptLines.push('--- NEW MESSAGES TO INCORPORATE ---');
 	}
+	transcriptLines.push('--- NEW MESSAGES ---');
 	for (const m of toCompact) {
 		const who = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System';
 		transcriptLines.push(`${who}: ${m.content}`);
@@ -286,7 +281,7 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 		temperature: 0.4,
 		topP: 1.0,
 		topK: 0,
-		maxTokens: Math.max(512, Math.min(summarizer.maxTokens ?? 1024, 2048)),
+		maxTokens: highlightsCap,
 		repetitionPenalty: 1.0,
 		frequencyPenalty: 0.0,
 		presencePenalty: 0.0,
@@ -311,6 +306,22 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 	summary = summary.trim();
 	if (!summary) return { ran: false, reason: 'empty-summary' };
 
+	// Belt-and-suspenders: the cap is also passed as maxTokens above, but
+	// some providers ignore it or count differently. If we still overshot,
+	// hard-truncate by token-proportional character count and log loudly.
+	const summaryTokens = countTokens(summary);
+	if (summaryTokens > highlightsCap) {
+		const ratio = highlightsCap / summaryTokens;
+		const cutCharCount = Math.max(64, Math.floor(summary.length * ratio));
+		summary = summary.slice(0, cutCharCount).trimEnd() + '\n[...highlights truncated to fit budget...]';
+		logger.warn('compaction: summary exceeded highlights cap, truncated', {
+			chatId,
+			summaryTokens,
+			highlightsCap,
+			contextSize: targetContextSize,
+		});
+	}
+
 	const lastCompactedId = toCompact[toCompact.length - 1].id;
 	db.update(chats)
 		.set({
@@ -321,7 +332,6 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 		.where(eq(chats.id, chatId))
 		.run();
 
-	// Tell connected clients so the in-chat indicator + chat settings tab refresh.
 	const fresh = db.select().from(chats).where(eq(chats.id, chatId)).get();
 	if (fresh) {
 		broadcast(chat.userId!, {
@@ -337,6 +347,7 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 		compactedCount: toCompact.length,
 		summaryLen: summary.length,
 		mode: settings.mode,
+		highlightsCap,
 	});
 
 	return {
@@ -347,6 +358,5 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
 	};
 }
 
-// Touch `messages` so the unused-import linter doesn't strip it — a future manual reset
-// endpoint will need it.
+// Keep `messages` reachable for the planned manual-reset endpoint.
 void messages;

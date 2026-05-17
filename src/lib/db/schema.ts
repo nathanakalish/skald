@@ -86,6 +86,7 @@ export const chats = sqliteTable('chats', {
 	overrideCompactionMode: text('override_compaction_mode'),
 	overrideCompactionTargetPercent: integer('override_compaction_target_percent'),
 	overrideCompactionFixedCount: integer('override_compaction_fixed_count'),
+	overrideCompactionWindowPercent: integer('override_compaction_window_percent'),
 	overrideCompactionProviderId: integer('override_compaction_provider_id'),
 	overrideCompactionModel: text('override_compaction_model'),
 	unread: integer('unread').default(0),

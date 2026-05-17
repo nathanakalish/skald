@@ -448,6 +448,7 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			['override_compaction_mode', 'TEXT'],
 			['override_compaction_target_percent', 'INTEGER'],
 			['override_compaction_fixed_count', 'INTEGER'],
+			['override_compaction_window_percent', 'INTEGER'],
 			['override_compaction_provider_id', 'INTEGER'],
 			['override_compaction_model', 'TEXT'],
 		];

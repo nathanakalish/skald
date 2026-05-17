@@ -4,7 +4,7 @@ import { db } from '$lib/db/index.js';
 import { chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
-import { buildChatContext } from '$lib/server/chatContext.js';
+import { buildChatContext } from '$lib/server/prompt/index.js';
 import { logger } from '$lib/server/logger.js';
 
 /**

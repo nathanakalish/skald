@@ -26,7 +26,7 @@
 			overrideCompactionEnabled?: boolean | null;
 			overrideCompactionThreshold?: number | null;
 			overrideCompactionMode?: string | null;
-			overrideCompactionTargetPercent?: number | null;
+			overrideCompactionWindowPercent?: number | null;
 			overrideCompactionFixedCount?: number | null;
 			overrideCompactionProviderId?: number | null;
 			overrideCompactionModel?: string | null;
@@ -58,7 +58,7 @@
 	let compactionEnabledOverride = $state<boolean | null>(null);
 	let compactionThresholdOverride = $state<number | null>(null);
 	let compactionModeOverride = $state<string | null>(null);
-	let compactionTargetPercentOverride = $state<number | null>(null);
+	let compactionWindowPercentOverride = $state<number | null>(null);
 	let compactionFixedCountOverride = $state<number | null>(null);
 	let compactionProviderIdOverride = $state<number | null>(null);
 	let compactionModelOverride = $state<string | null>(null);
@@ -107,7 +107,7 @@
 				compactionEnabledOverride = chat.overrideCompactionEnabled ?? null;
 				compactionThresholdOverride = chat.overrideCompactionThreshold ?? null;
 				compactionModeOverride = chat.overrideCompactionMode ?? null;
-				compactionTargetPercentOverride = chat.overrideCompactionTargetPercent ?? null;
+				compactionWindowPercentOverride = chat.overrideCompactionWindowPercent ?? null;
 				compactionFixedCountOverride = chat.overrideCompactionFixedCount ?? null;
 				compactionProviderIdOverride = chat.overrideCompactionProviderId ?? null;
 				compactionModelOverride = chat.overrideCompactionModel ?? null;
@@ -201,7 +201,7 @@
 			overrideCompactionEnabled: compactionEnabledOverride,
 			overrideCompactionThreshold: compactionThresholdOverride,
 			overrideCompactionMode: compactionModeOverride,
-			overrideCompactionTargetPercent: compactionTargetPercentOverride,
+			overrideCompactionWindowPercent: compactionWindowPercentOverride,
 			overrideCompactionFixedCount: compactionFixedCountOverride,
 			overrideCompactionProviderId: compactionProviderIdOverride,
 			overrideCompactionModel: compactionModelOverride,
@@ -699,7 +699,7 @@
 									{/if}
 								</div>
 								<div class="flex gap-2">
-									{#each [{ value: null, label: 'Global' }, { value: 'threshold', label: 'Until target %' }, { value: 'fixed', label: 'Fixed count' }] as opt}
+									{#each [{ value: null, label: 'Global' }, { value: 'window', label: 'Rolling window' }, { value: 'fixed', label: 'Fixed count' }] as opt}
 										<button
 											onclick={() => { compactionModeOverride = opt.value; }}
 											class="flex-1 rounded-lg border px-3 py-1.5 text-sm {compactionModeOverride === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}"
@@ -710,26 +710,26 @@
 								</div>
 							</div>
 
-							{#if compactionModeOverride === 'threshold' || compactionModeOverride === null}
-								<div class="space-y-1.5">
-									<div class="flex items-center justify-between">
-										<span class="text-sm font-medium">Target after compaction</span>
-										{#if compactionTargetPercentOverride !== null}
-											<button onclick={() => { compactionTargetPercentOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Default
-											</button>
-										{:else}
-											<span class="text-xs text-muted-foreground">Using global</span>
-										{/if}
-									</div>
-									<div class="flex items-center gap-3">
-										<input
-											type="range" min="20" max="70" step="5"
-											value={compactionTargetPercentOverride ?? 50}
-											oninput={(e) => { compactionTargetPercentOverride = Number(e.currentTarget.value); }}
-											class="flex-1 accent-primary"
-										/>
-										<span class="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{compactionTargetPercentOverride ?? 50}%</span>
+{#if compactionModeOverride === 'window' || compactionModeOverride === null}
+							<div class="space-y-1.5">
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-medium">Window size per run</span>
+									{#if compactionWindowPercentOverride !== null}
+										<button onclick={() => { compactionWindowPercentOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+											<RotateCcw class="h-3 w-3" /> Default
+										</button>
+									{:else}
+										<span class="text-xs text-muted-foreground">Using global</span>
+									{/if}
+								</div>
+								<div class="flex items-center gap-3">
+									<input
+										type="range" min="10" max="60" step="5"
+										value={compactionWindowPercentOverride ?? 30}
+										oninput={(e) => { compactionWindowPercentOverride = Number(e.currentTarget.value); }}
+										class="flex-1 accent-primary"
+									/>
+									<span class="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{compactionWindowPercentOverride ?? 30}%</span>
 									</div>
 								</div>
 							{/if}

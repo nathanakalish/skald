@@ -18,7 +18,7 @@ export const ALLOWED_SETTING_KEYS = [
 	'reformatterProviderId', 'reformatterModel', 'reformatterPrompt',
 	'characterCreatorProviderId', 'characterCreatorModel', 'characterCreatorPrompt',
 	'compactionEnabled', 'compactionThreshold', 'compactionMode',
-	'compactionTargetPercent', 'compactionFixedCount',
+	'compactionWindowPercent', 'compactionFixedCount',
 	'compactionProviderId', 'compactionModel', 'compactionPrompt',
 	'systemDarkThemeId', 'systemLightThemeId'
 ];

@@ -85,7 +85,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if ('overrideCompactionEnabled' in body) updates.overrideCompactionEnabled = body.overrideCompactionEnabled ?? null;
 	if ('overrideCompactionThreshold' in body) updates.overrideCompactionThreshold = body.overrideCompactionThreshold ?? null;
 	if ('overrideCompactionMode' in body) updates.overrideCompactionMode = body.overrideCompactionMode ?? null;
-	if ('overrideCompactionTargetPercent' in body) updates.overrideCompactionTargetPercent = body.overrideCompactionTargetPercent ?? null;
+	if ('overrideCompactionWindowPercent' in body) updates.overrideCompactionWindowPercent = body.overrideCompactionWindowPercent ?? null;
 	if ('overrideCompactionFixedCount' in body) updates.overrideCompactionFixedCount = body.overrideCompactionFixedCount ?? null;
 	if ('overrideCompactionProviderId' in body) {
 		const v = body.overrideCompactionProviderId;

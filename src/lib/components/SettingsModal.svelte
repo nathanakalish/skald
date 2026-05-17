@@ -60,7 +60,7 @@
 		compactionEnabled: boolean;
 		compactionThreshold: number;
 		compactionMode: string;
-		compactionTargetPercent: number;
+		compactionWindowPercent: number;
 		compactionFixedCount: number;
 		compactionProviderId: string;
 		compactionModel: string;
@@ -96,8 +96,8 @@
 		chatPageSize = 50,
 		reformatterProviderId = '', reformatterModel = '', reformatterPrompt = '',
 		characterCreatorProviderId = '', characterCreatorModel = '', characterCreatorPrompt = '',
-		compactionEnabled = false, compactionThreshold = 80, compactionMode = 'threshold',
-		compactionTargetPercent = 50, compactionFixedCount = 20,
+		compactionEnabled = false, compactionThreshold = 80, compactionMode = 'window',
+		compactionWindowPercent = 30, compactionFixedCount = 20,
 		compactionProviderId = '', compactionModel = '', compactionPrompt = '',
 		speechOpacity = 100, speechBold = true, speechItalic = false,
 		thoughtOpacity = 75, thoughtBold = false, thoughtItalic = true,
@@ -146,8 +146,8 @@
 
 	let localCompactionEnabled = $state(false);
 	let localCompactionThreshold = $state(80);
-	let localCompactionMode = $state('threshold');
-	let localCompactionTargetPercent = $state(50);
+	let localCompactionMode = $state('window');
+	let localCompactionWindowPercent = $state(30);
 	let localCompactionFixedCount = $state(20);
 	let localCompactionProviderId = $state('');
 	let localCompactionModel = $state('');
@@ -217,7 +217,7 @@
 				localCompactionEnabled = compactionEnabled;
 				localCompactionThreshold = compactionThreshold;
 				localCompactionMode = compactionMode;
-				localCompactionTargetPercent = compactionTargetPercent;
+				localCompactionWindowPercent = compactionWindowPercent;
 				localCompactionFixedCount = compactionFixedCount;
 				localCompactionProviderId = compactionProviderId;
 				localCompactionModel = compactionModel;
@@ -1055,26 +1055,27 @@
 												await saveSetting('compactionMode', localCompactionMode);
 											}}
 											items={[
-												{ value: 'threshold', label: 'Oldest, until context drops to a target %' },
+												{ value: 'window', label: 'Rolling window of oldest messages (recommended)' },
 												{ value: 'fixed', label: 'Fixed number of oldest messages' }
 											]}
 										/>
 									</div>
 
-									{#if localCompactionMode === 'threshold'}
+									{#if localCompactionMode === 'window'}
 										<div class="space-y-1.5">
-											<label for="compaction-target" class="flex items-center justify-between text-sm font-medium">
-												<span>Target after compaction</span>
-												<span class="text-muted-foreground">{localCompactionTargetPercent}% of context</span>
+											<label for="compaction-window" class="flex items-center justify-between text-sm font-medium">
+												<span>Window size per run</span>
+												<span class="text-muted-foreground">{localCompactionWindowPercent}% of context</span>
 											</label>
 											<input
-												id="compaction-target"
-												type="range" min="20" max="70" step="5"
-												value={localCompactionTargetPercent}
-												oninput={(e) => { localCompactionTargetPercent = Number(e.currentTarget.value); }}
-												onchange={async () => { await saveSetting('compactionTargetPercent', localCompactionTargetPercent); }}
+												id="compaction-window"
+												type="range" min="10" max="60" step="5"
+												value={localCompactionWindowPercent}
+												oninput={(e) => { localCompactionWindowPercent = Number(e.currentTarget.value); }}
+												onchange={async () => { await saveSetting('compactionWindowPercent', localCompactionWindowPercent); }}
 												class="w-full"
 											/>
+											<p class="text-xs text-muted-foreground">Each run folds the oldest messages up to this share of the context window into the highlights.</p>
 										</div>
 									{:else}
 										<div class="space-y-1.5">

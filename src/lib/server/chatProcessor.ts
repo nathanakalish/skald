@@ -22,7 +22,7 @@ import { logger } from '$lib/server/logger.js';
 import { bumpChatTail } from '$lib/db/chatTail.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { activeGenerations } from '$lib/server/activeGenerations.js';
-import { buildChatContext, type ProcessOptions } from './chatContext.js';
+import { buildChatContext, type ProcessOptions } from '$lib/server/prompt/index.js';
 import { ThinkingTagParser } from './chatStreamParser.js';
 import { resolveCompactionSettings, runCompaction, shouldAutoCompact } from './compactionService.js';
 

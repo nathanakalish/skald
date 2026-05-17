@@ -47,7 +47,7 @@ export interface Settings {
 	compactionEnabled: boolean;
 	compactionThreshold: number;
 	compactionMode: string;
-	compactionTargetPercent: number;
+	compactionWindowPercent: number;
 	compactionFixedCount: number;
 	compactionProviderId: string;
 	compactionModel: string;
@@ -106,8 +106,8 @@ const defaults: Settings = {
 	characterCreatorPrompt: '',
 	compactionEnabled: false,
 	compactionThreshold: 80,
-	compactionMode: 'threshold',
-	compactionTargetPercent: 50,
+	compactionMode: 'window',
+	compactionWindowPercent: 30,
 	compactionFixedCount: 20,
 	compactionProviderId: '',
 	compactionModel: '',
