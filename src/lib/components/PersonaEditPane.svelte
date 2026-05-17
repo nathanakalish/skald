@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { Pencil, Save, Star, Trash2, User as UserIcon, Upload, X, MoreHorizontal } from 'lucide-svelte';
 	import { personasStore, type Persona } from '$lib/stores/personas.svelte.js';
+	import { toasts } from '$lib/stores/toast.svelte.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface Props {
@@ -83,6 +85,24 @@
 		if (!name.trim() || saving) return;
 		saving = true;
 		error = null;
+		// Snapshot the existing entry so we can revert on failure.
+		const editingPersona = persona;
+		const prevSnapshot = editingPersona ? { ...editingPersona } : null;
+		const nextLocal: any = {
+			id: editingPersona?.id ?? -Date.now(),
+			name: name.trim(),
+			displayName: displayName.trim(),
+			description,
+			isDefault,
+			avatarPath: avatarPath ?? editingPersona?.avatarPath ?? null,
+		};
+		if (editingPersona) {
+			personasStore.update(editingPersona.id, nextLocal);
+		} else {
+			personasStore.add(nextLocal);
+		}
+		editing = false;
+
 		try {
 			const body = JSON.stringify({
 				name: name.trim(),
@@ -91,34 +111,41 @@
 				isDefault,
 				...(avatarPath !== undefined ? { avatarPath } : {}),
 			});
-			let res: Response;
-			if (persona) {
-				res = await fetch(`/api/personas/${persona.id}`, {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body,
-				});
-			} else {
-				res = await fetch('/api/personas', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body,
-				});
-			}
+			const res = editingPersona
+				? await fetch(`/api/personas/${editingPersona.id}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body,
+					})
+				: await fetch('/api/personas', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body,
+					});
 			if (!res.ok) {
 				const j = await res.json().catch(() => ({}));
 				error = j?.error || `Save failed (${res.status})`;
+				if (editingPersona && prevSnapshot) personasStore.update(editingPersona.id, prevSnapshot);
+				else personasStore.remove(nextLocal.id);
+				editing = true;
 				return;
 			}
 			const data = await res.json();
 			if (Array.isArray(data?.personas)) personasStore.replaceAll(data.personas);
 			else if (data?.id) {
-				if (persona) personasStore.update(data.id, data);
-				else personasStore.add(data);
+				if (editingPersona) personasStore.update(data.id, data);
+				else {
+					personasStore.remove(nextLocal.id);
+					personasStore.add(data);
+				}
 			}
-			const newId = persona?.id ?? data?.id;
-			editing = false;
+			const newId = editingPersona?.id ?? data?.id;
 			if (newId) onsaved?.(newId);
+		} catch {
+			if (editingPersona && prevSnapshot) personasStore.update(editingPersona.id, prevSnapshot);
+			else personasStore.remove(nextLocal.id);
+			error = 'Network error';
+			editing = true;
 		} finally {
 			saving = false;
 		}
@@ -189,14 +216,19 @@
 
 	async function doDelete() {
 		if (!persona) return;
-		const res = await fetch(`/api/personas/${persona.id}`, { method: 'DELETE' });
-		if (res.ok) {
+		const snapshot = { ...persona };
+		personasStore.remove(persona.id);
+		confirmDelete = false;
+		ondeleted?.();
+		try {
+			const res = await fetch(`/api/personas/${snapshot.id}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error(String(res.status));
 			const data = await res.json().catch(() => ({}));
 			if (Array.isArray(data?.personas)) personasStore.replaceAll(data.personas);
-			else personasStore.remove(persona.id);
-			ondeleted?.();
+		} catch {
+			personasStore.add(snapshot);
+			toasts.error('Failed to delete persona');
 		}
-		confirmDelete = false;
 	}
 
 	function onPickFile(e: Event) {
@@ -243,7 +275,7 @@
 						onclick={() => (menuOpen = !menuOpen)}
 						class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 						aria-label="More actions"
-						title="More actions"
+						use:tooltip={'More actions'}
 					>
 						<MoreHorizontal class="h-4 w-4" />
 					</button>
@@ -308,7 +340,7 @@
 							onclick={() => fileInput?.click()}
 							disabled={uploading || isCreate}
 							class="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-accent disabled:opacity-50"
-							title={isCreate ? 'Save persona first to upload an avatar' : 'Upload avatar'}
+							use:tooltip={isCreate ? 'Save persona first to upload an avatar' : 'Upload avatar'}
 						>
 							<Upload class="h-4 w-4" />
 							{avatarPath ? 'Replace avatar' : 'Upload avatar'}

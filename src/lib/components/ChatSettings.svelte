@@ -4,6 +4,7 @@
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { tooltip } from '$lib/tooltip.js';
 	import { untrack } from 'svelte';
 
 	interface Props {
@@ -181,39 +182,45 @@
 	}
 
 	async function save() {
-		saving = true;
+		// Close immediately — the form is bound to local state so the UI
+		// already reflects the new values. Persist in the background and
+		// surface failures via a toast rather than blocking the user.
+		const payload = {
+			overrideProviderId: providerId || null,
+			overrideModel: model || null,
+			overrideTemperature: temperature,
+			overrideMaxTokens: maxTokens,
+			overrideCustomPrompt: customPrompt || null,
+			replyGuidance: replyGuidance.trim() ? replyGuidance : null,
+			overridePersonaId: personaId || null,
+			overrideIncludeReasoning: includeReasoning,
+			overrideReasoningEffort: reasoningEffort,
+			overrideRenderMode: renderModeOverride,
+			useCharacterTheme,
+			allowExternalResources,
+			overrideCompactionEnabled: compactionEnabledOverride,
+			overrideCompactionThreshold: compactionThresholdOverride,
+			overrideCompactionMode: compactionModeOverride,
+			overrideCompactionTargetPercent: compactionTargetPercentOverride,
+			overrideCompactionFixedCount: compactionFixedCountOverride,
+			overrideCompactionProviderId: compactionProviderIdOverride,
+			overrideCompactionModel: compactionModelOverride,
+			compactionSummary: compactionSummaryDraft.trim() ? compactionSummaryDraft : null,
+		};
+		onclose();
 		try {
 			const res = await fetch(`/api/chats/${chatId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					overrideProviderId: providerId || null,
-					overrideModel: model || null,
-					overrideTemperature: temperature,
-					overrideMaxTokens: maxTokens,
-					overrideCustomPrompt: customPrompt || null,
-					replyGuidance: replyGuidance.trim() ? replyGuidance : null,
-					overridePersonaId: personaId || null,
-					overrideIncludeReasoning: includeReasoning,
-					overrideReasoningEffort: reasoningEffort,
-					overrideRenderMode: renderModeOverride,
-					useCharacterTheme,
-					allowExternalResources,
-					overrideCompactionEnabled: compactionEnabledOverride,
-					overrideCompactionThreshold: compactionThresholdOverride,
-					overrideCompactionMode: compactionModeOverride,
-					overrideCompactionTargetPercent: compactionTargetPercentOverride,
-					overrideCompactionFixedCount: compactionFixedCountOverride,
-					overrideCompactionProviderId: compactionProviderIdOverride,
-					overrideCompactionModel: compactionModelOverride,
-					compactionSummary: compactionSummaryDraft.trim() ? compactionSummaryDraft : null
-				})
+				body: JSON.stringify(payload),
 			});
-			if (res.ok) toasts.success('Chat settings saved');
-			onclose();
+			if (!res.ok) {
+				toasts.error('Failed to save chat settings');
+				return;
+			}
 			await onrefresh?.();
-		} finally {
-			saving = false;
+		} catch {
+			toasts.error('Failed to save chat settings');
 		}
 	}
 
@@ -278,7 +285,7 @@
 				{#each tabs as tab}
 					<button
 						onclick={() => { activeTab = tab.id; }}
-						title={tab.label}
+						use:tooltip={tab.label}
 						class="flex shrink-0 flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium transition-colors {activeTab === tab.id
 							? 'border-b-2 border-primary text-primary'
 							: 'text-muted-foreground'}"
@@ -494,7 +501,7 @@
 									{#if includeReasoning !== null}
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div onclick={(e) => { e.stopPropagation(); resetField('includeReasoning'); }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" title="Reset to default">
+										<div onclick={(e) => { e.stopPropagation(); resetField('includeReasoning'); }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" use:tooltip={'Reset to default'}>
 											<RotateCcw class="h-3.5 w-3.5" />
 										</div>
 									{/if}
@@ -615,7 +622,7 @@
 									{#if allowExternalResources !== null}
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div onclick={(e) => { e.stopPropagation(); allowExternalResources = null; }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" title="Reset to global default">
+										<div onclick={(e) => { e.stopPropagation(); allowExternalResources = null; }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" use:tooltip={'Reset to global default'}>
 											<RotateCcw class="h-3.5 w-3.5" />
 										</div>
 									{/if}
@@ -648,7 +655,7 @@
 									{#if compactionEnabledOverride !== null}
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div onclick={(e) => { e.stopPropagation(); compactionEnabledOverride = null; }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" title="Reset to global default">
+										<div onclick={(e) => { e.stopPropagation(); compactionEnabledOverride = null; }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" use:tooltip={'Reset to global default'}>
 											<RotateCcw class="h-3.5 w-3.5" />
 										</div>
 									{/if}

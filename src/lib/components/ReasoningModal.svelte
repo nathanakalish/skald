@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { tick } from 'svelte';
 	import { Pencil, Check, X } from 'lucide-svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
@@ -79,7 +80,7 @@
 							onclick={saveEdit}
 							aria-label="Save reasoning"
 							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							title="Save"
+							use:tooltip={'Save'}
 						>
 							<Check class="h-4 w-4" />
 						</button>
@@ -87,7 +88,7 @@
 							onclick={cancelEdit}
 							aria-label="Cancel edit"
 							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							title="Cancel edit"
+							use:tooltip={'Cancel edit'}
 						>
 							<X class="h-4 w-4" />
 						</button>
@@ -97,7 +98,7 @@
 								onclick={startEdit}
 								aria-label="Edit reasoning"
 								class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								title="Edit reasoning"
+								use:tooltip={'Edit reasoning'}
 							>
 								<Pencil class="h-3.5 w-3.5" />
 							</button>
@@ -106,7 +107,7 @@
 							onclick={() => { open = false; }}
 							aria-label="Close reasoning"
 							class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							title="Close"
+							use:tooltip={'Close'}
 						>
 							<X class="h-4 w-4" />
 						</button>

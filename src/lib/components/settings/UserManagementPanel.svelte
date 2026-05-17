@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { onMount } from 'svelte';
 	import { Pencil, Trash2, Plus, Shield } from 'lucide-svelte';
 
@@ -190,7 +191,7 @@
 										onclick={() => { if (!editIsLastAdmin) editRole = 'user'; }}
 										disabled={editIsLastAdmin}
 										class="flex-1 rounded-lg border px-3 py-1.5 text-sm {editRole === 'user' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'} {editIsLastAdmin ? 'opacity-40 cursor-not-allowed' : ''}"
-										title={editIsLastAdmin ? 'Cannot remove the last admin' : ''}
+										use:tooltip={editIsLastAdmin ? 'Cannot remove the last admin' : ''}
 									>User</button>
 									<button
 										onclick={() => (editRole = 'admin')}
@@ -244,7 +245,7 @@
 							<button
 								onclick={() => startEditUser(u)}
 								class="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-								title="Edit user"
+								use:tooltip={'Edit user'}
 							>
 								<Pencil class="h-4 w-4" />
 							</button>
@@ -252,7 +253,7 @@
 								<button
 									onclick={() => requestDeleteUser(u.id, u.username)}
 									class="rounded-lg p-2 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-									title="Delete user"
+									use:tooltip={'Delete user'}
 								>
 									<Trash2 class="h-4 w-4" />
 								</button>

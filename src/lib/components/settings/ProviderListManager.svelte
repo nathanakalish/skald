@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { Plus, Pencil, Trash2, Copy, GripVertical } from 'lucide-svelte';
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { haptic } from '$lib/utils/haptics.js';
@@ -250,7 +251,7 @@
 				<button
 					onclick={(e) => { e.stopPropagation(); setDefaultProvider(provider.id); }}
 					class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 {provider.enabled ? 'border-primary' : 'border-muted-foreground/40'}"
-					title={provider.enabled ? 'Default provider' : 'Set as default'}
+					use:tooltip={provider.enabled ? 'Default provider' : 'Set as default'}
 				>
 					{#if provider.enabled}
 						<span class="h-2 w-2 rounded-full bg-primary"></span>
@@ -276,21 +277,21 @@
 					<button
 						onclick={(e) => { e.stopPropagation(); cloneProvider(provider); }}
 						class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-						title="Clone provider"
+						use:tooltip={'Clone provider'}
 					>
 						<Copy class="h-3.5 w-3.5" />
 					</button>
 					<button
 						onclick={(e) => { e.stopPropagation(); openEditProvider(provider); }}
 						class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-						title="Edit provider"
+						use:tooltip={'Edit provider'}
 					>
 						<Pencil class="h-3.5 w-3.5" />
 					</button>
 					<button
 						onclick={(e) => requestDeleteProvider(provider.id, provider.name, e)}
 						class="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-						title="Delete provider"
+						use:tooltip={'Delete provider'}
 					>
 						<Trash2 class="h-3.5 w-3.5" />
 					</button>

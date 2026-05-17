@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { X, Save, Plus, Trash2, RotateCcw, Wand2, User, MessageSquare, ScrollText, Tag, Palette, Download, Smartphone, Pencil, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-svelte';
 	import { marked } from 'marked';
 	import { sanitizeRichHtml, renderMarkdown } from '$lib/markdown.js';
@@ -11,6 +12,8 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import { parseCharacterTheme } from '$lib/theme/characterTheme.js';
+	import { toasts } from '$lib/stores/toast.svelte.js';
+	import { confirm as confirmDialog } from '$lib/dialog.svelte.js';
 
 	interface Props {
 		open: boolean;
@@ -283,7 +286,7 @@
 			if (!res.ok) {
 				let msg = 'Failed to upload avatar';
 				try { msg = (await res.json()).error || msg; } catch { /* ignore */ }
-				alert(msg);
+				toasts.error(msg);
 				return;
 			}
 			const body = await res.json();
@@ -309,7 +312,7 @@
 				} as any);
 			}
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Network error');
+			toasts.error(err instanceof Error ? err.message : 'Network error');
 		} finally {
 			uploadingAvatar = false;
 		}
@@ -317,14 +320,19 @@
 
 	async function removeAvatar() {
 		if (!character?.avatarPath) return;
-		if (!confirm('Remove this avatar?')) return;
+		const ok = await confirmDialog({
+			title: 'Remove avatar?',
+			message: 'This character will fall back to a generated avatar.',
+			confirmLabel: 'Remove',
+		});
+		if (!ok) return;
 		uploadingAvatar = true;
 		try {
 			const res = await fetch(`/api/characters/${character.id}/avatar`, { method: 'DELETE' });
 			if (!res.ok) {
 				let msg = 'Failed to remove avatar';
 				try { msg = (await res.json()).error || msg; } catch { /* ignore */ }
-				alert(msg);
+				toasts.error(msg);
 				return;
 			}
 			const body = await res.json();
@@ -345,7 +353,7 @@
 				} as any);
 			}
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Network error');
+			toasts.error(err instanceof Error ? err.message : 'Network error');
 		} finally {
 			uploadingAvatar = false;
 		}
@@ -388,15 +396,15 @@
 				body: JSON.stringify({})
 			});
 			if (!res.ok) {
-				const data = await res.json();
-				alert(data.error || 'Failed to reformat greetings');
+				const data = await res.json().catch(() => ({}));
+				toasts.error(data.error || 'Failed to reformat greetings');
 				return;
 			}
 			const data = await res.json();
 			reformatResults = data.results;
 			showReview = true;
 		} catch (err) {
-			alert('Failed to reformat greetings');
+			toasts.error('Failed to reformat greetings');
 		} finally {
 			reformatting = false;
 		}
@@ -856,7 +864,7 @@
 								<button
 									onclick={() => setThemeColor(key, '')}
 									class="text-muted-foreground hover:text-foreground"
-									title="Clear"
+									use:tooltip={'Clear'}
 								>
 									<RotateCcw class="h-3 w-3" />
 								</button>
@@ -946,7 +954,7 @@
 					<button
 						onclick={() => onstartchat?.(character.id, 'story')}
 						class="flex h-8 items-center gap-1 rounded-lg bg-primary/10 px-2 sm:gap-1.5 sm:px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-						title="Start story chat"
+						use:tooltip={'Start story chat'}
 					>
 						<Plus class="h-3 w-3 sm:hidden" />
 						<MessageSquare class="h-3.5 w-3.5" />
@@ -955,7 +963,7 @@
 					<button
 						onclick={() => onstartchat?.(character.id, 'texting')}
 						class="flex h-8 items-center gap-1 rounded-lg bg-emerald-500/10 px-2 sm:gap-1.5 sm:px-3 text-xs font-medium text-emerald-500 transition-colors hover:bg-emerald-500/20"
-						title="Start text chat"
+						use:tooltip={'Start text chat'}
 					>
 						<Plus class="h-3 w-3 sm:hidden" />
 						<Smartphone class="h-3.5 w-3.5" />
@@ -966,7 +974,7 @@
 							onclick={() => (menuOpen = !menuOpen)}
 							class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 							aria-label="More actions"
-							title="More actions"
+							use:tooltip={'More actions'}
 						>
 							<MoreHorizontal class="h-4 w-4" />
 						</button>
@@ -1017,7 +1025,7 @@
 			{#each tabs as tab}
 				<button
 					onclick={() => (activeTab = tab.id)}
-					title={tab.label}
+					use:tooltip={tab.label}
 					class="relative flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors
 						{activeTab === tab.id
 							? 'text-foreground'
@@ -1101,7 +1109,7 @@
 								onclick={() => (menuOpen = !menuOpen)}
 								class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 								aria-label="More actions"
-								title="More actions"
+								use:tooltip={'More actions'}
 							>
 								<MoreHorizontal class="h-4 w-4" />
 							</button>
@@ -1159,7 +1167,7 @@
 				{#each tabs as tab}
 					<button
 						onclick={() => (activeTab = tab.id)}
-						title={tab.label}
+						use:tooltip={tab.label}
 						class="relative flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors
 							{activeTab === tab.id
 								? 'text-foreground'

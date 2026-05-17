@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { X, Save, Trash2, TestTube, Loader2, Check, RefreshCw, ChevronDown, Sliders, Server } from 'lucide-svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { providersStore } from '$lib/stores/providers.svelte.js';
+	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { providerProfiles, defaultEndpoints, getProfile, type ProviderType } from '$lib/providers/profiles.js';
 
 	interface Provider {
@@ -168,30 +170,37 @@
 	async function save() {
 		if (!name.trim()) return;
 		saving = true;
+		const editing = provider;
+		const prev = editing ? { ...editing } : null;
+		// Optimistic store update so list views (and the chat picker) refresh
+		// the moment the user clicks Save. Real server response will overwrite.
+		if (editing) {
+			providersStore.update(editing.id, {
+				name, type, endpoint, defaultModel, enabled: editing.enabled,
+			} as any);
+		}
+		onclose();
 		try {
-			if (provider) {
-				// Update existing
-				const res = await fetch(`/api/providers/${provider.id}`, {
+			if (editing) {
+				const res = await fetch(`/api/providers/${editing.id}`, {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						id: provider.id,
+						id: editing.id,
 						name, type, endpoint, apiKey, defaultModel,
-						enabled: provider.enabled,
+						enabled: editing.enabled,
 						maxConcurrent, temperature, topP, topK, maxTokens,
 						contextSize, repetitionPenalty, frequencyPenalty, presencePenalty,
 						customPrompt,
 						lorebookDepth, streamingEnabled, includeReasoning, reasoningEffort,
 						textingTypingSpeed, textingTypingMax, textingInitialDelay
-					})
+					}),
 				});
-				if (res.ok) {
-					const body = await res.json().catch(() => null);
-					if (body?.provider) providersStore.upsert(body.provider);
-					else await providersStore.load(true);
-				}
+				if (!res.ok) throw new Error(String(res.status));
+				const body = await res.json().catch(() => null);
+				if (body?.provider) providersStore.upsert(body.provider);
+				else await providersStore.load(true);
 			} else {
-				// Create new
 				const res = await fetch('/api/providers', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -201,13 +210,14 @@
 						apiKey, defaultModel
 					})
 				});
-				if (res.ok) {
-					const body = await res.json().catch(() => null);
-					if (body?.id) providersStore.add(body);
-					else await providersStore.load(true);
-				}
+				if (!res.ok) throw new Error(String(res.status));
+				const body = await res.json().catch(() => null);
+				if (body?.id) providersStore.add(body);
+				else await providersStore.load(true);
 			}
-			onclose();
+		} catch {
+			if (editing && prev) providersStore.update(editing.id, prev as any);
+			toasts.error('Failed to save provider');
 		} finally {
 			saving = false;
 		}
@@ -217,10 +227,15 @@
 
 	async function deleteProvider() {
 		if (!provider) return;
-		const res = await fetch(`/api/providers/${provider.id}`, { method: 'DELETE' });
-		if (res.ok) {
-			providersStore.remove(provider.id);
-			onclose();
+		const snapshot = { ...provider };
+		providersStore.remove(snapshot.id);
+		onclose();
+		try {
+			const res = await fetch(`/api/providers/${snapshot.id}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error(String(res.status));
+		} catch {
+			providersStore.add(snapshot);
+			toasts.error('Failed to delete provider');
 		}
 	}
 
@@ -298,7 +313,7 @@
 						<button
 							onclick={() => (showDeleteConfirm = true)}
 							class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-							title="Delete provider"
+							use:tooltip={'Delete provider'}
 						>
 							<Trash2 class="h-4 w-4" />
 						</button>
@@ -319,7 +334,7 @@
 					{#each tabs as tab}
 						<button
 							onclick={() => { activeTab = tab.id; }}
-							title={tab.label}
+							use:tooltip={tab.label}
 							class="flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors {activeTab === tab.id
 								? 'border-primary text-primary'
 								: 'border-transparent text-muted-foreground hover:text-foreground'}"
@@ -396,7 +411,7 @@
 									onclick={fetchModels}
 									disabled={modelLoading}
 									class="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs transition-colors hover:bg-accent disabled:opacity-50"
-									title="Fetch available models"
+									use:tooltip={'Fetch available models'}
 								>
 									<RefreshCw class="h-3.5 w-3.5 {modelLoading ? 'animate-spin' : ''}" />
 								</button>

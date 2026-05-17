@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { Plus, BookOpen, Pencil, Trash2, X, Upload, Search, ArrowUpDown, Globe } from 'lucide-svelte';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
@@ -6,6 +7,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
 	import ChubBrowseModal from '$lib/components/ChubBrowseModal.svelte';
+	import { toasts } from '$lib/stores/toast.svelte.js';
 
 	interface Props {
 		open: boolean;
@@ -54,25 +56,44 @@
 
 	async function createLorebook() {
 		if (!name.trim()) return;
-		const res = await fetch('/api/lorebooks', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, description })
-		});
-		if (res.ok) {
-			showCreateForm = false;
-			name = '';
-			description = '';
+		// Optimistic insert with a temp negative ID so the new card shows
+		// instantly. Swap to the real ID on success, drop on failure.
+		const tempId = -Date.now();
+		const payload = { name: name.trim(), description };
+		const placeholder: any = { id: tempId, name: payload.name, description, characterId: null };
+		lorebooksStore.add(placeholder);
+		showCreateForm = false;
+		name = '';
+		description = '';
+		try {
+			const res = await fetch('/api/lorebooks', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			if (!res.ok) throw new Error(String(res.status));
 			const body = await res.json();
+			lorebooksStore.remove(tempId);
 			if (body?.id) lorebooksStore.add(body);
+		} catch {
+			lorebooksStore.remove(tempId);
+			toasts.error('Failed to create lorebook');
 		}
 	}
 
 	async function deleteLorebook(id: number) {
-		const res = await fetch(`/api/lorebooks/${id}`, { method: 'DELETE' });
-		if (res.ok) {
-			if (selectedId === id) onselect?.(null);
-			lorebooksStore.remove(id);
+		const snapshot = lorebooks.find((l: any) => l.id === id);
+		if (!snapshot) return;
+		const wasSelected = selectedId === id;
+		lorebooksStore.remove(id);
+		if (wasSelected) onselect?.(null);
+		try {
+			const res = await fetch(`/api/lorebooks/${id}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error(String(res.status));
+		} catch {
+			lorebooksStore.add(snapshot);
+			if (wasSelected) onselect?.(id);
+			toasts.error('Failed to delete lorebook');
 		}
 	}
 
@@ -105,8 +126,8 @@
 			formData.append('file', file);
 			const res = await fetch('/api/lorebooks/import', { method: 'POST', body: formData });
 			if (!res.ok) {
-				const err = await res.json();
-				alert(`Import failed: ${err.error || 'Unknown error'}`);
+				const err = await res.json().catch(() => ({}));
+				toasts.error(`Import failed: ${err.error || 'Unknown error'}`);
 			} else {
 				const body = await res.json();
 				if (body?.lorebook) lorebooksStore.add(body.lorebook);
@@ -156,7 +177,7 @@
 			<button
 				onclick={() => (chubOpen = true)}
 				class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-				title="Browse CHUB"
+				use:tooltip={'Browse CHUB'}
 				aria-label="Browse CHUB"
 			>
 				<Globe class="h-4 w-4" />
@@ -165,7 +186,7 @@
 				onclick={triggerImport}
 				disabled={importing}
 				class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
-				title={importing ? 'Importing...' : 'Import'}
+				use:tooltip={importing ? 'Importing...' : 'Import'}
 				aria-label="Import lorebook"
 			>
 				<Upload class="h-4 w-4" />
@@ -173,7 +194,7 @@
 			<button
 				onclick={() => (showCreateForm = !showCreateForm)}
 				class="flex h-9 w-9 items-center justify-center rounded-full bg-accent/60 text-foreground transition-colors hover:bg-accent"
-				title="Create lorebook"
+				use:tooltip={'Create lorebook'}
 				aria-label="Create lorebook"
 			>
 				<Plus class="h-4 w-4" />
@@ -195,7 +216,7 @@
 		<button
 			onclick={() => { sortBy = sortBy === 'alpha' ? 'newest' : 'alpha'; }}
 			class="flex items-center gap-1 rounded-full border border-transparent bg-accent/40 px-2.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-			title="Toggle sort"
+			use:tooltip={'Toggle sort'}
 		>
 			<ArrowUpDown class="h-3.5 w-3.5" />
 			{sortBy === 'alpha' ? 'A–Z' : 'New'}
@@ -271,7 +292,7 @@
 						<button
 							onclick={(e) => { e.stopPropagation(); askDeleteLorebook(lorebook.id, lorebook.name); }}
 							class="mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
-							title="Delete lorebook"
+							use:tooltip={'Delete lorebook'}
 							aria-label="Delete lorebook"
 						>
 							<Trash2 class="h-3.5 w-3.5" />
@@ -341,7 +362,7 @@
 				<button
 					onclick={() => { sortBy = sortBy === 'alpha' ? 'newest' : 'alpha'; }}
 					class="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-					title="Toggle sort"
+					use:tooltip={'Toggle sort'}
 				>
 					<ArrowUpDown class="h-3.5 w-3.5" />
 					{sortBy === 'alpha' ? 'A–Z' : 'Newest'}

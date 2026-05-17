@@ -6,6 +6,7 @@
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
+	import { tooltip } from '$lib/tooltip.js';
 
 	type ChubType = 'character' | 'lorebook';
 
@@ -748,7 +749,7 @@
 					<button
 						onclick={() => (filtersOpen = true)}
 						class="relative flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-accent/40 px-3 py-2 text-xs hover:bg-accent"
-						title="Filters"
+						use:tooltip={'Filters'}
 						aria-label="Filters"
 					>
 						<SlidersHorizontal class="h-3.5 w-3.5" />
@@ -835,20 +836,20 @@
 										{@const upd = hasUpdate(card)}
 										<span
 											class="absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase text-white shadow {upd ? 'bg-amber-500/90' : 'bg-emerald-500/90'}"
-											title={upd ? `Update available on CHUB (last activity ${card.lastActivityAt ? new Date(card.lastActivityAt).toLocaleDateString() : 'newer'})` : d.exact ? `Already imported: ${d.exact.name}` : `You have a ${activeType} named “${d.byName[0].name}”`}
+											use:tooltip={upd ? `Update available on CHUB (last activity ${card.lastActivityAt ? new Date(card.lastActivityAt).toLocaleDateString() : 'newer'})` : d.exact ? `Already imported: ${d.exact.name}` : `You have a ${activeType} named “${d.byName[0].name}”`}
 										>{upd ? 'Update' : d.exact ? 'Owned' : 'Match'}</span>
 									{/if}
 								</div>
 								<div class="flex flex-col gap-1 p-2.5">
-									<div class="truncate text-sm font-semibold" title={card.name}>{card.name}</div>
-									<div class="truncate text-xs text-muted-foreground" title={card.creator}>by {card.creator}</div>
+									<div class="truncate text-sm font-semibold" use:tooltip={card.name}>{card.name}</div>
+									<div class="truncate text-xs text-muted-foreground" use:tooltip={card.creator}>by {card.creator}</div>
 									{#if card.tagline || card.description}
 										<p class="line-clamp-2 text-xs text-muted-foreground/90">{card.tagline || card.description}</p>
 									{/if}
 									<div class="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-										<span title="Downloads">⬇ {fmtCount(card.starCount)}</span>
-										{#if card.nFavorites}<span title="Favourites">★ {fmtCount(card.nFavorites)}</span>{/if}
-										{#if card.nTokens}<span title="Tokens">{fmtCount(card.nTokens)}t</span>{/if}
+										<span use:tooltip={'Downloads'}>⬇ {fmtCount(card.starCount)}</span>
+										{#if card.nFavorites}<span use:tooltip={'Favourites'}>★ {fmtCount(card.nFavorites)}</span>{/if}
+										{#if card.nTokens}<span use:tooltip={'Tokens'}>{fmtCount(card.nTokens)}t</span>{/if}
 									</div>
 								</div>
 							</div>
@@ -897,7 +898,7 @@
 								<button
 									onclick={() => openLinkPicker(previewCard!)}
 									disabled={importingPath !== null}
-									title="Link this CHUB card to an existing {activeType} in your library"
+									use:tooltip={`Link this CHUB card to an existing ${activeType} in your library`}
 									aria-label="Link to existing"
 									class="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
 								>
@@ -1203,7 +1204,7 @@
 									{#each tagSuggestions as t (t)}
 										<button
 											onclick={() => addIncludeTag(t)}
-											title="Click to include · Shift+click to exclude"
+											use:tooltip={'Click to include · Shift+click to exclude'}
 											onmousedown={(e) => { if (e.shiftKey) { e.preventDefault(); addExcludeTag(t); } }}
 											class="inline-flex items-center gap-1 rounded-full border border-border bg-accent/30 px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
 										>

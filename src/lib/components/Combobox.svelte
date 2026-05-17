@@ -9,6 +9,7 @@
 	 */
 	import { onMount, tick, untrack, type Snippet } from 'svelte';
 	import { ChevronDown, Loader2, Search, X } from 'lucide-svelte';
+	import { tooltip } from '$lib/tooltip.js';
 
 	export type ComboboxItem = {
 		value: string;
@@ -220,7 +221,7 @@
 				onclick={clear}
 				onkeydown={(e) => { if (e.key === 'Enter') clear(e as unknown as MouseEvent); }}
 				class="rounded p-0.5 text-muted-foreground/70 hover:bg-muted hover:text-foreground"
-				title="Clear"
+				use:tooltip={'Clear'}
 			>
 				<X class="h-3.5 w-3.5" />
 			</span>

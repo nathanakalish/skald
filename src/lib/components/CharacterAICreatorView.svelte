@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { Sparkles, Send, X, Loader2, Save, Undo2, StopCircle, MessageSquarePlus, Check } from 'lucide-svelte';
 	import { onMount, tick, untrack } from 'svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
@@ -447,7 +448,7 @@
 			<button
 				onclick={() => { mobileChatOpen = !mobileChatOpen; }}
 				class="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-				title={mobileChatOpen ? 'Hide chat' : 'Show chat'}
+				use:tooltip={mobileChatOpen ? 'Hide chat' : 'Show chat'}
 				aria-label="Toggle chat"
 			>
 				<MessageSquarePlus class="h-4 w-4" />
@@ -598,7 +599,7 @@
 										<button
 											onclick={() => undoTurn(turn.id)}
 											class="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-											title="Undo this change"
+											use:tooltip={'Undo this change'}
 										>
 											<Undo2 class="h-3 w-3" />
 											Undo
@@ -642,7 +643,7 @@
 							onclick={stop}
 							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive hover:bg-destructive/25 transition-colors"
 							aria-label="Stop"
-							title="Stop"
+							use:tooltip={'Stop'}
 						>
 							<StopCircle class="h-4 w-4" />
 						</button>
@@ -652,7 +653,7 @@
 							disabled={!input.trim()}
 							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
 							aria-label="Send"
-							title="Send"
+							use:tooltip={'Send'}
 						>
 							<Send class="h-4 w-4" />
 						</button>

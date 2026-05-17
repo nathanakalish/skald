@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { X, Info, StickyNote } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
@@ -111,12 +112,12 @@
 				<div class="flex border-b border-border">
 					<button
 						onclick={() => (activeTab = 'info')}
-						title="Info"
+						use:tooltip={'Info'}
 						class="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors {activeTab === 'info' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
 					><Info class="h-4 w-4" /><span class="hidden sm:inline">Info</span></button>
 					<button
 						onclick={() => (activeTab = 'notes')}
-						title="Creator Notes"
+						use:tooltip={'Creator Notes'}
 						class="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors {activeTab === 'notes' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
 					><StickyNote class="h-4 w-4" /><span class="hidden sm:inline">Creator Notes</span></button>
 				</div>

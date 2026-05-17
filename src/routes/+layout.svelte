@@ -55,6 +55,9 @@
 	} from 'lucide-svelte';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import DialogHost from '$lib/components/DialogHost.svelte';
+	import { confirm as confirmDialog } from '$lib/dialog.svelte.js';
+	import { tooltip } from '$lib/tooltip.js';
 	import ChatView from '$lib/components/ChatView.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
@@ -981,11 +984,21 @@
 			const kind = await classifyImportFile(file);
 
 			if (activeTarget === 'characters' && kind === 'lorebook') {
-				const ok = window.confirm(`${file.name} looks like a lorebook. Import it as a lorebook instead?`);
+				const ok = await confirmDialog({
+					title: 'Looks like a lorebook',
+					message: `${file.name} looks like a lorebook. Import it as a lorebook instead?`,
+					confirmLabel: 'Import as lorebook',
+					variant: 'info',
+				});
 				if (!ok) { skipped++; continue; }
 				target = 'lorebooks';
 			} else if (activeTarget === 'lorebooks' && kind === 'character') {
-				const ok = window.confirm(`${file.name} looks like a character card. Import it as a character instead?`);
+				const ok = await confirmDialog({
+					title: 'Looks like a character',
+					message: `${file.name} looks like a character card. Import it as a character instead?`,
+					confirmLabel: 'Import as character',
+					variant: 'info',
+				});
 				if (!ok) { skipped++; continue; }
 				target = 'characters';
 			}
@@ -1943,7 +1956,7 @@
 				<button
 					type="button"
 					onclick={(e) => { e.preventDefault(); e.stopPropagation(); abortChatById(chat.id); }}
-					title="Stop generating"
+					use:tooltip={'Stop generating'}
 					aria-label="Stop generating"
 					class="group/stop absolute -bottom-0.5 -right-0.5 flex items-center gap-0.5 rounded-full bg-sidebar/95 px-1 py-0.5 ring-1 ring-border transition-colors hover:bg-destructive hover:ring-destructive"
 				>
@@ -2002,7 +2015,7 @@
 		<button
 			onclick={(e) => chatMenu.open(chat.id, e)}
 			class="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-md opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100 {chatMenu.openChatId === chat.id ? '!opacity-100' : ''}"
-			title="More"
+			use:tooltip={'More'}
 			aria-label="More actions"
 		>
 			<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
@@ -2095,7 +2108,7 @@
 				<button
 					onclick={openPersonas}
 					class="group relative mb-1 flex h-10 w-10 items-center justify-center rounded-full text-primary transition-colors"
-					title="{data.user.username} — Personas"
+					use:tooltip={`${data.user.username} — Personas`}
 					aria-label="Personas"
 				>
 						<span class="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-primary/15 transition-colors group-hover:bg-primary/25 {(narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'personas') : (showPersonas && isSidebarVisible())) ? 'ring-2 ring-primary ring-offset-2 ring-offset-sidebar' : ''}">
@@ -2112,7 +2125,7 @@
 						{/if}
 					</span>
 					{#if data.user.role === 'admin'}
-						<span class="pointer-events-none absolute -right-0.5 -bottom-0.5 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sidebar text-primary shadow" title="Admin">
+						<span class="pointer-events-none absolute -right-0.5 -bottom-0.5 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sidebar text-primary shadow" use:tooltip={'Admin'}>
 							<Shield class="h-2.5 w-2.5" />
 						</span>
 					{/if}
@@ -2136,7 +2149,7 @@
 					}
 				}}
 				class="relative flex h-10 w-10 items-center justify-center rounded-xl text-foreground transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'chats' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (isSidebarVisible() && !showSettings && !showLorebooks && !showCharacters && !showPersonas ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
-				title="Chats"
+				use:tooltip={'Chats'}
 				aria-label="Chats"
 			>
 				<MessageSquare class="h-5 w-5" />
@@ -2163,7 +2176,7 @@
 					}
 				}}
 				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'characters' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (showCharacters && isSidebarVisible() ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
-				title="Characters"
+				use:tooltip={'Characters'}
 				aria-label="Characters"
 			>
 				<Users class="h-5 w-5" />
@@ -2187,7 +2200,7 @@
 					}
 				}}
 				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'lorebooks' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (showLorebooks && isSidebarVisible() ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
-				title="Lorebooks"
+				use:tooltip={'Lorebooks'}
 				aria-label="Lorebooks"
 			>
 				<BookOpen class="h-5 w-5" />
@@ -2215,7 +2228,7 @@
 					}
 				}}
 				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'settings' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (showSettings && isSidebarVisible() ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
-				title="Settings"
+				use:tooltip={'Settings'}
 				aria-label="Settings"
 			>
 				<Settings class="h-5 w-5" />
@@ -2224,7 +2237,7 @@
 				<button
 					onclick={handleLogout}
 					class="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
-					title="Log out"
+					use:tooltip={'Log out'}
 					aria-label="Log out"
 				>
 					<LogOut class="h-5 w-5" />
@@ -2362,7 +2375,7 @@
 					<button
 						onclick={handleLogout}
 						class="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
-						title="Log out"
+						use:tooltip={'Log out'}
 						aria-label="Log out"
 					>
 						<LogOut class="h-4 w-4" />
@@ -2406,7 +2419,7 @@
 				<button
 					onclick={() => { showOnlyPanel('characters'); }}
 					class="hidden h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform hover:bg-primary/90 hover:scale-105 active:scale-95 md:flex"
-					title="New Chat"
+					use:tooltip={'New Chat'}
 					aria-label="New Chat"
 				>
 					<SquarePen class="h-4 w-4" />
@@ -2618,7 +2631,7 @@
 			<button
 				onclick={() => { showOnlyPanel('characters'); }}
 				class="absolute bottom-20 right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg {hydrated ? 'transition-[transform,opacity] duration-300' : ''} {isMobile && mobileDrawerTab === 'chats' ? 'translate-y-0 opacity-100 active:scale-95' : 'pointer-events-none translate-y-24 opacity-0'}"
-				title="New Chat"
+				use:tooltip={'New Chat'}
 				aria-label="New Chat"
 				tabindex={isMobile && mobileDrawerTab === 'chats' ? 0 : -1}
 			>
@@ -2705,7 +2718,7 @@
 					<button
 						onclick={notif.dismissBanner}
 						class="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-						title="Dismiss"
+						use:tooltip={'Dismiss'}
 						aria-label="Dismiss notification"
 					>
 						<X class="h-3.5 w-3.5" />
@@ -3074,6 +3087,7 @@
 	oncancel={() => (confirmOpen = false)}
 />
 
+<DialogHost />
 <Toast />
 
 {#if realtime.connectionState !== 'connected'}

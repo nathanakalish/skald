@@ -6,6 +6,7 @@
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { tooltip } from '$lib/tooltip.js';
 
 	/**
 	 * Unified device list: each row is one physical device, showing both its
@@ -308,7 +309,7 @@
 			onclick={load}
 			disabled={loading}
 			class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-			title="Refresh"
+			use:tooltip={'Refresh'}
 			aria-label="Refresh"
 		>
 			<RefreshCw class="h-4 w-4 {loading ? 'animate-spin' : ''}" />
@@ -356,7 +357,7 @@
 									<span class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Signed out</span>
 								{/if}
 							</div>
-							<p class="mt-0.5 truncate text-xs text-muted-foreground" title={row.session?.userAgent ?? row.push?.userAgent ?? ''}>
+							<p class="mt-0.5 truncate text-xs text-muted-foreground" use:tooltip={row.session?.userAgent ?? row.push?.userAgent ?? ''}>
 								{rowSubtitle(row)}{rowFingerprint(row) ? ` · #${rowFingerprint(row)}` : ''}
 							</p>
 						</div>

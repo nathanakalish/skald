@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { Pencil, Plus, Trash2, X, Star, User } from 'lucide-svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -122,7 +123,7 @@
 		<button
 			onclick={() => oncreatenew?.()}
 			class="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform hover:bg-primary/90 hover:scale-105 active:scale-95"
-			title="New persona"
+			use:tooltip={'New persona'}
 			aria-label="New persona"
 		>
 			<Plus class="h-4 w-4" />
@@ -338,7 +339,7 @@
 											<button
 												onclick={() => setDefault(persona)}
 												class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-												title="Set as default"
+												use:tooltip={'Set as default'}
 											>
 												<Star class="h-4 w-4" />
 											</button>
@@ -346,7 +347,7 @@
 										<button
 											onclick={() => startEdit(persona)}
 											class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-											title="Edit persona"
+											use:tooltip={'Edit persona'}
 										>
 											<Pencil class="h-4 w-4" />
 										</button>

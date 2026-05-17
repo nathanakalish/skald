@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { X, Check, CheckCheck, ChevronLeft, ChevronRight, RefreshCw, FileText, Sparkles, Square } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { renderRoleplay } from '$lib/utils/rp-format.js';
+	import { toasts } from '$lib/stores/toast.svelte.js';
 
 	interface GreetingResult {
 		index: number;
@@ -59,8 +61,8 @@
 				signal: controller.signal
 			});
 			if (!res.ok) {
-				const data = await res.json();
-				alert(data.error || 'Failed to regenerate');
+				const data = await res.json().catch(() => ({}));
+				toasts.error(data.error || 'Failed to regenerate');
 				return;
 			}
 			const data = await res.json();
@@ -68,7 +70,7 @@
 		} catch (err) {
 			// User-cancelled: silently keep the previous reformatted text.
 			if ((err as any)?.name === 'AbortError') return;
-			alert('Failed to regenerate');
+			toasts.error('Failed to regenerate');
 		} finally {
 			if (regenerateController === controller) regenerateController = null;
 			regenerating = false;
@@ -175,12 +177,12 @@
 			<div class="flex border-b border-border md:hidden">
 				<button
 					onclick={() => (mobileTab = 'original')}
-					title="Original"
+					use:tooltip={'Original'}
 					class="flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors {mobileTab === 'original' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground'}"
 				><FileText class="h-4 w-4" /><span class="hidden sm:inline">Original</span></button>
 				<button
 					onclick={() => (mobileTab = 'reformatted')}
-					title="Reformatted"
+					use:tooltip={'Reformatted'}
 					class="flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors {mobileTab === 'reformatted' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground'}"
 				><Sparkles class="h-4 w-4" /><span class="hidden sm:inline">Reformatted</span></button>
 			</div>

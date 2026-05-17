@@ -18,6 +18,7 @@
 	import { TextareaAutosizer } from '$lib/chat/textareaAutosize.svelte.js';
 	import { parseImpersonationSwipes, type ImpersonationSwipe as ImpersonationSwipeEntry } from '$lib/chat/impersonationSwipes.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
+	import { tooltip } from '$lib/tooltip.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
 
 	let { chat, character, initialMessages, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
@@ -2180,14 +2181,17 @@
 		const msg = messageList[msgIdx];
 		const content = msg.content;
 
-		// Delete the user message from DB (cascades to children)
-		await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' });
-		// Remove this message and everything after it from local list
+		// Optimistically trim the local view; restore on delete failure so we
+		// don't end up with the message gone from the UI but still in the DB.
+		const savedList = messageList;
 		messageList = messageList.slice(0, msgIdx);
-
-		// Re-send via the normal flow
 		input = content;
 		await tick();
+
+		fetch(`/api/messages/${msg.id}`, { method: 'DELETE' })
+			.then((res) => { if (!res.ok) messageList = savedList; })
+			.catch(() => { messageList = savedList; });
+
 		sendMessage();
 	}
 
@@ -2195,12 +2199,17 @@
 		if (isStreaming) return;
 		const msg = messageList[msgIdx];
 
-		// Delete the user message (cascades to children) and trim the local
-		// view, then kick off a fresh impersonation. Mirrors `resendMessage`.
-		await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' });
+		// Mirror resendMessage: optimistic trim, fire-and-forget DELETE,
+		// then kick off a fresh impersonation immediately.
+		const savedList = messageList;
 		messageList = messageList.slice(0, msgIdx);
 		input = '';
 		await tick();
+
+		fetch(`/api/messages/${msg.id}`, { method: 'DELETE' })
+			.then((res) => { if (!res.ok) messageList = savedList; })
+			.catch(() => { messageList = savedList; });
+
 		impersonateMessage();
 	}
 
@@ -2285,15 +2294,15 @@
 				body: JSON.stringify({})
 			});
 			if (!res.ok) {
-				const data = await res.json();
-				alert(data.error || 'Failed to reformat message');
+				const data = await res.json().catch(() => ({}));
+				toasts.error(data.error || 'Failed to reformat message');
 				return;
 			}
 			const data = await res.json();
 			reformatReviewResults = [{ index: msgIdx, original: data.original, reformatted: data.reformatted }];
 			showReformatReview = true;
 		} catch {
-			alert('Failed to reformat message');
+			toasts.error('Failed to reformat message');
 		} finally {
 			reformattingMessageId = null;
 		}
@@ -2657,7 +2666,7 @@
 				<button
 					onclick={(e) => { e.stopPropagation(); showHeaderMenu = !showHeaderMenu; }}
 					class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground {hasOverrides ? 'text-primary' : ''}"
-					title="More"
+					use:tooltip={'More'}
 					aria-label="More actions"
 				>
 					<MoreHorizontal class="h-5 w-5" />
@@ -2739,7 +2748,7 @@
 								type="button"
 								onclick={openCompactionEditor}
 								class="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
-								title="View or edit the compaction summary"
+								use:tooltip={'View or edit the compaction summary'}
 							>
 								<Archive class="h-3 w-3" /> Conversation compacted
 							</button>
@@ -2765,7 +2774,7 @@
 						class:opacity-20={messageSearchQuery.trim() && !messageSearchMatches.has(message.id)}
 					>
 						<!-- Avatar (only at the end of a same-sender group; user messages don't show avatar — iMessage style. Hidden entirely on mobile to maximize bubble width) -->
-						<div class="hidden shrink-0 self-end md:block {message.role === 'user' ? 'md:hidden' : ''} {!groupEnd ? 'md:invisible' : ''}" title="Message #{msgNumber}">
+						<div class="hidden shrink-0 self-end md:block {message.role === 'user' ? 'md:hidden' : ''} {!groupEnd ? 'md:invisible' : ''}" use:tooltip={`Message #${msgNumber}`}>
 							{#if message.role === 'assistant'}
 								{#if character.avatarPath}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -2797,7 +2806,7 @@
 							ontouchmove={(e) => moveMsgLongPress(e)}
 							ontouchend={(e) => endMsgLongPress(e)}
 							ontouchcancel={() => endMsgLongPress()}
-							title={messageTimestamps !== 'off' && message.createdAt ? getMessageTime(message.createdAt) : undefined}
+							use:tooltip={messageTimestamps !== 'off' && message.createdAt ? getMessageTime(message.createdAt) : undefined}
 							data-reformatting={reformattingMessageId === message.id ? '' : undefined}
 						>
 							{#if editingId === message.id}
@@ -2811,7 +2820,7 @@
 									<button
 										onclick={() => saveEdit(i)}
 										class="flex h-9 w-9 md:h-6 md:w-6 items-center justify-center rounded border transition-all {message.role === 'user' ? 'border-white/15 bg-white/10 text-bubble-user-fg/80 hover:bg-white/20 hover:text-bubble-user-fg' : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'} active:scale-90"
-										title="Save"
+										use:tooltip={'Save'}
 										aria-label="Save edit"
 									>
 										<Check class="h-3.5 w-3.5" />
@@ -2819,7 +2828,7 @@
 									<button
 										onclick={cancelEdit}
 										class="flex h-9 w-9 md:h-6 md:w-6 items-center justify-center rounded border transition-all {message.role === 'user' ? 'border-white/15 bg-white/10 text-bubble-user-fg/80 hover:bg-white/20 hover:text-bubble-user-fg' : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'} active:scale-90"
-										title="Cancel"
+										use:tooltip={'Cancel'}
 										aria-label="Cancel edit"
 									>
 										<X class="h-3.5 w-3.5" />
@@ -2999,7 +3008,7 @@
 				oncontextmenu={impersonateBtnHandlers.oncontextmenu}
 				disabled={isStreaming && !isImpersonating}
 				class="flex w-11 shrink-0 items-center justify-center rounded-full border border-input bg-card text-muted-foreground shadow-sm shadow-black/10 transition-all hover:bg-accent hover:text-foreground active:scale-90 disabled:opacity-50"
-				title="Impersonate (long-press for options)"
+				use:tooltip={'Impersonate (long-press for options)'}
 				aria-label="Impersonate"
 			>
 				<UserPen class="h-4 w-4" />
@@ -3008,7 +3017,7 @@
 				<button
 					onclick={abortGeneration}
 					class="flex w-11 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-all hover:bg-destructive/80 hover:scale-105 active:scale-90"
-					title={isImpersonating ? 'Stop impersonation' : 'Stop generation'}
+					use:tooltip={isImpersonating ? 'Stop impersonation' : 'Stop generation'}
 					aria-label={isImpersonating ? 'Stop impersonation' : 'Stop generation'}
 				>
 					<Square class="h-4 w-4 fill-current" />
@@ -3373,7 +3382,7 @@
 				onclick={() => { startEdit(menuMsgObj); closeMsgMenu(); }}
 				disabled={isStreaming || menuIsCompacted}
 				class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
-				title={menuIsCompacted ? 'Compacted messages cannot be edited' : ''}
+				use:tooltip={menuIsCompacted ? 'Compacted messages cannot be edited' : ''}
 			>
 				<Pencil class="h-4 w-4" />Edit
 			</button>

@@ -9,6 +9,7 @@
 	import { haptic } from '$lib/utils/haptics.js';
 	import { urlBase64ToUint8Array } from '$lib/utils.js';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { tooltip } from '$lib/tooltip.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ThemeEditModal from '$lib/components/ThemeEditModal.svelte';
 	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
@@ -372,13 +373,20 @@
 	}
 
 	async function saveInstanceSetting(key: string, value: string) {
+		const prevValue = (instanceSettings as any)[key];
 		instanceSettings = { ...instanceSettings, [key]: value };
-		const res = await fetch('/api/admin/settings', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ [key]: value })
-		});
-		if (res.ok) toasts.success('Setting saved');
+		try {
+			const res = await fetch('/api/admin/settings', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ [key]: value })
+			});
+			if (!res.ok) throw new Error(String(res.status));
+			toasts.success('Setting saved');
+		} catch {
+			instanceSettings = { ...instanceSettings, [key]: prevValue };
+			toasts.error('Failed to save setting');
+		}
 	}
 
 	// Image cache state
@@ -1280,7 +1288,7 @@
 														else { localLinkBold = !localLinkBold; await saveSetting('linkBold', localLinkBold); }
 													}}
 													class="flex h-8 w-8 items-center justify-center rounded-md border text-sm font-bold transition-colors {row.bold ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-													title="Bold"
+													use:tooltip={'Bold'}
 													aria-label="Bold"
 													aria-pressed={row.bold}
 												>B</button>
@@ -1293,7 +1301,7 @@
 														else { localLinkItalic = !localLinkItalic; await saveSetting('linkItalic', localLinkItalic); }
 													}}
 													class="flex h-8 w-8 items-center justify-center rounded-md border text-sm italic transition-colors {row.italic ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-													title="Italic"
+													use:tooltip={'Italic'}
 													aria-label="Italic"
 													aria-pressed={row.italic}
 												>I</button>
@@ -1405,7 +1413,7 @@
 								<div class="space-y-2">
 									{#each regexScripts as script (script.id)}
 										<div class="flex items-center gap-3 rounded-lg border border-border p-3 {script.enabled ? '' : 'opacity-50'}">
-											<button onclick={() => toggleRegexEnabled(script)} class="shrink-0" title={script.enabled ? 'Disable' : 'Enable'}>
+											<button onclick={() => toggleRegexEnabled(script)} class="shrink-0" use:tooltip={script.enabled ? 'Disable' : 'Enable'}>
 												{#if script.enabled}
 													<Check class="h-4 w-4 text-green-500" />
 												{:else}
@@ -1421,10 +1429,10 @@
 												</div>
 												<p class="truncate font-mono text-xs text-muted-foreground">{script.findRegex} → {script.replaceString || '(empty)'}</p>
 											</div>
-											<button onclick={() => startEditRegex(script)} class="shrink-0 rounded p-1 hover:bg-accent/50" title="Edit">
+											<button onclick={() => startEditRegex(script)} class="shrink-0 rounded p-1 hover:bg-accent/50" use:tooltip={'Edit'}>
 												<Pencil class="h-3.5 w-3.5" />
 											</button>
-											<button onclick={() => deleteRegexScript(script.id)} class="shrink-0 rounded p-1 text-destructive hover:bg-destructive/10" title="Delete">
+											<button onclick={() => deleteRegexScript(script.id)} class="shrink-0 rounded p-1 text-destructive hover:bg-destructive/10" use:tooltip={'Delete'}>
 												<Trash2 class="h-3.5 w-3.5" />
 											</button>
 										</div>
@@ -1607,20 +1615,20 @@
 													type="button"
 													onclick={() => duplicateTheme(selected)}
 													class="flex shrink-0 items-center justify-center rounded-xl border border-border px-3 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-													title="Duplicate theme"
+													use:tooltip={'Duplicate theme'}
 												><Copy class="h-4 w-4" /></button>
 												<button
 													type="button"
 													onclick={() => openEdit(selected)}
 													class="flex shrink-0 items-center justify-center rounded-xl border border-border px-3 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-													title={selected.isBuiltin ? 'View colors' : 'Edit colors'}
+													use:tooltip={selected.isBuiltin ? 'View colors' : 'Edit colors'}
 												><Pencil class="h-4 w-4" /></button>
 												{#if canDelete}
 													<button
 														type="button"
 														onclick={() => deleteTheme(selected)}
 														class="flex shrink-0 items-center justify-center rounded-xl border border-border px-3 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-														title="Delete theme"
+														use:tooltip={'Delete theme'}
 													><Trash2 class="h-4 w-4" /></button>
 												{/if}
 											{/if}
@@ -1687,7 +1695,7 @@
 									type="button"
 									disabled
 									aria-disabled="true"
-									title="HTTPS required for notifications"
+									use:tooltip={'HTTPS required for notifications'}
 									class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed"
 								>
 									<Bell class="h-4 w-4" />
@@ -2114,7 +2122,7 @@
 				{#each tabs as tab (tab.id)}
 					<button
 						onclick={() => { internalActiveTab = tab.id; }}
-						title={tab.label}
+						use:tooltip={tab.label}
 						class="flex shrink-0 flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium transition-colors {activeTab === tab.id
 							? 'border-b-2 border-primary text-primary'
 							: 'text-muted-foreground'}"

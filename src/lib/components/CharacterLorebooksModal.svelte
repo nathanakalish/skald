@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '$lib/tooltip.js';
 	import { X, BookMarked, BookOpen, ChevronDown, ChevronRight, Tag, Pin, Loader2, Plus, Trash2, Lock, Search, ArrowUpDown, RotateCcw } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
@@ -204,7 +205,7 @@
 						<button
 							onclick={openAddModal}
 							class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-							title="Add lorebook"
+							use:tooltip={'Add lorebook'}
 						>
 							<Plus class="h-5 w-5" />
 						</button>
@@ -273,7 +274,7 @@
 										<button
 											onclick={() => removeLorebook(lb.id)}
 											class="mr-2 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-											title="Remove from chat"
+											use:tooltip={'Remove from chat'}
 										>
 											<Trash2 class="h-4 w-4" />
 										</button>
@@ -334,7 +335,7 @@
 																type="button"
 																onclick={() => resetEntryOverride(entry)}
 																class="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-																title="Reset to library defaults"
+																use:tooltip={'Reset to library defaults'}
 															>
 																<RotateCcw class="h-3 w-3" /> Reset
 															</button>
@@ -385,7 +386,7 @@
 					<button
 						onclick={() => { addSort = addSort === 'alpha' ? 'newest' : 'alpha'; }}
 						class="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-						title="Toggle sort"
+						use:tooltip={'Toggle sort'}
 					>
 						<ArrowUpDown class="h-3.5 w-3.5" />
 						{addSort === 'alpha' ? 'A–Z' : 'Newest'}

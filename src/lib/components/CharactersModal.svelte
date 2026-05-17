@@ -3,6 +3,7 @@
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import Combobox from '$lib/components/Combobox.svelte';
 	import CharacterEditModal from '$lib/components/CharacterEditModal.svelte';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import LorebookEditModal from '$lib/components/LorebookEditModal.svelte';
@@ -11,6 +12,7 @@
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
+	import { tooltip } from '$lib/tooltip.js';
 
 	interface Props {
 		open: boolean;
@@ -504,7 +506,7 @@
 			<button
 				onclick={() => (chubOpen = true)}
 				class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-				title="Browse CHUB"
+				use:tooltip={'Browse CHUB'}
 				aria-label="Browse CHUB"
 			>
 				<Globe class="h-4 w-4" />
@@ -513,7 +515,7 @@
 				onclick={() => fileInput?.click()}
 				disabled={importing}
 				class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
-				title={importing ? 'Importing...' : 'Import'}
+				use:tooltip={importing ? 'Importing...' : 'Import'}
 				aria-label="Import character"
 			>
 				<Upload class="h-4 w-4" />
@@ -521,7 +523,7 @@
 			<button
 				onclick={() => (showCreateForm = !showCreateForm)}
 				class="flex h-9 w-9 items-center justify-center rounded-full bg-accent/60 text-foreground transition-colors hover:bg-accent"
-				title="Create character"
+				use:tooltip={'Create character'}
 				aria-label="Create character"
 			>
 				<Plus class="h-4 w-4" />
@@ -557,7 +559,7 @@
 		<button
 			onclick={() => { setSortBy(sortBy === 'alpha' ? 'newest' : sortBy === 'newest' ? 'oldest' : 'alpha'); }}
 			class="flex items-center gap-1 rounded-full border border-transparent bg-accent/40 px-2.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-			title="Toggle sort"
+			use:tooltip={'Toggle sort'}
 		>
 			<ArrowUpDown class="h-3.5 w-3.5" />
 			{sortBy === 'alpha' ? 'A–Z' : sortBy === 'newest' ? 'New' : 'Old'}
@@ -565,7 +567,7 @@
 		<button
 			onclick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
 			class="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-accent/40 text-muted-foreground hover:bg-accent hover:text-foreground active:scale-90 transition-transform"
-			title={viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view'}
+			use:tooltip={viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view'}
 			aria-label="Toggle character view mode"
 		>
 			{#if viewMode === 'list'}
@@ -600,7 +602,7 @@
 							onaicreate?.(seed);
 						}}
 						class="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-						title="Create with AI"
+						use:tooltip={'Create with AI'}
 						aria-label="Create with AI"
 					>
 						<Sparkles class="h-3.5 w-3.5" />
@@ -676,7 +678,7 @@
 								<button
 									type="button"
 									class="group/avatar relative shrink-0 overflow-hidden rounded-xl"
-									title="View avatar"
+									use:tooltip={'View avatar'}
 									aria-label="View avatar"
 									onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
 								>
@@ -748,7 +750,7 @@
 					<button
 						onclick={() => (chubOpen = true)}
 						class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent"
-						title="Browse CHUB"
+						use:tooltip={'Browse CHUB'}
 					>
 						<Globe class="h-4 w-4" />
 						<span class="hidden sm:inline">CHUB</span>
@@ -804,17 +806,16 @@
 							class="w-full rounded-lg border border-input bg-background py-2 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 						/>
 					</div>
-					<div class="relative">
-						<select
+					<div class="relative w-40">
+						<Combobox
 							value={sortBy}
-							onchange={(e) => setSortBy((e.target as HTMLSelectElement).value as any)}
-							class="h-full appearance-none rounded-lg border border-input bg-background py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-						>
-							<option value="alpha">A–Z</option>
-							<option value="newest">Newest first</option>
-							<option value="oldest">Oldest first</option>
-						</select>
-						<ArrowUpDown class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+							items={[
+								{ value: 'alpha', label: 'A–Z' },
+								{ value: 'newest', label: 'Newest first' },
+								{ value: 'oldest', label: 'Oldest first' },
+							]}
+							onchange={(v) => setSortBy(v as any)}
+						/>
 					</div>
 				</div>
 				{#if allTags.length > 0}
@@ -988,7 +989,7 @@
 											<div class="flex items-center gap-1.5">
 												<h3 class="truncate text-base font-semibold">{character.name}</h3>
 												{#if characterHasTheme(character.id)}
-													<span title="Has custom theme"><Palette class="h-3.5 w-3.5 shrink-0 text-primary" /></span>
+													<span use:tooltip={'Has custom theme'}><Palette class="h-3.5 w-3.5 shrink-0 text-primary" /></span>
 												{/if}
 											</div>
 											{#if character.creator}
@@ -999,14 +1000,14 @@
 											<button
 												onclick={() => exportCharacter(character.id, character.name, 'png')}
 												class="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-												title="Export as PNG"
+												use:tooltip={'Export as PNG'}
 											>
 												<Download class="h-3.5 w-3.5" />
 											</button>
 											<button
 												onclick={() => { if (characterLorebook) editLorebookId = characterLorebook.id; }}
 												class="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-												title={characterLorebook ? 'Edit lorebook' : 'No lorebook'}
+												use:tooltip={characterLorebook ? 'Edit lorebook' : 'No lorebook'}
 												disabled={!characterLorebook}
 											>
 												<BookOpen class="h-3.5 w-3.5" />
@@ -1014,7 +1015,7 @@
 											<button
 												onclick={() => { editCharacter = character; }}
 												class="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-												title="Edit character"
+												use:tooltip={'Edit character'}
 											>
 												<Pencil class="h-3.5 w-3.5" />
 											</button>
