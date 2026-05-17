@@ -14,7 +14,11 @@ export default defineConfig({
 	test: {
 		environment: 'node',
 		include: ['src/**/*.test.ts'],
-		globals: false
+		globals: false,
+		// In CI: verbose shows individual test names in the step log, and
+		// github-actions writes test annotations + the summary panel.
+		// Locally: default is cleaner.
+		reporters: process.env.CI ? ['verbose', 'github-actions'] : ['default'],
 	},
 	resolve: {
 		alias: {

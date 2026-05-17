@@ -30,10 +30,60 @@ jobs:
         run: npm ci
 
       - name: Type check (svelte-check + tsc)
-        run: npm run check
+        id: typecheck
+        run: |
+          set +e
+          OUTPUT=$(npm run check 2>&1)
+          EXIT=$?
+          echo "$OUTPUT"
+          set -e
+
+          # Write a summary section for the type check
+          if [[ $EXIT -eq 0 ]]; then
+            echo "## Type check passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Type check failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$OUTPUT" | tail -20 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+          exit $EXIT
 
       - name: Run tests
         run: npm run test
+
+      - name: Dependency audit
+        if: always()
+        run: |
+          set +e
+          AUDIT=$(npm audit --json 2>/dev/null)
+          set -e
+
+          CRITICAL=$(echo "$AUDIT" | jq '.metadata.vulnerabilities.critical // 0')
+          HIGH=$(echo "$AUDIT" | jq '.metadata.vulnerabilities.high // 0')
+          MODERATE=$(echo "$AUDIT" | jq '.metadata.vulnerabilities.moderate // 0')
+          LOW=$(echo "$AUDIT" | jq '.metadata.vulnerabilities.low // 0')
+          TOTAL=$(echo "$AUDIT" | jq '.metadata.vulnerabilities.total // 0')
+
+          if [[ "$TOTAL" -eq 0 ]]; then
+            HEADER="## Dependency audit — no vulnerabilities"
+          elif [[ "$CRITICAL" -gt 0 || "$HIGH" -gt 0 ]]; then
+            HEADER="## Dependency audit — action required"
+          else
+            HEADER="## Dependency audit — low/moderate issues"
+          fi
+
+          {
+            echo "$HEADER"
+            echo ""
+            echo "| Severity | Count |"
+            echo "|----------|-------|"
+            echo "| Critical | $CRITICAL |"
+            echo "| High     | $HIGH |"
+            echo "| Moderate | $MODERATE |"
+            echo "| Low      | $LOW |"
+          } >> $GITHUB_STEP_SUMMARY
 
   # ── 2. CodeQL (gated on check passing) ───────────────────────────────────
   analyze:
