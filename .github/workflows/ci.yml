@@ -195,13 +195,17 @@ jobs:
         run: |
           NEW_VERSION="${{ steps.ver.outputs.new }}"
           PRERELEASE_FLAG=""
-          [[ "${{ github.ref_name }}" == "beta" ]] && PRERELEASE_FLAG="--prerelease"
+          TAG="v${NEW_VERSION}"
+          if [[ "${{ github.ref_name }}" == "beta" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+            TAG="v${NEW_VERSION}-beta"
+          fi
           # Use cliff's output so release notes and CHANGELOG.md come from the
           # same source rather than GitHub's PR-title scraper.
-          NOTES=$(git cliff --config cliff.toml --tag "v${NEW_VERSION}" --latest --strip all 2>/dev/null || echo "")
-          gh release create "v${NEW_VERSION}" \
+          NOTES=$(git cliff --config cliff.toml --tag "${TAG}" --latest --strip all 2>/dev/null || echo "")
+          gh release create "${TAG}" \
             --target "${{ github.ref_name }}" \
-            --title "v${NEW_VERSION}" \
+            --title "${TAG}" \
             --notes "${NOTES}" \
             $PRERELEASE_FLAG
 
@@ -287,11 +291,15 @@ jobs:
         run: |
           VERSION="${{ needs.detect.outputs.version }}"
           PRERELEASE_FLAG=""
-          [[ "${{ github.ref_name }}" == "beta" ]] && PRERELEASE_FLAG="--prerelease"
-          NOTES=$(git cliff --config cliff.toml --tag "v${VERSION}" --latest --strip all 2>/dev/null || echo "")
-          gh release create "v${VERSION}" \
+          TAG="v${VERSION}"
+          if [[ "${{ github.ref_name }}" == "beta" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+            TAG="v${VERSION}-beta"
+          fi
+          NOTES=$(git cliff --config cliff.toml --tag "${TAG}" --latest --strip all 2>/dev/null || echo "")
+          gh release create "${TAG}" \
             --target "${{ github.ref_name }}" \
-            --title "v${VERSION}" \
+            --title "${TAG}" \
             --notes "${NOTES}" \
             $PRERELEASE_FLAG
 
