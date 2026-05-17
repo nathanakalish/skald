@@ -93,8 +93,8 @@ export async function addCharacterToZip(zip: JSZip, character: typeof characters
 }
 
 /** Add a chat (with branches) to the zip under chats/. */
-export function addChatToZip(zip: JSZip, chat: typeof chats.$inferSelect, characterFp: string): void {
-	const allMessages = db.select().from(messages).where(eq(messages.chatId, chat.id)).all();
+export function addChatToZip(zip: JSZip, chat: typeof chats.$inferSelect, characterFp: string, prefetchedMessages?: typeof messages.$inferSelect[]): void {
+	const allMessages = prefetchedMessages ?? db.select().from(messages).where(eq(messages.chatId, chat.id)).all();
 	const chatJson = {
 		schema: 'skald-chat',
 		version: 2,
@@ -175,11 +175,20 @@ export async function buildEverythingBundle(userId: number, opts: BundleOptions)
 		counts.characters++;
 	}
 
-	// Chats.
+	// Chats — load all messages in one query instead of N per-chat queries.
 	const userChats = db.select().from(chats).where(eq(chats.userId, userId)).all();
+	const allMessages = userChats.length > 0
+		? db.select().from(messages).where(inArray(messages.chatId, userChats.map(c => c.id))).all()
+		: [];
+	const messagesByChatId = new Map<number, typeof messages.$inferSelect[]>();
+	for (const m of allMessages) {
+		const list = messagesByChatId.get(m.chatId);
+		if (list) list.push(m);
+		else messagesByChatId.set(m.chatId, [m]);
+	}
 	for (const chat of userChats) {
 		const fp = charFpById.get(chat.characterId) ?? '';
-		addChatToZip(zip, chat, fp);
+		addChatToZip(zip, chat, fp, messagesByChatId.get(chat.id) ?? []);
 		counts.chats++;
 	}
 
@@ -251,7 +260,7 @@ export async function buildEverythingBundle(userId: number, opts: BundleOptions)
 	};
 	zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 3 } });
 	return { buffer, counts };
 }
 
@@ -271,8 +280,17 @@ export async function buildCharacterBundle(userId: number, characterId: number):
 	const charChats = db.select().from(chats)
 		.where(and(eq(chats.userId, userId), eq(chats.characterId, characterId)))
 		.all();
+	const charMessages = charChats.length > 0
+		? db.select().from(messages).where(inArray(messages.chatId, charChats.map(c => c.id))).all()
+		: [];
+	const msgsByChat = new Map<number, typeof messages.$inferSelect[]>();
+	for (const m of charMessages) {
+		const list = msgsByChat.get(m.chatId);
+		if (list) list.push(m);
+		else msgsByChat.set(m.chatId, [m]);
+	}
 	for (const c of charChats) {
-		addChatToZip(zip, c, exported.fingerprint);
+		addChatToZip(zip, c, exported.fingerprint, msgsByChat.get(c.id) ?? []);
 		counts.chats++;
 	}
 
@@ -294,7 +312,7 @@ export async function buildCharacterBundle(userId: number, characterId: number):
 	};
 	zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 3 } });
 	return { buffer, counts, characterName: character.name };
 }
 
