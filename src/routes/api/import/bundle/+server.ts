@@ -83,6 +83,13 @@ export const POST: RequestHandler = async (event) => {
 		try { manifest = JSON.parse(await manifestEntry.async('string')); } catch { /* ignore */ }
 	}
 
+	logger.info('import: bundle start', {
+		userId: user.id,
+		bundleType: manifest?.bundleType ?? 'unknown',
+		fileSize: file.size,
+		zipEntries: Object.values(zip.files).filter(f => !f.dir).length,
+	});
+
 	const counts = { characters: 0, chats: 0, lorebooks: 0, personas: 0, providers: 0, themes: 0, settings: 0 };
 	const unresolvedChats: UnresolvedChat[] = [];
 	const messages_unresolved: { zipPath: string; bytes: string }[] = [];
@@ -138,6 +145,7 @@ export const POST: RequestHandler = async (event) => {
 				// Skip if we already have an identical character (matching fingerprint).
 				const existingId = existingCharsByFp.get(fp);
 				if (existingId) {
+					logger.info('import: character skipped (duplicate)', { path, name: cardData.name });
 					fingerprintToNewId.set(fp, existingId);
 					continue;
 				}
@@ -180,6 +188,7 @@ export const POST: RequestHandler = async (event) => {
 
 				fingerprintToNewId.set(fp, inserted.id);
 				existingCharsByFp.set(fp, inserted.id);
+				logger.info('import: character imported', { path, name: finalName, id: inserted.id });
 				counts.characters++;
 			} catch (err) {
 				logger.warn('bundle import: failed to import character', { path, err: String(err) });
@@ -227,6 +236,7 @@ export const POST: RequestHandler = async (event) => {
 					constant: e.constant ?? false
 				}).run();
 			}
+			logger.info('import: lorebook imported', { path: f.name, name: finalName, id: inserted.id, entryCount: (lb.entries ?? []).length });
 			counts.lorebooks++;
 		} catch (err) {
 			logger.warn('bundle import: failed to import lorebook', { path: f.name, err: String(err) });
@@ -250,6 +260,7 @@ export const POST: RequestHandler = async (event) => {
 
 			if (!charId) {
 				// No character matched — defer. Keep raw bytes for the client-side resolver.
+				logger.info('import: chat unresolved (no character match)', { path: f.name, title: chatJson.title, charName, charFp: fp ?? null });
 				const bytes = await f.async('string');
 				messages_unresolved.push({ zipPath: f.name, bytes });
 				unresolvedChats.push({
@@ -297,12 +308,17 @@ export const POST: RequestHandler = async (event) => {
 			if (leafId) {
 				db.update(chats).set({ activeLeafId: leafId }).where(eq(chats.id, insertedChat.id)).run();
 			}
-			recomputeChatTail(insertedChat.id);
+			try {
+				recomputeChatTail(insertedChat.id);
+			} catch (err) {
+				logger.warn('import: recomputeChatTail failed', { chatId: insertedChat.id, err: String(err) });
+			}
 
 			// Track old→new for chat_lorebooks linking
 			const m = f.name.match(/chat_(\d+)\.json$/);
 			if (m) oldIdToNewId.chats.set(Number(m[1]), insertedChat.id);
 
+			logger.info('import: chat imported', { path: f.name, title: chatJson.title, charId, newChatId: insertedChat.id, messageCount: sorted.length });
 			counts.chats++;
 		} catch (err) {
 			logger.warn('bundle import: failed to import chat', { path: f.name, err: String(err) });
@@ -481,20 +497,5 @@ export const POST: RequestHandler = async (event) => {
 		availableCharacters: db.select({ id: characters.id, name: characters.name }).from(characters).where(eq(characters.userId, user.id)).all()
 	});
 };
-
-function _logBundleImportComplete(
-	event: Parameters<RequestHandler>[0],
-	userId: number,
-	startedAt: number,
-	counts: Record<string, number>,
-	bytes: number,
-) {
-	event.locals.logger.info('import: bundle complete', {
-		userId,
-		bytes,
-		durationMs: Date.now() - startedAt,
-		counts,
-	});
-}
 
 export const config = { bodyParser: false };

@@ -93,7 +93,12 @@ function emit(level: LogLevelName, msg: string, bound: Record<string, unknown>, 
 	};
 
 	try {
-		process.stderr.write(JSON.stringify(record) + '\n');
+		const line = JSON.stringify(record) + '\n';
+		const colored =
+			process.stderr.isTTY && level === 'warn'  ? '\x1b[33m' + line + '\x1b[0m' :
+			process.stderr.isTTY && level === 'error' ? '\x1b[31m' + line + '\x1b[0m' :
+			line;
+		process.stderr.write(colored);
 	} catch {
 		// best-effort fallback
 		try { console.error(`[${level}] ${msg}`); } catch { /* ignore */ }

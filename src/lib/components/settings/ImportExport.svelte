@@ -7,6 +7,7 @@
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
+	import { chatsStore } from '$lib/stores/chats.svelte.js';
 	import ImportResolverModal from '$lib/components/ImportResolverModal.svelte';
 
 	interface Props {
@@ -415,6 +416,7 @@
 			}
 			await charactersStore.load(true);
 			await lorebooksStore.load(true);
+			await chatsStore.load(true);
 			importSummary = { counts: data.counts, providersWarning: !!data.providersWarning };
 			showProvidersWarning = !!data.providersWarning;
 			if (Array.isArray(data.unresolvedChats) && data.unresolvedChats.length > 0) {
