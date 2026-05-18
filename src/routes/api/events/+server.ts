@@ -115,7 +115,7 @@ export const GET: RequestHandler = (requestEvent) => {
 				}
 			});
 
-			controller.enqueue(encoder.encode(': connected\n\n'));
+			safeEnqueue(encoder.encode(': connected\n\n'));
 		},
 		cancel() {
 			cleanup();

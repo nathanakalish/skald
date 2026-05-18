@@ -120,7 +120,13 @@ function buildGreetingContextContent(character: ResolvedContext['character'], us
 			for (const alt of alts) if (typeof alt === 'string' && alt.trim()) greetings.push(alt);
 		}
 	} catch (err) {
-		logger.warn('slots: malformed alternateGreetings JSON', { err: String(err) });
+		logger.warn('slots: malformed alternateGreetings JSON', {
+			err: String(err),
+			// First 200 chars of the offending payload — without this the warning is
+			// useless because you can't tell whose row is broken or what it looked like.
+			raw: String(character.alternateGreetings ?? '').slice(0, 200),
+			characterId: character.id ?? null,
+		});
 	}
 
 	let content = '';

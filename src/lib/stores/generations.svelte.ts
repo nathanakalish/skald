@@ -33,25 +33,25 @@ export interface GenerationState {
 const _generations = new SvelteMap<number, GenerationState>();
 
 function ensureStreamingState(chatId: number): GenerationState {
-	let gen = _generations.get(chatId);
-	if (!gen) {
-		// Wrap in $state so per-field mutations stay reactive without
-		// having to reassign the Map entry.
-		gen = $state({
-			chatId,
-			status: 'streaming',
-			accumulated: '',
-			accumulatedReasoning: '',
-			isRegenerate: false,
-			isImpersonation: false,
-			originalMessageId: null,
-			startedAt: Date.now(),
-			lastEventAt: Date.now(),
-			error: null,
-			tokenStats: null
-		});
-		_generations.set(chatId, gen);
-	}
+	const existing = _generations.get(chatId);
+	if (existing) return existing;
+	// `$state(...)` is only legal as a variable-declaration initializer in
+	// Svelte 5 — rolldown rejects `gen = $state(...)` reassignment. Bind to a
+	// `const` here, then store + return.
+	const gen: GenerationState = $state({
+		chatId,
+		status: 'streaming',
+		accumulated: '',
+		accumulatedReasoning: '',
+		isRegenerate: false,
+		isImpersonation: false,
+		originalMessageId: null,
+		startedAt: Date.now(),
+		lastEventAt: Date.now(),
+		error: null,
+		tokenStats: null
+	});
+	_generations.set(chatId, gen);
 	return gen;
 }
 

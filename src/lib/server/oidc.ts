@@ -191,11 +191,20 @@ export async function getUserClaims(tokenResponse: TokenResponse, expectedNonce:
 		throw new Error(`Username claim '${config.usernameClaim}' not found or not a string in token`);
 	}
 
-	// Groups (may be nested, may be missing entirely)
+	// Groups (may be nested, may be missing entirely). Some IdPs (Authentik with
+	// "Groups" property mapping disabled, certain Keycloak configs) emit a single
+	// group as a bare string instead of an array — silently dropping that would
+	// revoke admin role on first re-login. Coerce string→array and warn so the
+	// admin can confirm whether to switch the claim mapping IdP-side.
 	let groups: string[] = [];
 	const rawGroups = claims[config.groupsClaim];
 	if (Array.isArray(rawGroups)) {
 		groups = rawGroups.filter((g): g is string => typeof g === 'string');
+	} else if (typeof rawGroups === 'string' && rawGroups.length > 0) {
+		groups = [rawGroups];
+		logger.warn('oidc: groups claim arrived as string, coerced to single-element array', {
+			claim: config.groupsClaim,
+		});
 	}
 
 	// Optional `picture` claim from the standard OIDC profile scope.

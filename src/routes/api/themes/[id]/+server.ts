@@ -6,7 +6,7 @@ import { eq, and, ne } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import * as themeCache from '$lib/server/themeCache.js';
-import { validateThemeColors } from '../+server.js';
+import { _validateThemeColors } from '../+server.js';
 
 // PUT update a theme (only custom themes owned by user)
 export const PUT: RequestHandler = async (event) => {
@@ -39,7 +39,7 @@ export const PUT: RequestHandler = async (event) => {
 		// CRUD-L6: validate colour key/value shape so the SSR `<style>` splat
 		// stays on the safe side of the CSS injection line. POST already does
 		// this; PUT used to silently accept anything.
-		const parsed = validateThemeColors(colors);
+		const parsed = _validateThemeColors(colors);
 		if ('error' in parsed) return json({ error: parsed.error }, { status: 400 });
 		updates.colors = JSON.stringify(parsed.colors);
 	}

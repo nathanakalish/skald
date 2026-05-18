@@ -1,8 +1,33 @@
 import type { RequestHandler } from './$types.js';
-import { readFile, access } from 'fs/promises';
+import { readFile, access, unlink } from 'fs/promises';
 import { join, resolve } from 'path';
+import { logger } from '$lib/server/logger.js';
 
 const CACHE_DIR = join(process.cwd(), 'data', 'image-cache');
+
+// Magic-byte sniff so we don't serve corrupt/truncated payloads as images.
+// Browsers handle a bad image gracefully (broken-image icon), but we'd rather
+// 404 and evict so the next request through cacheImage() re-downloads.
+function looksLikeImage(buf: Buffer, ext: string): boolean {
+	if (buf.length < 12) return false;
+	switch (ext) {
+		case '.png':
+			return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+		case '.jpg':
+		case '.jpeg':
+			return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+		case '.gif':
+			return buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46;
+		case '.webp':
+			return buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+				&& buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50;
+		case '.svg':
+			// Cheap text sniff — corrupt SVG is very rare, full XML parse would be overkill.
+			return buf.subarray(0, 256).toString('utf8').toLowerCase().includes('<svg');
+		default:
+			return true;
+	}
+}
 
 const MIME_TYPES: Record<string, string> = {
 	'.png': 'image/png',
@@ -51,6 +76,15 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	try {
 		const data = await readFile(filepath);
 		const ext = targetFile.substring(targetFile.lastIndexOf('.'));
+
+		if (!looksLikeImage(data, ext)) {
+			// Corrupt/truncated cache entry — drop it so the next cacheImage() call
+			// will refetch. Better to 404 once than serve garbage forever.
+			logger.warn('image cache: corrupt entry, evicting', { file: targetFile, bytes: data.length });
+			try { await unlink(filepath); } catch { /* may already be gone */ }
+			return new Response('Not found', { status: 404 });
+		}
+
 		const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
 		const headers: Record<string, string> = {

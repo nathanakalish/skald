@@ -83,27 +83,35 @@ export async function runBackup(): Promise<string | null> {
 		renameSync(tmpTarget, target);
 		logger.info('db backup complete', { target });
 
-		// Retention pruning — anything beyond the keep limit is toast.
-		const files = readdirSync(dir)
-			.filter((f) => f.startsWith('skald-') && f.endsWith('.db'))
-			.map((f) => ({ name: f, mtime: statSync(join(dir, f)).mtimeMs }))
-			.sort((a, b) => b.mtime - a.mtime);
-		const stale = files.slice(retention);
-		for (const f of stale) {
+		// Retention prune + .tmp cleanup are pure filesystem grunt work — punt
+		// them off the hot path so the caller (cron tick, manual trigger) gets
+		// the "backup complete" return ASAP and doesn't block on N unlinks.
+		setImmediate(() => {
 			try {
-				unlinkSync(join(dir, f.name));
-				logger.info('db backup pruned', { file: f.name });
-			} catch (err) {
-				logger.warn('db backup prune failed', { file: f.name, err });
-			}
-		}
+				const files = readdirSync(dir)
+					.filter((f) => f.startsWith('skald-') && f.endsWith('.db'))
+					.map((f) => ({ name: f, mtime: statSync(join(dir, f)).mtimeMs }))
+					.sort((a, b) => b.mtime - a.mtime);
+				const stale = files.slice(retention);
+				for (const f of stale) {
+					try {
+						unlinkSync(join(dir, f.name));
+						logger.info('db backup pruned', { file: f.name });
+					} catch (err) {
+						logger.warn('db backup prune failed', { file: f.name, err });
+					}
+				}
 
-		// Also clean up any stray .tmp files from previous crashes.
-		for (const name of readdirSync(dir)) {
-			if (name.startsWith('skald-') && name.endsWith('.db.tmp')) {
-				try { unlinkSync(join(dir, name)); } catch { /* ignore */ }
+				// Also clean up any stray .tmp files from previous crashes.
+				for (const name of readdirSync(dir)) {
+					if (name.startsWith('skald-') && name.endsWith('.db.tmp')) {
+						try { unlinkSync(join(dir, name)); } catch { /* ignore */ }
+					}
+				}
+			} catch (err) {
+				logger.warn('db backup retention sweep failed', { err: String(err) });
 			}
-		}
+		});
 
 		return filename;
 	} catch (err) {

@@ -7,6 +7,13 @@
 set -e
 
 # These are the same paths declared as VOLUME in the Dockerfile.
-chown -R skald:skald /app/data /app/static/avatars 2>/dev/null || true
+# Don't fail startup if chown can't fix one of them (e.g. read-only bind mount,
+# NFS without root_squash, or volume already owned by skald) — but do log it so
+# permission problems aren't silently hidden.
+for dir in /app/data /app/static/avatars; do
+	if ! chown -R skald:skald "$dir" 2>/dev/null; then
+		echo "WARN: chown failed for $dir — continuing with existing ownership" >&2
+	fi
+done
 
 exec gosu skald "$@"

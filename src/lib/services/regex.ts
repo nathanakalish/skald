@@ -143,7 +143,18 @@ export function applyRegexScripts(
 			continue;
 		}
 		const before = result;
-		result = result.replace(regex, script.replaceString);
+		try {
+			result = result.replace(regex, script.replaceString);
+		} catch (err) {
+			// `.replace` can throw on malformed `replaceString` ($-references that
+			// don't resolve in some engines, etc.). Don't let one bad script tank
+			// the request — log loudly so the user knows to disable it.
+			logger.warn('regex: script failed at apply time', {
+				userId, scope, scriptId: script.id, scriptName: script.name,
+				err: String(err),
+			});
+			continue;
+		}
 		if (result !== before) appliedCount++;
 	}
 	if (scripts.length > 0) {

@@ -117,3 +117,24 @@ process.on('exit', shutdown);
 // Apply any pending migrations from drizzle/migrations/ — runs after the
 // imperative baseline DDL above. Fatal on failure (better than silent drift).
 runMigrations(sqlite);
+
+// Periodic incremental VACUUM. Dead pages accumulate as rows churn (message
+// edits, chat deletes, regenerations). Without this the file grows without
+// shrinking. PRAGMA incremental_vacuum is non-blocking-ish (does small chunks
+// of work) compared to plain VACUUM which rewrites the entire DB. Cheap when
+// the freelist is empty, so running daily is fine — and Node's setInterval
+// can't take a value > 2^31-1 ms (~24.8 days), so a literal "monthly"
+// interval silently clamps to 1ms and fires constantly.
+sqlite.pragma('auto_vacuum = INCREMENTAL');
+const VACUUM_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+const vacuumTimer = setInterval(() => {
+	try {
+		const t0 = performance.now();
+		sqlite.pragma('incremental_vacuum');
+		logger.info('db: incremental vacuum done', { ms: Math.round(performance.now() - t0) });
+	} catch (err) {
+		logger.warn('db: incremental vacuum failed', { err: String(err) });
+	}
+}, VACUUM_INTERVAL_MS);
+// Don't block process exit on the vacuum timer.
+vacuumTimer.unref?.();

@@ -26,6 +26,11 @@ interface Callbacks {
 export class ThinkingTagParser {
 	private inThinkingTag = false;
 	private tagBuffer = '';
+	// Defensive cap. Under normal control flow the buffer never exceeds the length
+	// of `</thinking>` (10 chars) — the prefix-match flush below sees to that. But
+	// a sufficiently weird provider stream could in theory hand us pathological
+	// input; bail out rather than letting an LLM stream eat unbounded memory.
+	private static readonly TAG_BUFFER_MAX = 1024;
 
 	constructor(private readonly cb: Callbacks) {}
 
@@ -60,6 +65,13 @@ export class ThinkingTagParser {
 
 				this.tagBuffer += ch;
 				i++;
+				if (this.tagBuffer.length > ThinkingTagParser.TAG_BUFFER_MAX) {
+					// Overflow: treat as raw content (or reasoning if inside a tag) and reset.
+					if (this.inThinkingTag) this.cb.onReasoning(this.tagBuffer);
+					else this.cb.onContent(this.tagBuffer);
+					this.tagBuffer = '';
+					continue;
+				}
 				const lower = this.tagBuffer.toLowerCase();
 
 				if (!this.inThinkingTag) {

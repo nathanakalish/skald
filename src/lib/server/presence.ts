@@ -23,8 +23,11 @@ interface Session {
 	registeredAt: number;
 }
 
-/** Sessions whose last presence update is older than this are treated as not focused. */
-const STALE_FOCUS_MS = 90 * 1000;
+/** Sessions whose last presence update is older than this are treated as not focused.
+ * Heartbeat is 30s, so this allows ~5 missed pings before treating the tab as
+ * backgrounded — survives a brief network blip + tab-switch without firing a
+ * spurious push. Bumped from 90s after false-positive reports. */
+const STALE_FOCUS_MS = 180 * 1000;
 
 /** Sessions older than this with no updates get GC'd entirely. */
 const SESSION_GC_MS = 10 * 60 * 1000;

@@ -32,8 +32,12 @@ export function loadPromptContext(chatId: number, opts: ProcessOptions): Resolve
 	}
 
 	// Provider resolution — always scoped to the chat owner.
+	// Deterministic tie-breaker: sortOrder ASC, then id ASC. Without this, two providers
+	// with the same sort_order (default 0) could flip-flop between requests depending on
+	// SQLite's row order.
 	const defaultProvider = db.select().from(providers)
 		.where(and(eq(providers.userId, chatUserId), eq(providers.enabled, true)))
+		.orderBy(asc(providers.sortOrder), asc(providers.id))
 		.get();
 	if (!defaultProvider) throw new Error('No provider configured');
 

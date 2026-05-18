@@ -24,6 +24,11 @@ export async function* iterateSSE(
 	const reader = body.getReader();
 	const decoder = new TextDecoder();
 	let buffer = '';
+	// Surfaces misbehaving providers spewing non-SSE noise — without this, a stream of
+	// HTML error pages or plaintext garbage would silently no-op until the socket closed.
+	let badLines = 0;
+	let badWarned = false;
+	const BAD_LINE_WARN_THRESHOLD = 32;
 
 	try {
 		while (true) {
@@ -36,7 +41,18 @@ export async function* iterateSSE(
 
 			for (const line of lines) {
 				const trimmed = line.trim();
-				if (!trimmed || !trimmed.startsWith('data: ')) continue;
+				if (!trimmed) continue;
+				if (!trimmed.startsWith('data: ')) {
+					badLines++;
+					if (!badWarned && badLines >= BAD_LINE_WARN_THRESHOLD) {
+						badWarned = true;
+						console.warn(
+							`[sse] ${badLines} non-SSE lines from provider stream; ` +
+							`first offending line: ${trimmed.slice(0, 120)}`
+						);
+					}
+					continue;
+				}
 				const data = trimmed.slice(6);
 				if (doneSentinel && data === doneSentinel) return;
 				yield data;

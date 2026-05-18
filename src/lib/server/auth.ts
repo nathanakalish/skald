@@ -49,7 +49,7 @@ export function createSession(userId: number, userAgent: string | null = null): 
 	}).run();
 	logger.info('session created', {
 		userId,
-		sessionIdPrefix: sessionIdHash.slice(0, 8),
+		sessionIdPrefix: sessionIdHash.slice(0, 12),
 		durationDays: days,
 		hasUserAgent: !!ua,
 	});
@@ -106,7 +106,7 @@ export function deleteSession(token: string): void {
 	const result = db.delete(sessions).where(eq(sessions.id, hashed)).run();
 	lastSeenCache.delete(hashed);
 	if (result.changes > 0) {
-		logger.info('session deleted', { sessionIdPrefix: hashed.slice(0, 8) });
+		logger.info('session deleted', { sessionIdPrefix: hashed.slice(0, 12) });
 	}
 }
 

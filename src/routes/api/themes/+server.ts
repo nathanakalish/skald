@@ -41,7 +41,7 @@ export const POST: RequestHandler = async (event) => {
 		.get();
 	if (dupe) return json({ error: 'A theme with that name already exists' }, { status: 409 });
 
-	const parsed = validateThemeColors(colors);
+	const parsed = _validateThemeColors(colors);
 	if ('error' in parsed) return json({ error: parsed.error }, { status: 400 });
 
 	const theme = db
@@ -65,7 +65,7 @@ export const POST: RequestHandler = async (event) => {
 // splat values into a `style="--key:value"` attribute, so rejecting anything
 // outside `[\w-]` keys / `[\w\s().,#%-]` values keeps us safely on the right
 // side of the CSS injection / XSS line (M15, CRUD-L6).
-export function validateThemeColors(colors: unknown): { colors: Record<string, string> } | { error: string } {
+export function _validateThemeColors(colors: unknown): { colors: Record<string, string> } | { error: string } {
 	let parsedColors: Record<string, unknown>;
 	try {
 		parsedColors = typeof colors === 'string' ? JSON.parse(colors) : (colors as Record<string, unknown>);
