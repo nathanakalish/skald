@@ -8,10 +8,8 @@
  */
 
 export const MAX_MESSAGE_CHARS = 200_000;
-export const MAX_FIELD_CHARS = 50_000;
-export const MAX_NAME_CHARS = 500;
 
-export function tooLong(value: unknown, max: number): boolean {
+function tooLong(value: unknown, max: number): boolean {
 	return typeof value === 'string' && value.length > max;
 }
 

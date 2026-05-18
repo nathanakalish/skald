@@ -17,7 +17,7 @@ import type { Persona } from '$lib/stores/personas.svelte.js';
 import type { Theme } from '$lib/stores/themes.svelte.js';
 
 // Generic envelope. Payload shape varies by `type` — see `RealtimeEvent`.
-export interface RealtimeEnvelope<T = unknown> {
+interface RealtimeEnvelope<T = unknown> {
 	type: string;
 	userId: number;
 	chatId?: number;
@@ -68,8 +68,3 @@ export type RealtimeEvent =
 	  }
 	| { type: 'export:ready' }
 	| { type: 'export:failed' };
-
-// Type guard used by the client dispatcher.
-export function isRealtimeEvent(t: string): boolean {
-	return /^(chat|character|provider|lorebook|persona|theme|message|export):/.test(t);
-}

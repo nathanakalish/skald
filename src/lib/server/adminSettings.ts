@@ -30,7 +30,7 @@ const DEFAULTS: Record<string, string> = {
 	maxLorebooksTotalMiB: '0'
 };
 
-export function getAdminSetting(key: string): string {
+function getAdminSetting(key: string): string {
 	const row = db.select().from(adminSettings).where(eq(adminSettings.key, key)).get();
 	return row?.value ?? DEFAULTS[key] ?? '';
 }
@@ -41,25 +41,4 @@ export function getAdminSettingBool(key: string): boolean {
 
 export function getAdminSettingNumber(key: string): number {
 	return Number(getAdminSetting(key)) || Number(DEFAULTS[key]) || 0;
-}
-
-let cachedAllSettings: Record<string, string> | null = null;
-let allSettingsCacheTime = 0;
-const CACHE_TTL = 60_000; // 1 minute
-
-export function getAllAdminSettings(): Record<string, string> {
-	const now = Date.now();
-	if (cachedAllSettings && now - allSettingsCacheTime < CACHE_TTL) return cachedAllSettings;
-	const rows = db.select().from(adminSettings).all();
-	const result = { ...DEFAULTS };
-	for (const row of rows) {
-		result[row.key] = row.value;
-	}
-	cachedAllSettings = result;
-	allSettingsCacheTime = now;
-	return result;
-}
-
-export function invalidateAdminSettingsCache() {
-	cachedAllSettings = null;
 }

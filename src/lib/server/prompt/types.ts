@@ -8,9 +8,9 @@ import type { MessageRow } from '$lib/server/chatTree.js';
 import type { TokenBudget } from '$lib/services/tokenizer.js';
 
 export type ChatRow = typeof chats.$inferSelect;
-export type CharacterRow = typeof characters.$inferSelect;
-export type ProviderRow = typeof providers.$inferSelect;
-export type PersonaRow = typeof personas.$inferSelect;
+type CharacterRow = typeof characters.$inferSelect;
+type ProviderRow = typeof providers.$inferSelect;
+type PersonaRow = typeof personas.$inferSelect;
 
 export type ChatMode = 'story' | 'texting';
 export type RenderMode = 'roleplay' | 'markdown';

@@ -1,17 +1,12 @@
 /**
- * Shared drizzle projections + ownership-check helper.
+ * Shared drizzle projections.
  *
  * A pile of API endpoints want only a subset of columns from `characters` /
  * `chats` for list views (sidebar, picker, search results). This is the one
  * source of truth for those projections so the field lists don't drift
  * between endpoints.
- *
- * `ownedBy()` collapses the `and(eq(table.id, id), eq(table.userId, user.id))`
- * incantation that shows up 50+ times across the API surface.
  */
 import { characters, chats } from '$lib/db/schema.js';
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
-import { and, eq } from 'drizzle-orm';
 
 /**
  * Lightweight character projection. Just the fields the sidebar / picker /
@@ -53,17 +48,3 @@ export const chatSidebar = {
 	lastMessage: chats.lastMessage,
 	lastMessageRole: chats.lastMessageRole
 } as const;
-
-/**
- * `ownedBy(table.id, id, user.id)` → `and(eq(table.id, id), eq(table.userId, user.id))`.
- * Pass the actual `id` column so the helper can pull `userId` off the same
- * table. Keeps the call sites short without losing the explicit ownership
- * intent at the read site.
- *
- * Example:
- *   db.select().from(chats).where(ownedBy(chats.id, chatId, user.id)).get();
- */
-export function ownedBy(idCol: SQLiteColumn, idVal: number, userId: number) {
-	const table = (idCol as any).table as { userId: SQLiteColumn };
-	return and(eq(idCol, idVal), eq(table.userId, userId));
-}

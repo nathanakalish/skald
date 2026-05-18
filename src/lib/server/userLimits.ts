@@ -56,13 +56,13 @@ function avatarOriginalSize(avatarPath: string | null | undefined): number {
 	try { return statSync(original).size; } catch { return 0; }
 }
 
-export function getResourceLimits(resource: Resource): Limits {
+function getResourceLimits(resource: Resource): Limits {
 	const maxCount = Math.max(0, Math.floor(getAdminSettingNumber(COUNT_KEYS[resource])));
 	const maxMiB = Math.max(0, Math.floor(getAdminSettingNumber(SIZE_KEYS[resource])));
 	return { maxCount, maxBytes: maxMiB * 1024 * 1024 };
 }
 
-export function getCharactersUsage(userId: number): Usage {
+function getCharactersUsage(userId: number): Usage {
 	const row = db
 		.select({
 			count: sql<number>`count(*)`,
@@ -102,7 +102,7 @@ export function getCharactersUsage(userId: number): Usage {
 	};
 }
 
-export function getChatsUsage(userId: number): Usage {
+function getChatsUsage(userId: number): Usage {
 	const row = db
 		.select({
 			count: sql<number>`count(*)`,
@@ -127,7 +127,7 @@ export function getChatsUsage(userId: number): Usage {
 	};
 }
 
-export function getLorebooksUsage(userId: number): Usage {
+function getLorebooksUsage(userId: number): Usage {
 	const row = db
 		.select({
 			count: sql<number>`count(*)`,
@@ -152,7 +152,7 @@ export function getLorebooksUsage(userId: number): Usage {
 	};
 }
 
-export function getUsage(resource: Resource, userId: number): Usage {
+function getUsage(resource: Resource, userId: number): Usage {
 	switch (resource) {
 		case 'characters': return getCharactersUsage(userId);
 		case 'chats': return getChatsUsage(userId);

@@ -6,11 +6,11 @@
 // Guards only check the shape the dispatcher actually needs; everything
 // beyond that is TypeScript's problem via the `RealtimeEvent` union.
 
-export function isRecord(x: unknown): x is Record<string, unknown> {
+function isRecord(x: unknown): x is Record<string, unknown> {
 	return typeof x === 'object' && x !== null && !Array.isArray(x);
 }
 
-export function hasNumberId(x: unknown): x is { id: number } {
+function hasNumberId(x: unknown): x is { id: number } {
 	return isRecord(x) && typeof x.id === 'number';
 }
 

@@ -24,16 +24,8 @@ export function ownsPersona(userId: number, id: number): boolean {
 	return !!row;
 }
 
-/** Verify a message lives in a given chat (chat ownership is the caller's job). */
-export function messageBelongsToChat(messageId: number, chatId: number): boolean {
-	if (!Number.isFinite(messageId) || !Number.isFinite(chatId)) return false;
-	const row = db.select({ id: messages.id }).from(messages)
-		.where(and(eq(messages.id, messageId), eq(messages.chatId, chatId))).get();
-	return !!row;
-}
-
 /** Tables that have an `id` PK and a `userId` FK and are subject to per-user ownership checks. */
-export type OwnedTable =
+type OwnedTable =
 	| typeof providers
 	| typeof personas
 	| typeof chats

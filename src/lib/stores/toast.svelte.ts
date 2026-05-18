@@ -5,7 +5,7 @@
 // when the user is focused on a different chat. They share the same physical
 // stack so they don't fight for screen space.
 
-export interface BaseToast {
+interface BaseToast {
 	id: number;
 	/** Auto-dismiss after this many ms. 0 = sticky (manual dismiss only). */
 	duration: number;
@@ -19,7 +19,7 @@ export interface SimpleToast extends BaseToast {
 	onclick?: () => void;
 }
 
-export interface ChatToast extends BaseToast {
+interface ChatToast extends BaseToast {
 	kind: 'chat';
 	chatId: number;
 	characterName: string;

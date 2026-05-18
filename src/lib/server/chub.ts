@@ -58,7 +58,7 @@ async function chubFetch(url: string, init: RequestInit): Promise<Response> {
 	return fetch(url, { ...init, redirect: 'error' });
 }
 
-export type ChubNamespace = 'characters' | 'lorebooks';
+type ChubNamespace = 'characters' | 'lorebooks';
 
 export type ChubSort = 'download_count' | 'last_activity_at' | 'created_at' | 'rating' | 'n_favorites';
 
@@ -78,7 +78,7 @@ export interface ChubSearchOptions {
 
 /** Normalised card for the UI. We pass `raw` through too so callers can grow
  *  without us having to keep this in sync every release. */
-export interface ChubCard {
+interface ChubCard {
 	id: number;
 	fullPath: string;
 	name: string;

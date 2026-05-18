@@ -44,7 +44,7 @@ export async function isPlaceholderAvatar(buffer: Buffer): Promise<boolean> {
  * Optimize an avatar image: resize to fit within maxSize while preserving aspect ratio,
  * convert to WebP. Returns the WebP buffer.
  */
-export async function optimizeAvatar(buffer: Buffer, maxSize = 512): Promise<Buffer> {
+async function optimizeAvatar(buffer: Buffer, maxSize = 512): Promise<Buffer> {
 	return sharp(buffer)
 		.resize(maxSize, maxSize, { fit: 'inside', withoutEnlargement: true })
 		.webp({ quality: 85 })

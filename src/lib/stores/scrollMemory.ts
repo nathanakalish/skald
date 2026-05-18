@@ -9,7 +9,3 @@ export function saveScroll(chatId: number, scrollTop: number): void {
 export function loadScroll(chatId: number): number | null {
 	return positions.get(chatId) ?? null;
 }
-
-export function clearScroll(chatId: number): void {
-	positions.delete(chatId);
-}

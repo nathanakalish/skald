@@ -14,7 +14,7 @@
  * they missed during the gap.
  */
 
-export interface ChatEvent {
+interface ChatEvent {
 	/**
 		 * Original chat-stream event types plus the resource-invalidation events.
 		 * Kept as a permissive string so callers (especially the resource broadcast
@@ -31,7 +31,7 @@ export interface ChatEvent {
 	data: any;
 }
 
-export interface SequencedEvent extends ChatEvent {
+interface SequencedEvent extends ChatEvent {
 	id: number;
 }
 

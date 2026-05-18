@@ -4,7 +4,6 @@ import { db } from '$lib/db/index.js';
 import { adminSettings, adminSettingsAudit } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/auth.js';
-import { invalidateAdminSettingsCache } from '$lib/server/adminSettings.js';
 import { logger } from '$lib/server/logger.js';
 
 const ALLOWED_KEYS = [
@@ -123,6 +122,5 @@ export const PATCH: RequestHandler = async (event) => {
 		});
 	}
 
-	invalidateAdminSettingsCache();
 	return json({ ok: true });
 };

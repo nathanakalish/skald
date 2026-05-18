@@ -59,4 +59,3 @@ export function createProvider(type: ProviderType | string, config: ProviderConf
 	return new Ctor(config);
 }
 
-export { type LLMProvider, type ProviderConfig, type ChatMessage, type SamplerSettings, type StreamChunk } from './base.js';

@@ -21,7 +21,7 @@ export interface ConfirmOptions {
 	variant?: 'danger' | 'info';
 }
 
-export interface AlertOptions {
+interface AlertOptions {
 	title?: string;
 	message: string;
 	okLabel?: string;

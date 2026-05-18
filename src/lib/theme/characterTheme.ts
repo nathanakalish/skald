@@ -12,7 +12,7 @@
  * editors can read both halves.
  */
 
-export interface CharacterThemePair {
+interface CharacterThemePair {
 	dark: Record<string, string>;
 	light: Record<string, string>;
 }

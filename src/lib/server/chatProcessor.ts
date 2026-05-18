@@ -35,14 +35,6 @@ import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/imp
 export type { ProcessOptions };
 export type { ImpersonationSwipe };
 
-export interface ProcessCallbacks {
-	onTokenStats?: (stats: any) => void;
-	onReasoning?: (text: string) => void;
-	onToken?: (text: string) => void;
-	onError?: (error: string) => void;
-	onDone?: () => void;
-}
-
 /**
  * Process a chat request: stream from the LLM, save to DB, fan out SSE events.
  * Runs in the background (no HTTP response to write back to).
@@ -565,68 +557,4 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 
 	activeGenerations.clear(chatId);
 	eventBus.emit({ type: 'streaming', chatId, userId: chatUserId, data: { active: false, isImpersonation: !!impersonate } });
-}
-
-/**
- * Process chat inline with callbacks (for impersonate which needs direct response).
- * This version uses callbacks instead of the event bus.
- */
-export async function processChatInline(
-	opts: ProcessOptions,
-	callbacks: ProcessCallbacks,
-	signal?: AbortSignal
-): Promise<string> {
-	const { chatId } = opts;
-
-	let ctx;
-	try {
-		ctx = buildChatContext(chatId, opts);
-	} catch (err) {
-		const msg = err instanceof Error ? err.message : 'Unknown error';
-		callbacks.onError?.(msg);
-		return '';
-	}
-
-	const { activeProvider, activeModel, samplerSettings, llmMessages, tokenStats, streamingEnabled } = ctx;
-
-	const llm = createProvider(activeProvider.type as ProviderType, {
-		endpoint: activeProvider.endpoint,
-		apiKey: activeProvider.apiKey || '',
-		model: activeModel,
-	});
-
-	let fullResponse = '';
-	let fullReasoning = '';
-	let contentStarted = false;
-
-	try {
-		callbacks.onTokenStats?.(tokenStats);
-
-		for await (const chunk of llm.stream(llmMessages, samplerSettings, signal)) {
-			if (chunk.type === 'reasoning') {
-				fullReasoning += chunk.text;
-				if (streamingEnabled) callbacks.onReasoning?.(chunk.text);
-			} else {
-				let text = chunk.text;
-				if (!contentStarted) {
-					text = text.trimStart();
-					if (!text) continue;
-					contentStarted = true;
-				}
-				fullResponse += text;
-				if (streamingEnabled) callbacks.onToken?.(text);
-			}
-		}
-
-		if (!streamingEnabled) {
-			if (fullReasoning) callbacks.onReasoning?.(fullReasoning);
-			callbacks.onToken?.(fullResponse);
-		}
-	} catch (err) {
-		const message = err instanceof Error ? err.message : 'Unknown error';
-		callbacks.onError?.(message);
-	}
-
-	callbacks.onDone?.();
-	return fullResponse;
 }

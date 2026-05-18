@@ -8,7 +8,7 @@
 import { rawDb } from '$lib/db/index.js';
 
 /** Raw row shape returned by SQLite (snake_case). Mapped to camelCase by callers. */
-export interface RawMessageRow {
+interface RawMessageRow {
 	id: number;
 	chat_id: number;
 	parent_id: number | null;
@@ -155,7 +155,7 @@ export function loadActivePathPage(
 }
 
 /** Sibling info per message id (used for swipe navigation in the UI). */
-export interface SiblingInfo {
+interface SiblingInfo {
 	index: number;
 	total: number;
 }

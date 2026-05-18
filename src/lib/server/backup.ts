@@ -26,7 +26,7 @@ function getConfig() {
 }
 
 /** Run a single backup right now. Returns the resulting filename or null on failure. */
-export async function runBackup(): Promise<string | null> {
+async function runBackup(): Promise<string | null> {
 	const { dir, retention } = getConfig();
 	try {
 		mkdirSync(dir, { recursive: true });

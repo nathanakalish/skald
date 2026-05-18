@@ -22,7 +22,7 @@ import { getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
 
 export const BUNDLE_VERSION = 2;
 
-export type BundleType = 'everything' | 'characters' | 'lorebooks' | 'chats';
+type BundleType = 'everything' | 'characters' | 'lorebooks' | 'chats';
 
 /**
  * Stable fingerprint of a character's content. Two characters with identical
@@ -48,7 +48,7 @@ export function characterFingerprint(c: {
 }
 
 /** Read the original (uploaded) avatar bytes if we still have them. */
-export function readAvatarBytes(avatarPath: string | null | undefined): { bytes: Buffer; ext: string } | null {
+function readAvatarBytes(avatarPath: string | null | undefined): { bytes: Buffer; ext: string } | null {
 	if (!avatarPath) return null;
 	const basename = avatarPath.split('/').pop() || '';
 	const originalPath = getOriginalAvatarPath(basename);
@@ -73,7 +73,7 @@ interface ExportedCharacter {
 }
 
 /** Add one character + its avatar PNG card to the zip. */
-export async function addCharacterToZip(zip: JSZip, character: typeof characters.$inferSelect): Promise<ExportedCharacter> {
+async function addCharacterToZip(zip: JSZip, character: typeof characters.$inferSelect): Promise<ExportedCharacter> {
 	const card = toCharaCardJSON(character as Parameters<typeof toCharaCardJSON>[0]);
 	const fingerprint = characterFingerprint({
 		name: character.name,
@@ -96,7 +96,7 @@ export async function addCharacterToZip(zip: JSZip, character: typeof characters
 }
 
 /** Add a chat (with branches) to the zip under chats/. */
-export function addChatToZip(zip: JSZip, chat: typeof chats.$inferSelect, characterFp: string, prefetchedMessages?: typeof messages.$inferSelect[]): void {
+function addChatToZip(zip: JSZip, chat: typeof chats.$inferSelect, characterFp: string, prefetchedMessages?: typeof messages.$inferSelect[]): void {
 	const allMessages = prefetchedMessages ?? db.select().from(messages).where(eq(messages.chatId, chat.id)).all();
 	const chatJson = {
 		schema: 'skald-chat',
@@ -123,7 +123,7 @@ export function addChatToZip(zip: JSZip, chat: typeof chats.$inferSelect, charac
 }
 
 /** Add a lorebook + entries to the zip under lorebooks/. */
-export function addLorebookToZip(
+function addLorebookToZip(
 	zip: JSZip,
 	lorebook: typeof lorebooks.$inferSelect,
 	characterFp: string | null

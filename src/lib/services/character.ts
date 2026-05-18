@@ -7,7 +7,7 @@
 
 import { parseStringArray, parseRecord } from '$lib/jsonSafe.js';
 
-export interface CharaBookEntry {
+interface CharaBookEntry {
 	keys: string[];
 	content: string;
 	enabled: boolean;

@@ -128,10 +128,6 @@ export function getProfile(id: string): ProviderProfile | undefined {
 	return profileMap[id];
 }
 
-export function defaultEndpoint(id: string): string {
-	return profileMap[id]?.endpoint ?? '';
-}
-
 export const defaultEndpoints: Record<string, string> = Object.fromEntries(
 	providerProfiles.map((p) => [p.id, p.endpoint])
 );

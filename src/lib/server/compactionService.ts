@@ -35,7 +35,7 @@ import { broadcast } from '$lib/server/realtime.js';
  * "in this conversation" filler. The terse format keeps highlights dense
  * and lets the cap-truncation be lossless in practice.
  */
-export const DEFAULT_COMPACTION_PROMPT = `You compress the EARLIER portion of a roleplay/chat into a terse highlights list. The list is shown to the storytelling AI in place of the original messages — every line you write is a fact it can rely on.
+const DEFAULT_COMPACTION_PROMPT = `You compress the EARLIER portion of a roleplay/chat into a terse highlights list. The list is shown to the storytelling AI in place of the original messages — every line you write is a fact it can rely on.
 
 If a PREVIOUS HIGHLIGHTS block is provided, you MUST carry every still-relevant fact forward into the new list. Do NOT lose information.
 
@@ -63,7 +63,7 @@ function getUserSetting(userId: number, key: string): string | undefined {
 	return row?.value ?? undefined;
 }
 
-export type CompactionMode = 'window' | 'fixed';
+type CompactionMode = 'window' | 'fixed';
 
 export interface EffectiveCompactionSettings {
 	enabled: boolean;
@@ -131,7 +131,7 @@ export function shouldAutoCompact(promptTokens: number, availableForPrompt: numb
  * Upper bound: 4096 — past this we're spending more on the summary than we'd
  * save by compacting.
  */
-export function computeHighlightsCap(contextSize: number): number {
+function computeHighlightsCap(contextSize: number): number {
 	return Math.max(256, Math.min(Math.round(contextSize * 0.025), 4096));
 }
 

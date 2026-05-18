@@ -20,13 +20,6 @@ export function exportFileExists(userId: number): boolean {
 	return existsSync(exportFilePath(userId));
 }
 
-export function deleteExportFile(userId: number): void {
-	const p = exportFilePath(userId);
-	if (existsSync(p)) {
-		try { unlinkSync(p); } catch { /* ignore */ }
-	}
-}
-
 // In-progress job tracking — prevents duplicate concurrent runs.
 const running = new Set<number>();
 

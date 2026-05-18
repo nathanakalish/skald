@@ -8,7 +8,7 @@
 /**
  * Parse the wild zoo of LLM API error shapes into one short, readable line.
  */
-export function humanizeError(rawMessage: string): string {
+function humanizeError(rawMessage: string): string {
 	// Pull the status code out of "Provider API error (STATUS): body"
 	const match = rawMessage.match(/^(\w[\w.]*)\s+API error \((\d+)\):\s*([\s\S]*)$/);
 	if (!match) return rawMessage;

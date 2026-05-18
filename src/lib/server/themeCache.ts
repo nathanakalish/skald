@@ -59,7 +59,3 @@ export function invalidateForTheme(themeId: number): void {
 		}
 	}
 }
-
-export function clear(): void {
-	cache.clear();
-}

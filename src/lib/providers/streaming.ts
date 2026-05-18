@@ -7,8 +7,6 @@
  * "stream complete".
  */
 
-export type LineHandler = (jsonText: string) => boolean | void;
-
 /**
  * Async-iterator over an SSE stream that prefixes every line with `data: `.
  * Yields the JSON-text payload (the bit after `data: `) for each event.
@@ -109,23 +107,3 @@ export async function* iterateNDJSON(
 }
 
 /** Legacy callback-style wrappers, kept for any callers not yet migrated. */
-export async function readSSEStream(
-	body: ReadableStream<Uint8Array>,
-	onLine: LineHandler,
-	doneSentinel: string | null = '[DONE]'
-): Promise<void> {
-	for await (const data of iterateSSE(body, doneSentinel)) {
-		const stop = onLine(data);
-		if (stop === true) return;
-	}
-}
-
-export async function readNDJSONStream(
-	body: ReadableStream<Uint8Array>,
-	onLine: LineHandler
-): Promise<void> {
-	for await (const line of iterateNDJSON(body)) {
-		const stop = onLine(line);
-		if (stop === true) return;
-	}
-}
