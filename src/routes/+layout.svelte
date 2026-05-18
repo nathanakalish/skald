@@ -115,7 +115,7 @@
 
 	type PersistedPanel = 'chat' | 'settings' | 'lorebooks' | 'characters' | 'personas';
 	type PersistedMobileTab = 'chats' | 'characters' | 'lorebooks' | 'personas' | 'settings';
-	type PersistedSettingsTab = 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'account' | 'about' | 'instance' | 'users';
+	type PersistedSettingsTab = 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'import-export' | 'account' | 'about' | 'instance' | 'users';
 
 	const initialUiState = (() => {
 		const fallback = {
@@ -624,13 +624,15 @@
 		// branch below would no-op anyway.
 		if (typeof event.type === 'string' && event.type.includes(':')) {
 			if (event.type === 'export:ready') {
+				try { window.dispatchEvent(new CustomEvent('skald-export-ready')); } catch { /* ignore */ }
 				toasts.info('Backup ready — click to download', 0, () => {
 					showSettings = true;
-					settingsActiveTab = 'account';
+					settingsActiveTab = 'import-export';
 				});
 				return;
 			}
 			if (event.type === 'export:failed') {
+				try { window.dispatchEvent(new CustomEvent('skald-export-failed')); } catch { /* ignore */ }
 				toasts.error('Backup export failed');
 				return;
 			}
@@ -1445,7 +1447,7 @@
 	});
 
 	// Settings panel state (desktop embedded)
-	type SettingsTabId = 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'account' | 'about' | 'instance' | 'users';
+	type SettingsTabId = 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'import-export' | 'account' | 'about' | 'instance' | 'users';
 	let settingsActiveTab = $state<SettingsTabId>(initialUiState.settingsTab);
 	const settingsBaseTabs = [
 		{ id: 'providers' as const, label: 'Providers', icon: Server },
@@ -2844,7 +2846,6 @@
 					nestedEmphasisInSpeech={settings.nestedEmphasisInSpeech ?? true}
 					promptSlotOrder={settings.promptSlotOrder ?? ''}
 					user={data.user ?? null}
-					activeChatId={activeChatId}
 					onchatimported={handleImportedChat}
 					onclose={() => { showOnlyPanel('chats'); if (isMobile) mobileOpen = true; }}
 				/>

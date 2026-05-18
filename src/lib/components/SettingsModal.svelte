@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, Check, X, Server, Pencil, Trash2, Palette, Copy, Bell, GripVertical, Users, MessageSquare, Settings2, Info, User, RotateCcw, Sparkles, Type } from 'lucide-svelte';
+	import { Plus, Check, X, Server, Pencil, Trash2, Palette, Copy, Bell, GripVertical, Users, MessageSquare, Settings2, Info, User, RotateCcw, Sparkles, Type, PackageOpen } from 'lucide-svelte';
 	import Combobox, { type ComboboxItem } from '$lib/components/Combobox.svelte';
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { untrack } from 'svelte';
@@ -16,7 +16,7 @@
 	import AboutTab from '$lib/components/settings/AboutTab.svelte';
 	import UserManagementPanel from '$lib/components/settings/UserManagementPanel.svelte';
 	import ProviderListManager from '$lib/components/settings/ProviderListManager.svelte';
-	import DataExportImport from '$lib/components/settings/DataExportImport.svelte';
+	import ImportExport from '$lib/components/settings/ImportExport.svelte';
 	import SignedInDevices from '$lib/components/settings/SignedInDevices.svelte';
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { themesStore } from '$lib/stores/themes.svelte.js';
@@ -26,7 +26,7 @@
 		open: boolean;
 		embedded?: boolean;
 		mode?: 'modal' | 'embedded' | 'page';
-		activeTab?: 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'account' | 'about' | 'instance' | 'users';
+		activeTab?: 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'import-export' | 'account' | 'about' | 'instance' | 'users';
 		providers: any[];
 		themes: any[];
 		alwaysUseCharacterThemes: boolean;
@@ -80,7 +80,6 @@
 		nestedEmphasisInSpeech: boolean;
 		promptSlotOrder: string;
 		user: { id: number; username: string; role: string } | null;
-		activeChatId?: number | null;
 		onchatimported?: (chatId: number) => void;
 		onclose: () => void;
 	}
@@ -105,7 +104,7 @@
 		narrationOpacity = 100, narrationBold = false, narrationItalic = false,
 		nestedEmphasisInSpeech = true,
 		promptSlotOrder = '',
-		user = null, activeChatId = null, onchatimported, onclose
+		user = null, onchatimported, onclose
 	}: Props = $props();
 	const isAdmin = $derived(user?.role === 'admin');
 	const mode = $derived(modeProp ?? (embedded ? 'embedded' : 'modal'));
@@ -333,6 +332,7 @@
 		{ id: 'appearance', label: 'Appearance', icon: Palette },
 		{ id: 'chat', label: 'Chat', icon: MessageSquare },
 		{ id: 'notifications', label: 'Notifications', icon: Bell },
+		{ id: 'import-export', label: 'Import / Export', icon: PackageOpen },
 		{ id: 'account', label: 'Account', icon: User },
 	] as const;
 
@@ -343,7 +343,7 @@
 
 	const aboutTab = { id: 'about', label: 'About', icon: Info } as const;
 
-	type TabId = 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'account' | 'about' | 'instance' | 'users';
+	type TabId = 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'import-export' | 'account' | 'about' | 'instance' | 'users';
 
 	const tabs = $derived(isAdmin ? [...baseTabs, ...adminTabs, aboutTab] : [...baseTabs, aboutTab]);
 
@@ -1675,9 +1675,10 @@
 							</div>
 
 							<SignedInDevices />
-
-							<DataExportImport activeChatId={activeChatId ?? null} {onchatimported} />
 						</div>
+
+				{:else if activeTab === 'import-export'}
+						<ImportExport {onchatimported} />
 
 				{:else if activeTab === 'notifications'}
 						<!-- Notifications Tab -->

@@ -19,7 +19,9 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { toCharaCardJSON, embedCharaCardInPNG } from '$lib/services/character.js';
 import { getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
 
-export const BUNDLE_VERSION = 1;
+export const BUNDLE_VERSION = 2;
+
+export type BundleType = 'everything' | 'characters' | 'lorebooks' | 'chats';
 
 /**
  * Stable fingerprint of a character's content. Two characters with identical
@@ -254,6 +256,7 @@ export async function buildEverythingBundle(userId: number, opts: BundleOptions)
 	const manifest = {
 		schema: 'skald-bundle',
 		version: BUNDLE_VERSION,
+		bundleType: 'everything' as BundleType,
 		exportedAt: new Date().toISOString(),
 		counts,
 		options: opts
@@ -264,56 +267,196 @@ export async function buildEverythingBundle(userId: number, opts: BundleOptions)
 	return { buffer, counts };
 }
 
-/** Build a "character + chats + lorebook" zip. */
-export async function buildCharacterBundle(userId: number, characterId: number): Promise<{ buffer: Buffer; counts: BundleCounts; characterName: string } | null> {
-	const character = db.select().from(characters)
-		.where(and(eq(characters.id, characterId), eq(characters.userId, userId)))
-		.get();
-	if (!character) return null;
-
+/**
+ * Build a zip containing a selected set of characters. Lorebooks attached to those
+ * characters are always included. Chats are optional.
+ *
+ * Any IDs the user doesn't own are silently skipped — the DB query filters by userId,
+ * so passing a stranger's id just means it won't appear in the bundle.
+ */
+export async function buildCharactersBundle(
+	userId: number,
+	characterIds: number[],
+	opts: { includeChats?: boolean } = {}
+): Promise<{ buffer: Buffer; counts: BundleCounts }> {
 	const zip = new JSZip();
 	const counts: BundleCounts = { characters: 0, chats: 0, lorebooks: 0, personas: 0, providers: 0, themes: 0 };
 
-	const exported = await addCharacterToZip(zip, character);
-	counts.characters = 1;
-
-	const charChats = db.select().from(chats)
-		.where(and(eq(chats.userId, userId), eq(chats.characterId, characterId)))
-		.all();
-	const charMessages = charChats.length > 0
-		? db.select().from(messages).where(inArray(messages.chatId, charChats.map(c => c.id))).all()
+	const rows = characterIds.length > 0
+		? db.select().from(characters).where(and(eq(characters.userId, userId), inArray(characters.id, characterIds))).all()
 		: [];
-	const msgsByChat = new Map<number, typeof messages.$inferSelect[]>();
-	for (const m of charMessages) {
-		const list = msgsByChat.get(m.chatId);
-		if (list) list.push(m);
-		else msgsByChat.set(m.chatId, [m]);
-	}
-	for (const c of charChats) {
-		addChatToZip(zip, c, exported.fingerprint, msgsByChat.get(c.id) ?? []);
-		counts.chats++;
+
+	const fpById = new Map<number, string>();
+	for (const c of rows) {
+		const exported = await addCharacterToZip(zip, c);
+		fpById.set(c.id, exported.fingerprint);
+		counts.characters++;
 	}
 
-	const charLorebooks = db.select().from(lorebooks)
-		.where(and(eq(lorebooks.userId, userId), eq(lorebooks.characterId, characterId)))
-		.all();
-	for (const lb of charLorebooks) {
-		addLorebookToZip(zip, lb, exported.fingerprint);
+	// Lorebooks attached to any of these characters — always included.
+	const ownedIds = rows.map(r => r.id);
+	const attachedLorebooks = ownedIds.length > 0
+		? db.select().from(lorebooks).where(and(eq(lorebooks.userId, userId), inArray(lorebooks.characterId, ownedIds))).all()
+		: [];
+	for (const lb of attachedLorebooks) {
+		const fp = lb.characterId ? fpById.get(lb.characterId) ?? null : null;
+		addLorebookToZip(zip, lb, fp);
+		counts.lorebooks++;
+	}
+
+	if (opts.includeChats && ownedIds.length > 0) {
+		const charChats = db.select().from(chats).where(and(eq(chats.userId, userId), inArray(chats.characterId, ownedIds))).all();
+		const chatIds = charChats.map(c => c.id);
+		const allMessages = chatIds.length > 0
+			? db.select().from(messages).where(inArray(messages.chatId, chatIds)).all()
+			: [];
+		const msgsByChat = new Map<number, typeof messages.$inferSelect[]>();
+		for (const m of allMessages) {
+			const list = msgsByChat.get(m.chatId);
+			if (list) list.push(m); else msgsByChat.set(m.chatId, [m]);
+		}
+		for (const c of charChats) {
+			const fp = fpById.get(c.characterId) ?? '';
+			addChatToZip(zip, c, fp, msgsByChat.get(c.id) ?? []);
+			counts.chats++;
+		}
+
+		// chat_lorebooks for re-linking on import
+		const clb = chatIds.length > 0
+			? db.select().from(chatLorebooks).where(inArray(chatLorebooks.chatId, chatIds)).all()
+			: [];
+		zip.file('chat_lorebooks.json', JSON.stringify(clb, null, 2));
+	}
+
+	const manifest = {
+		schema: 'skald-bundle',
+		version: BUNDLE_VERSION,
+		bundleType: 'characters' as BundleType,
+		exportedAt: new Date().toISOString(),
+		counts,
+		options: { includeChats: !!opts.includeChats }
+	};
+	zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+	return { buffer, counts };
+}
+
+/** Build a zip containing only selected lorebooks. */
+export async function buildLorebooksBundle(
+	userId: number,
+	lorebookIds: number[]
+): Promise<{ buffer: Buffer; counts: BundleCounts }> {
+	const zip = new JSZip();
+	const counts: BundleCounts = { characters: 0, chats: 0, lorebooks: 0, personas: 0, providers: 0, themes: 0 };
+
+	const rows = lorebookIds.length > 0
+		? db.select().from(lorebooks).where(and(eq(lorebooks.userId, userId), inArray(lorebooks.id, lorebookIds))).all()
+		: [];
+
+	// We need character fingerprints for any linked characters so the import side
+	// can re-attach them. Look those characters up (filtered to this user) and
+	// compute fingerprints without bundling the character card itself.
+	const linkedCharIds = Array.from(new Set(rows.map(r => r.characterId).filter((x): x is number => x != null)));
+	const linkedChars = linkedCharIds.length > 0
+		? db.select().from(characters).where(and(eq(characters.userId, userId), inArray(characters.id, linkedCharIds))).all()
+		: [];
+	const fpByCharId = new Map<number, string>();
+	for (const c of linkedChars) {
+		fpByCharId.set(c.id, characterFingerprint({
+			name: c.name, description: c.description, personality: c.personality,
+			firstMessage: c.firstMessage, scenario: c.scenario
+		}));
+	}
+
+	for (const lb of rows) {
+		const fp = lb.characterId ? fpByCharId.get(lb.characterId) ?? null : null;
+		addLorebookToZip(zip, lb, fp);
 		counts.lorebooks++;
 	}
 
 	const manifest = {
 		schema: 'skald-bundle',
 		version: BUNDLE_VERSION,
-		kind: 'character',
+		bundleType: 'lorebooks' as BundleType,
 		exportedAt: new Date().toISOString(),
-		characterName: character.name,
 		counts
 	};
 	zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
 	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 3 } });
-	return { buffer, counts, characterName: character.name };
+	return { buffer, counts };
+}
+
+/** Build a zip containing selected chats. Optionally bundles the character card(s). */
+export async function buildChatsBundle(
+	userId: number,
+	chatIds: number[],
+	opts: { includeCharacterCard?: boolean } = {}
+): Promise<{ buffer: Buffer; counts: BundleCounts }> {
+	const zip = new JSZip();
+	const counts: BundleCounts = { characters: 0, chats: 0, lorebooks: 0, personas: 0, providers: 0, themes: 0 };
+
+	const chatRows = chatIds.length > 0
+		? db.select().from(chats).where(and(eq(chats.userId, userId), inArray(chats.id, chatIds))).all()
+		: [];
+	const ownedChatIds = chatRows.map(c => c.id);
+
+	const charIds = Array.from(new Set(chatRows.map(c => c.characterId)));
+	const charRows = charIds.length > 0
+		? db.select().from(characters).where(and(eq(characters.userId, userId), inArray(characters.id, charIds))).all()
+		: [];
+
+	const fpByCharId = new Map<number, string>();
+	if (opts.includeCharacterCard) {
+		// Bundle the cards AND remember fingerprints.
+		for (const c of charRows) {
+			const exported = await addCharacterToZip(zip, c);
+			fpByCharId.set(c.id, exported.fingerprint);
+			counts.characters++;
+		}
+	} else {
+		// Skip cards, but still emit fingerprints so import can match existing characters.
+		for (const c of charRows) {
+			fpByCharId.set(c.id, characterFingerprint({
+				name: c.name, description: c.description, personality: c.personality,
+				firstMessage: c.firstMessage, scenario: c.scenario
+			}));
+		}
+	}
+
+	const allMessages = ownedChatIds.length > 0
+		? db.select().from(messages).where(inArray(messages.chatId, ownedChatIds)).all()
+		: [];
+	const msgsByChat = new Map<number, typeof messages.$inferSelect[]>();
+	for (const m of allMessages) {
+		const list = msgsByChat.get(m.chatId);
+		if (list) list.push(m); else msgsByChat.set(m.chatId, [m]);
+	}
+	for (const c of chatRows) {
+		const fp = fpByCharId.get(c.characterId) ?? '';
+		addChatToZip(zip, c, fp, msgsByChat.get(c.id) ?? []);
+		counts.chats++;
+	}
+
+	// Bundle chat_lorebooks links so import re-attaches them when both sides exist.
+	const clb = ownedChatIds.length > 0
+		? db.select().from(chatLorebooks).where(inArray(chatLorebooks.chatId, ownedChatIds)).all()
+		: [];
+	zip.file('chat_lorebooks.json', JSON.stringify(clb, null, 2));
+
+	const manifest = {
+		schema: 'skald-bundle',
+		version: BUNDLE_VERSION,
+		bundleType: 'chats' as BundleType,
+		exportedAt: new Date().toISOString(),
+		counts,
+		options: { includeCharacterCard: !!opts.includeCharacterCard }
+	};
+	zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+	const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+	return { buffer, counts };
 }
 
 function safeJSON<T>(s: string | null | undefined, fallback: T): T {
