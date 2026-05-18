@@ -2,6 +2,7 @@
 	import { Plus, Pencil, Trash2, MessageSquare, Users, X, Upload, Download, Loader2, Smartphone, Search, ArrowUpDown, BookOpen, Palette, Globe, LayoutGrid, List, Sparkles } from 'lucide-svelte';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import CharacterEditModal from '$lib/components/CharacterEditModal.svelte';
@@ -731,7 +732,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Characters" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Characters" tabindex="-1" use:focusTrap
 		onkeydown={(e) => e.key === 'Escape' && onclose()}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->

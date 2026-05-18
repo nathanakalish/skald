@@ -192,9 +192,21 @@ export interface RunCompactionOptions {
  */
 const inFlight = new Set<number>();
 
-export async function runCompaction(chatId: number, opts: RunCompactionOptions = {}): Promise<CompactionResult> {
-	if (inFlight.has(chatId)) return { ran: false, reason: 'already-running' };
+/**
+ * Atomic check-and-add. JS doesn't expose a single-op primitive for this on
+ * `Set`, so atomicity relies on Node's single-threaded event loop: the `has`
+ * and `add` calls below MUST execute as one synchronous step. Do not introduce
+ * `await`, async work, or any function call that can yield between them.
+ * Returns true if the caller acquired the mutex, false if someone else holds it.
+ */
+function acquireInFlight(chatId: number): boolean {
+	if (inFlight.has(chatId)) return false;
 	inFlight.add(chatId);
+	return true;
+}
+
+export async function runCompaction(chatId: number, opts: RunCompactionOptions = {}): Promise<CompactionResult> {
+	if (!acquireInFlight(chatId)) return { ran: false, reason: 'already-running' };
 	const startedAt = Date.now();
 	logger.info('compaction: triggered', { chatId, reason: opts.force ? 'manual' : 'auto_threshold' });
 	try {
@@ -371,8 +383,7 @@ async function runCompactionInner(chatId: number, opts: RunCompactionOptions): P
  * a second re-process still works).
  */
 export async function runReprocess(chatId: number): Promise<CompactionResult> {
-	if (inFlight.has(chatId)) return { ran: false, reason: 'already-running' };
-	inFlight.add(chatId);
+	if (!acquireInFlight(chatId)) return { ran: false, reason: 'already-running' };
 	const startedAt = Date.now();
 	logger.info('compaction: reprocess triggered', { chatId });
 	try {

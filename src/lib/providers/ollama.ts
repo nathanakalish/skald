@@ -1,4 +1,4 @@
-import { LLMProvider, type ChatMessage, type SamplerSettings, type StreamChunk } from './base.js';
+import { LLMProvider, type ChatMessage, type SamplerSettings, type StreamChunk, type TestConnectionResult } from './base.js';
 import { iterateNDJSON } from './streaming.js';
 
 /**
@@ -63,13 +63,22 @@ export class OllamaProvider extends LLMProvider {
 		}
 	}
 
-	async testConnection(): Promise<boolean> {
+	async testConnection(): Promise<TestConnectionResult> {
+		const t0 = Date.now();
 		try {
 			await this.guardEndpoint();
 			const response = await fetch(`${this.config.endpoint}/api/tags`);
-			return response.ok;
-		} catch {
-			return false;
+			if (!response.ok) {
+				return { ok: false, latencyMs: Date.now() - t0, error: `HTTP ${response.status}` };
+			}
+			let modelCount: number | undefined;
+			try {
+				const data = await response.json();
+				if (Array.isArray(data?.models)) modelCount = data.models.length;
+			} catch { /* tags shape changes across ollama versions */ }
+			return { ok: true, latencyMs: Date.now() - t0, modelCount };
+		} catch (err) {
+			return { ok: false, latencyMs: Date.now() - t0, error: err instanceof Error ? err.message : String(err) };
 		}
 	}
 }

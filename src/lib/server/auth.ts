@@ -97,7 +97,16 @@ function bumpSessionLastSeen(hashedToken: string): void {
 	lastSeenCache.set(hashedToken, now);
 	try {
 		db.update(sessions).set({ lastSeenAt: sqlNow() }).where(eq(sessions.id, hashedToken)).run();
-	} catch { /* best-effort — must never crash the request path */ }
+	} catch (err) {
+		// Best-effort: never crash the request path on a bookkeeping update.
+		// But don't fully swallow either — silent failures here mask real DB
+		// problems (locked file, corrupted index, full disk) since lastSeenAt
+		// touches a hot row on every request.
+		logger.warn('auth: lastSeenAt bump failed', {
+			sessionIdPrefix: hashedToken.slice(0, 12),
+			err: String(err),
+		});
+	}
 }
 
 /** Delete a session (logout). */

@@ -622,6 +622,25 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		);
 	`);
 
+	// Append-only audit trail for admin settings changes. Logs are ephemeral
+	// (stderr), so for compliance we also persist who changed what when. Null
+	// admin_user_id keeps history readable after the admin's user row is deleted.
+	sqlite.exec(`
+		CREATE TABLE IF NOT EXISTS admin_settings_audit (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			key TEXT NOT NULL,
+			from_value TEXT,
+			to_value TEXT NOT NULL,
+			admin_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+			admin_username TEXT,
+			changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+		CREATE INDEX IF NOT EXISTS idx_admin_settings_audit_changed_at
+			ON admin_settings_audit(changed_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_admin_settings_audit_key
+			ON admin_settings_audit(key);
+	`);
+
 	// Drop the leftover handoff table from the brief nonce-based OIDC flow.
 	// Harmless if the table never existed.
 	sqlite.exec('DROP TABLE IF EXISTS pending_oidc_logins');

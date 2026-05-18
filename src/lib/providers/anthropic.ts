@@ -1,4 +1,4 @@
-import { LLMProvider, type ChatMessage, type SamplerSettings, type StreamChunk } from './base.js';
+import { LLMProvider, type ChatMessage, type SamplerSettings, type StreamChunk, type TestConnectionResult } from './base.js';
 import { iterateSSE } from './streaming.js';
 
 /**
@@ -174,7 +174,8 @@ export class AnthropicProvider extends LLMProvider {
 		];
 	}
 
-	async testConnection(): Promise<boolean> {
+	async testConnection(): Promise<TestConnectionResult> {
+		const t0 = Date.now();
 		try {
 			await this.guardEndpoint();
 			// Hit /models to validate the API key without burning tokens.
@@ -184,7 +185,14 @@ export class AnthropicProvider extends LLMProvider {
 					'anthropic-version': '2023-06-01'
 				}
 			});
-			if (response.ok) return true;
+			if (response.ok) {
+				let modelCount: number | undefined;
+				try {
+					const data = await response.json();
+					if (Array.isArray(data?.data)) modelCount = data.data.length;
+				} catch { /* shape may vary across versions; latency still useful */ }
+				return { ok: true, latencyMs: Date.now() - t0, modelCount };
+			}
 
 			// Fallback: tiniest possible message request.
 			const msgResponse = await fetch(`${this.config.endpoint}/messages`, {
@@ -200,9 +208,9 @@ export class AnthropicProvider extends LLMProvider {
 					max_tokens: 1
 				})
 			});
-			return msgResponse.ok;
-		} catch {
-			return false;
+			return { ok: msgResponse.ok, latencyMs: Date.now() - t0 };
+		} catch (err) {
+			return { ok: false, latencyMs: Date.now() - t0, error: err instanceof Error ? err.message : String(err) };
 		}
 	}
 }

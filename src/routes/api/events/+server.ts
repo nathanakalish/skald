@@ -46,6 +46,9 @@ export const GET: RequestHandler = (requestEvent) => {
 			function safeEnqueue(chunk: Uint8Array): boolean {
 				const desired = controller.desiredSize ?? 0;
 				if (desired < SSE_BACKPRESSURE_LIMIT) {
+					logger.warn('sse: backpressure threshold exceeded, closing slow consumer', {
+						userId: user.id, sessionId, desiredSize: desired,
+					});
 					try { controller.close(); } catch { /* already closed */ }
 					cleanup();
 					return false;
@@ -109,7 +112,16 @@ export const GET: RequestHandler = (requestEvent) => {
 			}
 
 			unsubscribe = eventBus.subscribe((event) => {
-				// Only forward events for this user's chats.
+				// `server-shutdown` is a broadcast to every connection — forward it
+				// regardless of userId, then close so the client can reconnect to
+				// the new process on its normal backoff.
+				if (event.type === 'server-shutdown') {
+					send(event.id, JSON.stringify(event));
+					try { controller.close(); } catch { /* already closed */ }
+					cleanup();
+					return;
+				}
+				// Otherwise only forward events for this user's chats.
 				if (event.userId === user.id) {
 					send(event.id, JSON.stringify(event));
 				}

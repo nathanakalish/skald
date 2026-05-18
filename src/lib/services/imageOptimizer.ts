@@ -57,6 +57,10 @@ export async function optimizeAvatar(buffer: Buffer, maxSize = 512): Promise<Buf
  * Skips SVGs and GIFs (animated).
  */
 export async function optimizeCachedImage(buffer: Buffer, ext: string, maxSize = 1920): Promise<{ buffer: Buffer; ext: string } | null> {
+	// Skip SVG (sharp would rasterize and lose vector data) and GIF (sharp's
+	// WebP encoder serializes only the first frame, which silently turns
+	// animated reactions/avatars into a single still image). Better to serve
+	// the original than break the animation.
 	const skipFormats = ['.svg', '.gif'];
 	if (skipFormats.includes(ext.toLowerCase())) return null;
 

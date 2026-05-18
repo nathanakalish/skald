@@ -128,6 +128,10 @@
 		use:tooltip={messageTimestamps !== 'off' && message.createdAt ? getMessageTime(message.createdAt) : undefined}
 		data-reformatting={isReformatting ? '' : undefined}
 	>
+		<!-- FRONT-M6: sighted users get the timestamp via tooltip on hover; screen readers get it here. Skipped entirely when timestamps are toggled off. -->
+		{#if messageTimestamps !== 'off' && message.createdAt}
+			<time datetime={message.createdAt} class="sr-only">{getMessageTime(message.createdAt)}</time>
+		{/if}
 		{#if isEditing}
 			<textarea
 				bind:value={editContent}

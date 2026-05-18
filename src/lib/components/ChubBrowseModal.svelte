@@ -2,6 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { Search, X, Loader2, Globe, BookOpen, Users, Download, AlertTriangle, ArrowLeft, Link2, SlidersHorizontal, Plus, ChevronDown, Check } from 'lucide-svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
@@ -651,7 +652,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Browse CHUB" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Browse CHUB" tabindex="-1" use:focusTrap
 		onkeydown={(e) => {
 			if (e.key !== 'Escape') return;
 			if (sortOpen) sortOpen = false;

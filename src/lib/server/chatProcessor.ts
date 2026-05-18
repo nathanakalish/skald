@@ -22,6 +22,7 @@ import { logger } from '$lib/server/logger.js';
 import { bumpChatTail } from '$lib/db/chatTail.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { activeGenerations } from '$lib/server/activeGenerations.js';
+import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
 import { buildChatContext, type ProcessOptions } from '$lib/server/prompt/index.js';
 import { ThinkingTagParser } from './chatStreamParser.js';
 import { resolveCompactionSettings, runCompaction, shouldAutoCompact } from './compactionService.js';
@@ -70,12 +71,23 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			const settings = resolveCompactionSettings(ctx.chat, ctx.chatUserId);
 			if (settings.enabled && shouldAutoCompact(ctx.tokenStats.promptTokens, ctx.tokenStats.availableForPrompt, settings.threshold)) {
 				const result = await runCompaction(chatId);
-				if (result.ran) {
-					ctx = buildChatContext(chatId, opts);
-				}
+				// Always rebuild ctx after a compaction attempt: a successful run
+				// shrinks history, and even a refusal (`already-running`) means a
+				// concurrent run may have already updated `compactedUpToMessageId`.
+				// The rebuild is cheap relative to an LLM call.
+				ctx = buildChatContext(chatId, opts);
+				logger.debug('chatProcessor: post-compaction rebuild', {
+					chatId, ran: result.ran, reason: result.reason,
+					promptTokens: ctx.tokenStats.promptTokens,
+					availableForPrompt: ctx.tokenStats.availableForPrompt,
+				});
 			}
 		} catch (err) {
-			logger.warn('chatProcessor: auto-compaction failed (continuing without)', { chatId, err: String(err) });
+			logger.warn('chatProcessor: auto-compaction failed, rebuilding context', { chatId, err: String(err) });
+			// Rebuild even on throw so we don't reuse a stale ctx — the provider
+			// then either fits the over-budget prompt or returns its own context
+			// error, which is more accurate than us silently truncating.
+			try { ctx = buildChatContext(chatId, opts); } catch { /* keep original ctx */ }
 		}
 	}
 
@@ -347,9 +359,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			const lastAssistant = pathMsgs.filter(m => m.role === 'assistant').pop();
 
 			if (lastAssistant) {
-				const swipes: string[] = JSON.parse(lastAssistant.swipes || '[]');
+				const swipes = parseSwipes(lastAssistant.swipes);
 				swipes.push(cachedResponse);
-				const reasoningSwipes: string[] = JSON.parse(lastAssistant.reasoning || '[]');
+				const reasoningSwipes = parseReasoning(lastAssistant.reasoning);
 				reasoningSwipes.push(fullReasoning || '');
 				const newIndex = swipes.length - 1;
 				db.update(messages)
@@ -502,8 +514,13 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			const tz = db.select().from(userSettings)
 				.where(and(eq(userSettings.userId, chatUserId), eq(userSettings.key, 'userTimezone')))
 				.get()?.value || undefined;
-			let userNow = new Date();
+			// Only evaluate quiet hours when we actually know the user's tz.
+			// The client auto-syncs it on connect, so an empty value just means
+			// "we haven't heard from a browser yet" — better to allow the push
+			// through than to false-positive against server-local time, which
+			// also handles DST wrong if the server is on UTC.
 			if (tz) {
+				let userNow = new Date();
 				try {
 					const parts = new Intl.DateTimeFormat('en-US', {
 						timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit'
@@ -511,9 +528,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 					const hh = Number(parts.find(p => p.type === 'hour')?.value ?? '0');
 					const mm = Number(parts.find(p => p.type === 'minute')?.value ?? '0');
 					userNow = new Date(2000, 0, 1, hh, mm);
-				} catch { /* fall back to server time */ }
+					withinQuiet = isWithinQuietHours(qhStart, qhEnd, userNow);
+				} catch { /* invalid tz somehow — leave withinQuiet=false */ }
 			}
-			withinQuiet = isWithinQuietHours(qhStart, qhEnd, userNow);
 		}
 
 		const shouldSendPush = !chatMuted && !viewedElsewhere && !appOpenSomewhere && !withinQuiet;

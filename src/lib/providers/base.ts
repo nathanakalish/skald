@@ -25,6 +25,19 @@ export interface StreamChunk {
 	text: string;
 }
 
+/**
+ * Result of a provider connectivity check. `ok` is the only required field;
+ * `latencyMs` and `modelCount` are populated when the test path can derive
+ * them cheaply, and surface in the settings UI so operators can spot a slow
+ * or empty provider before they ship a chat to it.
+ */
+export interface TestConnectionResult {
+	ok: boolean;
+	latencyMs?: number;
+	modelCount?: number;
+	error?: string;
+}
+
 export abstract class LLMProvider {
 	protected config: ProviderConfig;
 
@@ -42,7 +55,7 @@ export abstract class LLMProvider {
 
 	abstract listModels(): Promise<string[]>;
 
-	abstract testConnection(): Promise<boolean>;
+	abstract testConnection(): Promise<TestConnectionResult>;
 
 	/**
 	 * SSRF guard for the configured endpoint. Resolves the endpoint hostname

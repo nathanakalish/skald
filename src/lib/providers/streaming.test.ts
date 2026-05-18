@@ -100,4 +100,20 @@ describe('iterateNDJSON', () => {
 		const out = await collect(iterateNDJSON(stream));
 		expect(out).toEqual(['{"a":1}', '{"a":2}']);
 	});
+
+	it('flushes trailing content not terminated with \\n (PROV-M3)', async () => {
+		const stream = streamFrom([
+			'{"a":1}\n{"a":2}'
+		]);
+		const out = await collect(iterateNDJSON(stream));
+		expect(out).toEqual(['{"a":1}', '{"a":2}']);
+	});
+
+	it('drops whitespace-only trailing buffer', async () => {
+		const stream = streamFrom([
+			'{"a":1}\n   '
+		]);
+		const out = await collect(iterateNDJSON(stream));
+		expect(out).toEqual(['{"a":1}']);
+	});
 });

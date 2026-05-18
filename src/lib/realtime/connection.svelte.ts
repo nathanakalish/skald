@@ -84,8 +84,16 @@ export function createRealtimeConnection({
 		// silent retry ALSO fails do we surface a "Disconnected" toast.
 		let failedAttempts = 0;
 		let disconnectToastShown = false;
-		const RECONNECT_INTERVAL = 5000;
+		// Exponential backoff with full jitter (AWS-style). At 5s base / 60s cap and
+		// 2x growth: 5s, 10s, 20s, 40s, 60s, 60s, … with each delay randomised in
+		// [0, delay) so N tabs reconnecting after a server bounce don't thunder.
+		const RECONNECT_BASE_MS = 5000;
+		const RECONNECT_CAP_MS = 60_000;
 		const GIVE_UP_AFTER = 3 * 60 * 1000;
+		function nextReconnectDelay(): number {
+			const exp = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * 2 ** failedAttempts);
+			return Math.floor(Math.random() * exp);
+		}
 
 		async function checkVersion() {
 			if (reloadingForUpdate || versionCheckInFlight) return;
@@ -157,7 +165,7 @@ export function createRealtimeConnection({
 			reconnectTimer = setTimeout(() => {
 				reconnectTimer = null;
 				connect();
-			}, RECONNECT_INTERVAL);
+			}, nextReconnectDelay());
 		}
 
 		function connect() {

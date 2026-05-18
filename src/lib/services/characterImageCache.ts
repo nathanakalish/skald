@@ -3,6 +3,7 @@ import { db } from '$lib/db/index.js';
 import { characters } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { logger } from '$lib/server/logger.js';
+import { parseStringArray } from '$lib/jsonSafe.js';
 
 /**
  * Helpers that cache remote images referenced by character rows.
@@ -123,12 +124,7 @@ export async function ensureCharacterImagesCached(character: CharacterRow): Prom
 
 	// 3. Inline images in firstMessage + alternateGreetings.
 	const hasRemoteImg = (s: string | null | undefined) => !!s && /!\[[^\]]*\]\(https?:\/\//.test(s);
-	let altsArr: string[] = [];
-	try {
-		altsArr = JSON.parse(character.alternateGreetings || '[]');
-	} catch {
-		altsArr = [];
-	}
+	const altsArr = parseStringArray(character.alternateGreetings);
 	if (hasRemoteImg(character.firstMessage) || altsArr.some(hasRemoteImg)) {
 		try {
 			const cachedFirst = character.firstMessage

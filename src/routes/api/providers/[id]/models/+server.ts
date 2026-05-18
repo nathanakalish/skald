@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { providers } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
+import { retryOnce } from '$lib/providers/retry.js';
 import { requireUser } from '$lib/server/auth.js';
 
 export const GET: RequestHandler = async (event) => {
@@ -22,7 +23,7 @@ export const GET: RequestHandler = async (event) => {
 			model: provider.defaultModel || ''
 		});
 
-		const models = await llm.listModels();
+		const models = await retryOnce(() => llm.listModels());
 		return json({ models });
 	} catch (err) {
 		return json(

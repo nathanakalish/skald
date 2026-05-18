@@ -5,7 +5,7 @@
  * while the new one is building.
  */
 import { join } from 'path';
-import { existsSync, unlinkSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, unlinkSync, mkdirSync, writeFileSync, renameSync } from 'fs';
 import { buildEverythingBundle, type BundleOptions } from './bundle.js';
 import { broadcast } from './realtime.js';
 import { logger } from './logger.js';
@@ -39,19 +39,26 @@ export function startExportJob(userId: number, opts: BundleOptions): boolean {
 	if (running.has(userId)) return false;
 	running.add(userId);
 
-	// Delete the previous file now so the download button disappears while
-	// the new one is building — no stale downloads.
-	deleteExportFile(userId);
 	mkdirSync(EXPORT_DIR, { recursive: true });
+	// Write to a .tmp sibling first so a crash mid-build doesn't blow away the
+	// last good export. Only swap in place on success. If a .tmp from a prior
+	// crash exists, drop it before we start.
+	const finalPath = exportFilePath(userId);
+	const tmpPath = finalPath + '.tmp';
+	if (existsSync(tmpPath)) {
+		try { unlinkSync(tmpPath); } catch { /* ignore */ }
+	}
 
 	void (async () => {
 		try {
 			const result = await buildEverythingBundle(userId, opts);
-			writeFileSync(exportFilePath(userId), result.buffer);
+			writeFileSync(tmpPath, result.buffer);
+			renameSync(tmpPath, finalPath); // atomic on the same filesystem
 			logger.info('background export complete', { userId });
 			broadcast(userId, { type: 'export:ready' });
 		} catch (err) {
 			logger.error('background export failed', { userId, err: String(err) });
+			try { unlinkSync(tmpPath); } catch { /* may not exist */ }
 			broadcast(userId, { type: 'export:failed' });
 		} finally {
 			running.delete(userId);

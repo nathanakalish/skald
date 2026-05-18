@@ -3,6 +3,7 @@
 	import { Plus, BookOpen, Pencil, Trash2, X, Upload, Search, ArrowUpDown, Globe } from 'lucide-svelte';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import LorebookEditModal from '$lib/components/LorebookEditModal.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
@@ -306,7 +307,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Lorebooks" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Lorebooks" tabindex="-1" use:focusTrap
 		onkeydown={(e) => e.key === 'Escape' && onclose()}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->

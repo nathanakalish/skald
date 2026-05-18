@@ -59,6 +59,7 @@ WITH RECURSIVE path(id, parent_id, depth) AS (
 	SELECT m.id, m.parent_id, p.depth + 1
 	FROM messages m
 	JOIN path p ON m.id = p.parent_id
+	WHERE p.depth < 100000
 )
 SELECT m.* FROM messages m
 JOIN path p ON p.id = m.id
@@ -68,14 +69,22 @@ ORDER BY p.depth DESC
 // Count only — walks id+parent_id (no large content columns), much cheaper
 // than SELECT m.* for long conversations.
 const COUNT_SQL = `
-WITH RECURSIVE path(id, parent_id) AS (
-	SELECT id, parent_id FROM messages WHERE id = ?
+WITH RECURSIVE path(id, parent_id, depth) AS (
+	SELECT id, parent_id, 0 FROM messages WHERE id = ?
 	UNION ALL
-	SELECT m.id, m.parent_id FROM messages m
+	SELECT m.id, m.parent_id, p.depth + 1 FROM messages m
 	JOIN path p ON m.id = p.parent_id
+	WHERE p.depth < 100000
 )
 SELECT COUNT(*) AS total FROM path
 `;
+
+// The depth < 100000 cap on PATH_SQL / COUNT_SQL is a cycle guard. parent_id
+// is foreign-key constrained but not topology-checked, so a manual DB edit or
+// a buggy import could in theory create a parent_id loop. Without the cap a
+// cycle would walk the recursive CTE until SQLite or Node OOMs. 100k is well
+// above any plausible chat depth (deepest chats observed: low hundreds) but
+// low enough to bound worst-case memory.
 
 // Bounded walk: only traverse maxDepth+1 steps from the leaf so we don't
 // load thousands of full message rows just to paginate them in JS.

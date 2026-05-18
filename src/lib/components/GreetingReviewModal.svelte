@@ -3,6 +3,7 @@
 	import { X, Check, CheckCheck, ChevronLeft, ChevronRight, RefreshCw, FileText, Sparkles, Square } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import { renderRoleplay } from '$lib/utils/rp-format.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 
@@ -126,7 +127,7 @@
 {#if modal.visible}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div class="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}" role="dialog" aria-modal="true" aria-label="Review Greetings" tabindex="-1" onclick={onclose}>
+	<div class="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}" role="dialog" aria-modal="true" aria-label="Review Greetings" tabindex="-1" use:focusTrap onclick={onclose}>
 		<div
 			class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			onclick={(e) => e.stopPropagation()}

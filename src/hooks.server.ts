@@ -10,6 +10,7 @@ import { checkRateLimit } from '$lib/server/rateLimit.js';
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
 import * as themeCache from '$lib/server/themeCache.js';
 import { isOidcEnabled } from '$lib/server/oidc.js';
+import { eventBus } from '$lib/server/eventBus.js';
 
 // One-shot boot banner so operators can immediately see the build, runtime,
 // and which subsystems are wired up.
@@ -29,7 +30,15 @@ setInterval(() => cleanupExpiredSessions(), 60 * 60 * 1000).unref();
 
 // Graceful shutdown signal logging — the actual DB close lives in src/lib/db/index.ts.
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
-	process.on(sig, () => logger.info('shutdown signal received', { signal: sig }));
+	process.on(sig, () => {
+		logger.info('shutdown signal received', { signal: sig });
+		// Best-effort flush: notify connected SSE clients so they can close cleanly
+		// and start their reconnect backoff against the new process. Synchronous
+		// dispatch means it lands before the runtime tears down sockets.
+		try { eventBus.shutdown(); } catch (err) {
+			logger.warn('eventBus.shutdown failed', { err: String(err) });
+		}
+	});
 }
 
 // Last line of defence — if something escapes all our try/catches, at least it ends up in the logs.

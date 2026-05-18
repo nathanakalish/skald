@@ -1,4 +1,4 @@
-import { LLMProvider, type ChatMessage, type SamplerSettings, type StreamChunk } from './base.js';
+import { LLMProvider, type ChatMessage, type SamplerSettings, type StreamChunk, type TestConnectionResult } from './base.js';
 import { iterateSSE } from './streaming.js';
 
 /**
@@ -86,12 +86,17 @@ export class OpenAIProvider extends LLMProvider {
 		return (data.data || []).map((m: { id: string }) => m.id).sort();
 	}
 
-	async testConnection(): Promise<boolean> {
+	async testConnection(): Promise<TestConnectionResult> {
+		const t0 = Date.now();
 		try {
 			const models = await this.listModels();
-			return models.length > 0;
-		} catch {
-			return false;
+			return {
+				ok: models.length > 0,
+				latencyMs: Date.now() - t0,
+				modelCount: models.length,
+			};
+		} catch (err) {
+			return { ok: false, latencyMs: Date.now() - t0, error: err instanceof Error ? err.message : String(err) };
 		}
 	}
 }

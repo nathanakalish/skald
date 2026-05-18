@@ -9,6 +9,7 @@
 	import { haptic } from '$lib/utils/haptics.js';
 	import { urlBase64ToUint8Array } from '$lib/utils.js';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ThemeEditModal from '$lib/components/ThemeEditModal.svelte';
@@ -2095,7 +2096,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1" use:focusTrap
 		onkeydown={(e) => e.key === 'Escape' && onclose()}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->

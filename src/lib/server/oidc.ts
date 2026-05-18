@@ -47,12 +47,36 @@ export async function getDiscovery(): Promise<OidcDiscovery> {
 	const issuerUrl = getOidcConfig().issuerUrl.replace(/\/$/, '');
 	logger.debug('oidc: discovery fetch', { issuerUrl });
 	const t0 = Date.now();
-	const res = await fetch(`${issuerUrl}/.well-known/openid-configuration`, {
-		signal: AbortSignal.timeout(10000)
-	});
+	let res: Response;
+	try {
+		res = await fetch(`${issuerUrl}/.well-known/openid-configuration`, {
+			signal: AbortSignal.timeout(10000)
+		});
+	} catch (err) {
+		// Network blew up. If we have a previous successful fetch, keep serving
+		// it — better a slightly stale endpoint URL than a hard auth outage when
+		// the IdP burps for ten seconds. The refresh will retry on the next call.
+		if (cachedDiscovery) {
+			logger.warn('oidc: discovery refresh failed, serving stale', {
+				issuerUrl,
+				ageMs: now - discoveryCacheTime,
+				err: String(err),
+			});
+			return cachedDiscovery;
+		}
+		throw err;
+	}
 
 	if (!res.ok) {
 		logger.error('oidc: discovery failed', { issuerUrl, status: res.status, statusText: res.statusText, durationMs: Date.now() - t0 });
+		if (cachedDiscovery) {
+			logger.warn('oidc: discovery refresh non-2xx, serving stale', {
+				issuerUrl,
+				status: res.status,
+				ageMs: now - discoveryCacheTime,
+			});
+			return cachedDiscovery;
+		}
 		throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
 	}
 

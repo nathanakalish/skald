@@ -5,16 +5,17 @@ import {
 	characters, chats, messages, lorebooks, lorebookEntries,
 	personas, providers, themes, userSettings, chatLorebooks
 } from '$lib/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { parseCharaCardFromPNG } from '$lib/services/character.js';
 import { cacheCharacterTextImages, cacheBackgroundFromExtensions } from '$lib/services/characterImageCache.js';
 import { storeAvatarFromBuffer, isPlaceholderAvatar } from '$lib/services/imageOptimizer.js';
 import { extractThemeFromAvatar } from '$lib/services/themeExtractor.js';
-import { characterFingerprint } from '$lib/server/bundle.js';
+import { characterFingerprint, BUNDLE_VERSION } from '$lib/server/bundle.js';
 import { logger } from '$lib/server/logger.js';
 import { ALLOWED_SETTING_KEYS } from '$lib/server/settingsKeys.js';
+import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
 import JSZip from 'jszip';
 
 const MAX_BUNDLE_BYTES = 256 * 1024 * 1024; // 256 MB
@@ -60,15 +61,22 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Could not read zip file' }, { status: 400 });
 	}
 
-	// Zip-bomb guard (M12). Sum every entry's UNCOMPRESSED size before doing
-	// any extraction. JSZip exposes this on the private _data._uncompressedSize
-	// (no public accessor), so we tolerate it being missing.
+	// Zip-bomb guard (IMPORT-M3). Sum every entry's UNCOMPRESSED size before
+	// any extraction. JSZip exposes this on `_data.uncompressedSize` (no
+	// public accessor — fragile across versions). If a single entry is missing
+	// that field we refuse rather than assume zero, because "assume zero"
+	// gives an attacker a free pass to ship a bomb past this check. Operators
+	// who hit a false positive can pre-extract and re-zip.
 	const ZIP_UNCOMPRESSED_LIMIT = 256 * 1024 * 1024; // 256 MiB
 	let totalUncompressed = 0;
-	for (const entry of Object.values(zip.files)) {
+	for (const [path, entry] of Object.entries(zip.files)) {
 		if (entry.dir) continue;
 		const data = (entry as unknown as { _data?: { uncompressedSize?: number } })._data;
-		const sz = data?.uncompressedSize ?? 0;
+		const sz = data?.uncompressedSize;
+		if (typeof sz !== 'number' || sz < 0) {
+			logger.warn('import: zip entry missing uncompressedSize — refusing', { userId: user.id, path });
+			return json({ error: 'Could not verify uncompressed size for every entry in zip — refusing to extract.' }, { status: 400 });
+		}
 		totalUncompressed += sz;
 		if (totalUncompressed > ZIP_UNCOMPRESSED_LIMIT) {
 			return json({ error: 'Zip would expand beyond 256 MiB \u2014 refusing to extract.' }, { status: 413 });
@@ -79,6 +87,18 @@ export const POST: RequestHandler = async (event) => {
 	const manifestEntry = zip.file('manifest.json');
 	if (manifestEntry) {
 		try { manifest = JSON.parse(await manifestEntry.async('string')); } catch { /* ignore */ }
+	}
+
+	// IMPORT-M5: warn (don't reject) when the bundle was written by a newer
+	// schema than this server knows about. We're conservatively forward-
+	// compatible — unknown keys get dropped by the existing allowlists, but
+	// the operator should know so they can interpret missing data correctly.
+	const importWarnings: string[] = [];
+	const manifestVersion = typeof manifest?.version === 'number' ? manifest.version : null;
+	if (manifestVersion != null && manifestVersion > BUNDLE_VERSION) {
+		const msg = `Bundle was exported by a newer version of Skald (v${manifestVersion}) than this server supports (v${BUNDLE_VERSION}). Some fields may be silently dropped.`;
+		logger.warn('import: bundle version newer than server', { userId: user.id, manifestVersion, supported: BUNDLE_VERSION });
+		importWarnings.push(msg);
 	}
 
 	logger.info('import: bundle start', {
@@ -217,28 +237,48 @@ export const POST: RequestHandler = async (event) => {
 	for (const f of lorebookFiles) {
 		try {
 			const lb = JSON.parse(await f.async('string'));
-			const finalName = dedupeName(lb.name || 'Imported Lorebook', existingLorebookNames);
-			existingLorebookNames.add(finalName);
+			const desiredName = lb.name || 'Imported Lorebook';
 
 			const charFp = lb.character?.fingerprint as string | undefined;
 			const linkedCharId = charFp ? fingerprintToNewId.get(charFp) ?? null : null;
 
-			// Atomic: lorebook header + all entries land or none. A partial
-			// lorebook with missing entries is silently broken for the user.
+			// IMPORT-M6: parity with single-character import — reuse an
+			// existing lorebook by name (per user) and merge entries by
+			// (keywords, content-hash) fingerprint. Re-importing the same
+			// bundle twice should be a no-op, not a fragmenting rename.
+			const existing = db.select().from(lorebooks)
+				.where(and(eq(lorebooks.userId, user.id), eq(lorebooks.name, desiredName)))
+				.get();
+
 			const inserted = db.transaction(() => {
-				const row = db.insert(lorebooks).values({
+				const row = existing ?? db.insert(lorebooks).values({
 					userId: user.id,
-					name: finalName,
+					name: desiredName,
 					description: lb.description ?? '',
 					characterId: linkedCharId,
 					enabled: lb.enabled ?? true
 				}).returning().get();
 
+				// If we're reusing an existing lorebook, late-bind it to the
+				// freshly-imported character when it wasn't linked before.
+				if (existing && !existing.characterId && linkedCharId) {
+					db.update(lorebooks).set({ characterId: linkedCharId }).where(eq(lorebooks.id, existing.id)).run();
+				}
+
+				const existingFingerprints = existing
+					? new Set(db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, row.id)).all().map(e => lorebookEntryFingerprint(e.keywords, e.content)))
+					: new Set<string>();
+
 				for (const e of (lb.entries ?? [])) {
+					const keywords = e.keywords ?? '';
+					const content = e.content ?? '';
+					const fp = lorebookEntryFingerprint(keywords, content);
+					if (existingFingerprints.has(fp)) continue;
+					existingFingerprints.add(fp);
 					db.insert(lorebookEntries).values({
 						lorebookId: row.id,
-						keywords: e.keywords ?? '',
-						content: e.content ?? '',
+						keywords,
+						content,
 						insertionOrder: e.insertionOrder ?? 100,
 						enabled: e.enabled ?? true,
 						caseSensitive: e.caseSensitive ?? false,
@@ -248,12 +288,16 @@ export const POST: RequestHandler = async (event) => {
 				return row;
 			});
 
-			// Track old→new id mapping via the lorebook_<oldId>.json filename.
+			// Track old→new id mapping via the lorebook_<oldId>.json filename
+			// so chat_lorebooks links re-bind to the (possibly reused) row.
 			const m = f.name.match(/lorebook_(\d+)\.json$/);
 			if (m) oldIdToNewId.lorebooks.set(Number(m[1]), inserted.id);
 
-			logger.info('import: lorebook imported', { path: f.name, name: finalName, id: inserted.id, entryCount: (lb.entries ?? []).length });
-			counts.lorebooks++;
+			// Keep the name dedupe set accurate for any later collisions.
+			existingLorebookNames.add(desiredName);
+
+			logger.info('import: lorebook imported', { path: f.name, name: desiredName, id: inserted.id, reused: !!existing, entryCount: (lb.entries ?? []).length });
+			if (!existing) counts.lorebooks++;
 		} catch (err) {
 			logger.warn('bundle import: failed to import lorebook', { path: f.name, err: String(err) });
 		}
@@ -512,6 +556,7 @@ export const POST: RequestHandler = async (event) => {
 		unresolvedChats,
 		unresolvedChatPayloads: messages_unresolved, // raw v2 JSON for resolver
 		providersWarning,
+		warnings: importWarnings,
 		availableCharacters: db.select({ id: characters.id, name: characters.name }).from(characters).where(eq(characters.userId, user.id)).all()
 	});
 };

@@ -22,8 +22,8 @@ export const POST: RequestHandler = async (event) => {
 			model: provider.defaultModel || ''
 		});
 
-		const ok = await llm.testConnection();
-		return json({ ok });
+		const result = await llm.testConnection();
+		return json(result);
 	} catch (err) {
 		return json({ ok: false, error: err instanceof Error ? err.message : 'Connection test failed' });
 	}

@@ -1863,7 +1863,15 @@
 	// Chat import lives in Settings → Account; the layout just needs a callback
 	// to refresh the sidebar and open the new chat after import.
 
+	// Per-chat sequence counter for mute toggles. Rapid double-clicks (or a
+	// slow first response that arrives after a faster second response) could
+	// otherwise let a stale rollback overwrite the user's latest intent.
+	// Only the most-recent request for a given chat is allowed to rollback.
+	const muteRequestSeq = new Map<number, number>();
+
 	async function toggleMute(chatId: number, currentlyMuted: boolean) {
+		const seq = (muteRequestSeq.get(chatId) ?? 0) + 1;
+		muteRequestSeq.set(chatId, seq);
 		// Optimistic flip — keep the menu/UI snappy.
 		chatsStore.update(chatId, { muted: !currentlyMuted });
 		const result = await api(`/api/chats/${chatId}/mute`, {
@@ -1871,7 +1879,9 @@
 			json: { muted: !currentlyMuted },
 			silent: true
 		});
-		if (!result) chatsStore.update(chatId, { muted: currentlyMuted });
+		if (!result && muteRequestSeq.get(chatId) === seq) {
+			chatsStore.update(chatId, { muted: currentlyMuted });
+		}
 	}
 
 	async function handleImportedChat(id: number) {
@@ -2053,6 +2063,11 @@
 {#if !data.user}
 	<LoginForm oidcEnabled={!!data.oidcEnabled} devAuthEnabled={!!data.devAuthEnabled} {oidc} />
 {:else}
+<!-- FRONT-L1: SkipNav target — first focusable element so screen-reader/keyboard users can jump past the rail + sidebar straight into the chat. Visually hidden until focused. -->
+<a
+	href="#main-content"
+	class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg"
+>Skip to main content</a>
 <div
 	class="flex h-dvh overflow-hidden bg-sidebar md:gap-2 md:bg-sidebar md:p-2"
 	data-font-size={settings.fontSize ?? 'medium'}
@@ -2725,7 +2740,7 @@
 		</aside>
 
 	<!-- Main content -->
-	<main class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:gap-2 md:overflow-visible md:bg-transparent">
+	<main id="main-content" class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:gap-2 md:overflow-visible md:bg-transparent">
 		<!-- Notification permission banner. Show whenever push is NOT subscribed for this device (covers fresh sign-in, after "Disable notifications" from the Signed-in-devices list, and the original "permission not yet granted" case). Hidden on insecure (non-HTTPS) origins because Web Push won't work there anyway, or when the API isn't supported at all. -->
 		{#if notif.pushSubscriptionReady && notif.secureContext && notif.permission !== 'unsupported' && !notif.pushSubscribed && !notif.bannerDismissed}
 			<div class="flex shrink-0 flex-col gap-1 border-b border-border/50 bg-accent/30 px-4 py-2 md:rounded-2xl md:border-b-0">

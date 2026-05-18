@@ -321,13 +321,27 @@ export const adminSettings = sqliteTable('admin_settings', {
 	value: text('value').notNull()
 });
 
+// Append-only audit trail for admin settings changes. SET NULL on user delete
+// so history survives admin removal — admin_username preserves the original
+// identity for readability.
+export const adminSettingsAudit = sqliteTable('admin_settings_audit', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	key: text('key').notNull(),
+	fromValue: text('from_value'),
+	toValue: text('to_value').notNull(),
+	adminUserId: integer('admin_user_id').references(() => users.id, { onDelete: 'set null' }),
+	adminUsername: text('admin_username'),
+	changedAt: text('changed_at').notNull().default(sql`(datetime('now'))`)
+});
+
 export const pushSubscriptions = sqliteTable('push_subscriptions', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
 	// Best-effort link to the session that registered this subscription so
-	// "sign out device" can also drop the device's push subs. Nullable for
-	// rows created before the link existed.
-	sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+	// "sign out device" can also drop the device's push subs. CASCADEs to
+	// match: a subscription orphaned from its session can't be attributed
+	// or revoked, so we drop it with the session.
+	sessionId: text('session_id').references(() => sessions.id, { onDelete: 'cascade' }),
 	endpoint: text('endpoint').notNull(),
 	keysP256dh: text('keys_p256dh').notNull(),
 	keysAuth: text('keys_auth').notNull(),

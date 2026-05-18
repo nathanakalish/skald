@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { createProvider } from '$lib/providers/index.js';
+import { retryOnce } from '$lib/providers/retry.js';
 import { requireUser } from '$lib/server/auth.js';
 
 export const POST: RequestHandler = async (event) => {
@@ -28,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
 			model: ''
 		});
 
-		const models = await llm.listModels();
+		const models = await retryOnce(() => llm.listModels());
 		return json({ models });
 	} catch (err) {
 		return json(

@@ -15,19 +15,17 @@ export class GeminiProvider extends OpenAIProvider {
 	}
 
 	protected buildRequestBody(messages: ChatMessage[], settings: SamplerSettings): Record<string, unknown> {
+		// Start from the standard OpenAI body, then strip fields Gemini's
+		// compat endpoint doesn't accept and swap in its `thinking` shape.
+		const body = super.buildRequestBody(messages, settings);
+		delete body.frequency_penalty;
+		delete body.presence_penalty;
+		delete body.reasoning_effort;
+
 		const thinkingEnabled = settings.reasoningEffort && settings.reasoningEffort !== 'off';
-
-		const body: Record<string, unknown> = {
-			model: this.config.model,
-			messages,
-			stream: true,
-			// Gemini ignores temperature when thinking is on
-			temperature: thinkingEnabled ? undefined : settings.temperature,
-			top_p: settings.topP,
-			max_tokens: settings.maxTokens
-		};
-
 		if (thinkingEnabled) {
+			// Gemini ignores temperature once thinking is on, so don't bother sending it.
+			body.temperature = undefined;
 			const budgetMap: Record<string, number> = {
 				low: Math.max(1024, settings.maxTokens),
 				medium: Math.max(1024, settings.maxTokens * 4),
@@ -35,7 +33,7 @@ export class GeminiProvider extends OpenAIProvider {
 			};
 			body.thinking = {
 				type: 'enabled',
-				budget_tokens: budgetMap[settings.reasoningEffort] ?? settings.maxTokens * 4
+				budget_tokens: budgetMap[settings.reasoningEffort!] ?? settings.maxTokens * 4
 			};
 		}
 

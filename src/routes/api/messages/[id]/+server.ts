@@ -7,6 +7,7 @@ import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
+import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -22,8 +23,8 @@ export const PATCH: RequestHandler = async (event) => {
 
 	// Swipe navigation: change active swipe index
 	if ('swipeIndex' in body) {
-		const swipes: string[] = JSON.parse(message.swipes || '[]');
-		const reasoningSwipes: string[] = JSON.parse(message.reasoning || '[]');
+		const swipes = parseSwipes(message.swipes);
+		const reasoningSwipes = parseReasoning(message.reasoning);
 		const newIndex = Number(body.swipeIndex);
 
 		if (newIndex < 0 || newIndex >= swipes.length) {
@@ -56,7 +57,7 @@ export const PATCH: RequestHandler = async (event) => {
 	// Edit message content
 	if ('content' in body) {
 		const content = String(body.content);
-		const swipes: string[] = JSON.parse(message.swipes || '[]');
+		const swipes = parseSwipes(message.swipes);
 		const idx = message.swipeIndex ?? 0;
 
 		// Update the current swipe entry too
@@ -85,7 +86,7 @@ export const PATCH: RequestHandler = async (event) => {
 	// Edit reasoning for current swipe
 	if ('reasoning' in body) {
 		const reasoning = String(body.reasoning);
-		const reasoningSwipes: string[] = JSON.parse(message.reasoning || '[]');
+		const reasoningSwipes = parseReasoning(message.reasoning);
 		const idx = message.swipeIndex ?? 0;
 
 		// Ensure array is long enough

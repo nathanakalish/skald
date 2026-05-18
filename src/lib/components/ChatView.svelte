@@ -18,6 +18,7 @@
 	import { LinkValidator } from '$lib/chat/linkValidation.svelte.js';
 	import { TextareaAutosizer } from '$lib/chat/textareaAutosize.svelte.js';
 	import { parseImpersonationSwipes, type ImpersonationSwipe as ImpersonationSwipeEntry } from '$lib/chat/impersonationSwipes.js';
+	import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
@@ -232,11 +233,9 @@
 	}
 
 	function parseMessage(m: any): Message {
-		let swipes: string[] = [];
-		try { swipes = JSON.parse(m.swipes || '[]'); } catch { /* */ }
+		let swipes = parseSwipes(m.swipes);
 		if (swipes.length === 0) swipes = [m.content];
-		let reasoning: string[] = [];
-		try { reasoning = JSON.parse(m.reasoning || '[]'); } catch { /* */ }
+		const reasoning = parseReasoning(m.reasoning);
 		return {
 			id: m.id,
 			role: m.role,

@@ -10,6 +10,7 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import { createModalState } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 
 	interface Props {
 		open: boolean;
@@ -41,40 +42,7 @@
 		return { destroy() { node.remove(); } };
 	}
 
-	/** Focus-trap: keep Tab/Shift+Tab inside the dialog while it's open so
-	 *  keyboard users can't accidentally tab into the page underneath. */
-	function focusTrap(node: HTMLElement) {
-		const selector = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-		function getFocusables(): HTMLElement[] {
-			return Array.from(node.querySelectorAll<HTMLElement>(selector)).filter(el => el.offsetParent !== null || el === document.activeElement);
-		}
-		function onKey(e: KeyboardEvent) {
-			if (e.key !== 'Tab') return;
-			const els = getFocusables();
-			if (els.length === 0) { e.preventDefault(); node.focus(); return; }
-			const first = els[0];
-			const last = els[els.length - 1];
-			const active = document.activeElement as HTMLElement | null;
-			if (e.shiftKey && (active === first || !node.contains(active))) {
-				e.preventDefault(); last.focus();
-			} else if (!e.shiftKey && active === last) {
-				e.preventDefault(); first.focus();
-			}
-		}
-		const prev = document.activeElement as HTMLElement | null;
-		node.addEventListener('keydown', onKey);
-		// Move focus inside on mount so the first Tab goes somewhere sensible.
-		queueMicrotask(() => {
-			const els = getFocusables();
-			(els[0] ?? node).focus();
-		});
-		return {
-			destroy() {
-				node.removeEventListener('keydown', onKey);
-				prev?.focus?.();
-			}
-		};
-	}
+	/** Focus-trap action lives in $lib/focusTrap so heavyweight modals can share it. */
 
 	function onBackdropKey(e: KeyboardEvent) {
 		if (closeOnEscape && e.key === 'Escape') onclose();

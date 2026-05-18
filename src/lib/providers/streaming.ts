@@ -66,6 +66,16 @@ export async function* iterateSSE(
 /**
  * Async-iterator over a newline-delimited JSON stream (one JSON object per
  * line). Used by Ollama. Yields each non-empty line verbatim.
+ *
+ * Multi-line JSON: strict JSON forbids raw newlines inside strings (they
+ * must be escaped as `\n`), so splitting on `\n` is safe for any well-formed
+ * NDJSON producer. A producer that pretty-prints JSON across multiple lines
+ * would just produce per-fragment parse failures upstream, which `ollama.ts`
+ * silently skips — no security impact, only lost tokens. We don't attempt to
+ * reassemble multi-line JSON because doing so reliably requires a streaming
+ * tokeniser and the failure mode of getting it wrong is worse than the
+ * symptom (truncated assistant message vs. crashed parser running on attacker
+ * input).
  */
 export async function* iterateNDJSON(
 	body: ReadableStream<Uint8Array>
@@ -88,6 +98,11 @@ export async function* iterateNDJSON(
 				yield line;
 			}
 		}
+		// Flush any trailing content not terminated with \n. Ollama always
+		// sends a final newline after the `done: true` object, but we shouldn't
+		// silently drop the last message if a provider omits it.
+		const trailing = buffer.trim();
+		if (trailing) yield trailing;
 	} finally {
 		try { reader.releaseLock(); } catch { /* ignore */ }
 	}

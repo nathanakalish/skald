@@ -5,6 +5,8 @@
  * PNG cards stash the JSON data (base64-encoded) in a tEXt chunk with keyword "chara".
  */
 
+import { parseStringArray, parseRecord } from '$lib/jsonSafe.js';
+
 export interface CharaBookEntry {
 	keys: string[];
 	content: string;
@@ -197,29 +199,17 @@ export function toCharaCardJSON(character: {
 	characterVersion: string;
 	extensions: string;
 }): Record<string, unknown> {
-	let altGreetings: string[] = [];
-	try {
-		altGreetings = JSON.parse(character.alternateGreetings || '[]');
-	} catch { /* empty */ }
+	let altGreetings: string[] = parseStringArray(character.alternateGreetings);
 
-	let tagsList: string[] = [];
-	try {
-		tagsList = JSON.parse(character.tags || '[]');
-		if (!Array.isArray(tagsList)) {
-			tagsList = character.tags
-				? character.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-				: [];
-		}
-	} catch {
-		tagsList = character.tags
-			? character.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-			: [];
+	// Tags: usually JSON-encoded string[], but legacy/imported rows sometimes
+	// hold a comma-separated string. Fall back to that shape only when JSON
+	// parsing genuinely yields nothing usable.
+	let tagsList: string[] = parseStringArray(character.tags);
+	if (tagsList.length === 0 && character.tags && !character.tags.trim().startsWith('[')) {
+		tagsList = character.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
 	}
 
-	let extensions: Record<string, unknown> = {};
-	try {
-		extensions = JSON.parse(character.extensions || '{}');
-	} catch { /* empty */ }
+	const extensions: Record<string, unknown> = parseRecord(character.extensions);
 
 	return {
 		spec: 'chara_card_v2',

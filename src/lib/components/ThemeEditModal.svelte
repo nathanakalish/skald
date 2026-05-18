@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Save, X, Plus } from 'lucide-svelte';
 	import { createModalState } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import { themesStore } from '$lib/stores/themes.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
@@ -138,7 +139,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Edit theme" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Edit theme" tabindex="-1" use:focusTrap
 		onkeydown={(e) => e.key === 'Escape' && onclose()}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->

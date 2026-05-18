@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
-import { adminSettings } from '$lib/db/schema.js';
+import { adminSettings, adminSettingsAudit } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/auth.js';
 import { invalidateAdminSettingsCache } from '$lib/server/adminSettings.js';
@@ -102,6 +102,15 @@ export const PATCH: RequestHandler = async (event) => {
 			} else {
 				db.insert(adminSettings).values({ key, value: strValue }).run();
 			}
+			// Persist an audit row in the same txn so the change and its trail
+			// commit atomically — log lines are ephemeral; this table isn't.
+			db.insert(adminSettingsAudit).values({
+				key,
+				fromValue: previous,
+				toValue: strValue,
+				adminUserId: admin.id,
+				adminUsername: admin.username
+			}).run();
 			changes[key] = { from: previous, to: strValue };
 		}
 	});

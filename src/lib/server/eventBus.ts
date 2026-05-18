@@ -92,6 +92,28 @@ class EventBus {
 			this.buffer.shift();
 		}
 	}
+
+	/**
+	 * Broadcast a `server-shutdown` event to every connected listener so
+	 * clients can flush UI state and queue a reconnect against the new
+	 * process before the SSE stream just dies on them.
+	 *
+	 * We deliberately don't persist the replay buffer to disk: the events
+	 * it holds (complete / unread / error) all reflect state that's already
+	 * in the DB. A reconnected client refetches and re-derives, so a process
+	 * restart is recoverable without crash-safe queueing.
+	 */
+	shutdown(): void {
+		const sequenced: SequencedEvent = {
+			id: ++this.seq,
+			type: 'server-shutdown',
+			userId: 0,
+			data: { reason: 'graceful' },
+		};
+		for (const listener of this.listeners) {
+			try { listener(sequenced); } catch { /* swallow */ }
+		}
+	}
 }
 
 // Singleton — shared across all requests in the same server process.

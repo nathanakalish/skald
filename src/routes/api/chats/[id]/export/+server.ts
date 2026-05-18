@@ -5,6 +5,7 @@ import { chats, characters, messages } from '$lib/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { characterFingerprint } from '$lib/server/bundle.js';
+import { loadActivePath, findDeepestLeaf } from '$lib/server/chatTree.js';
 
 /**
  * Skald-native chat export. Returns the full message tree (parentId, swipes,
@@ -22,8 +23,6 @@ export const GET: RequestHandler = async (event) => {
 	const character = db.select().from(characters).where(eq(characters.id, chat.characterId)).get();
 	if (!character) return json({ error: 'Character not found' }, { status: 404 });
 
-	const allMessages = db.select().from(messages).where(eq(messages.chatId, id)).orderBy(asc(messages.id)).all();
-
 	const fp = characterFingerprint({
 		name: character.name,
 		description: character.description,
@@ -33,9 +32,14 @@ export const GET: RequestHandler = async (event) => {
 	});
 
 	if (format === 'md') {
-		// Linear active path only — markdown can't represent branches sensibly
+		// Markdown can't represent branches, so we follow the active leaf
+		// (or fall back to the deepest leaf if the chat never had an active
+		// pointer set) back to the root. Previously this iterated every row
+		// in the chat — branches and abandoned swipes leaked into the export.
+		const leafId = chat.activeLeafId ?? findDeepestLeaf(chat.id);
+		const path = leafId ? loadActivePath(leafId) : [];
 		const lines = [`# Chat with ${character.name}`, ''];
-		for (const m of allMessages) {
+		for (const m of path) {
 			if (m.role === 'system') continue;
 			const name = m.role === 'assistant' ? character.name : 'You';
 			lines.push(`**${name}:**`, m.content, '');
@@ -59,7 +63,7 @@ export const GET: RequestHandler = async (event) => {
 		mode: chat.mode ?? 'story',
 		activeLeafId: chat.activeLeafId ?? null,
 		character: { name: character.name, fingerprint: fp },
-		messages: allMessages.map(m => ({
+		messages: db.select().from(messages).where(eq(messages.chatId, id)).orderBy(asc(messages.id)).all().map(m => ({
 			id: m.id,
 			role: m.role,
 			content: m.content,

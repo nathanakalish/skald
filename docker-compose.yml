@@ -59,6 +59,13 @@ services:
       # - OIDC_ADMIN_GROUP=skald_admin
       # - OIDC_USER_GROUP=skald_user
       # - OIDC_AUTO_CREATE_USERS=true
+    # Filesystem is read-only except for the mounted data volumes and /tmp.
+    # The entrypoint chowns the volumes (which are writable) and the runtime
+    # writes only to /app/data, /app/static/avatars, and /tmp. Drop this if you
+    # mount anything else writable.
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - skald-data:/app/data
       - skald-avatars:/app/static/avatars

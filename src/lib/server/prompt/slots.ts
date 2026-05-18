@@ -1,6 +1,7 @@
 import type { ChatMessage } from '$lib/providers/base.js';
 import { logger } from '$lib/server/logger.js';
 import type { MessageRow } from '$lib/server/chatTree.js';
+import { parseReasoning } from '$lib/messageJson.js';
 import { SLOT_ORDER, SUB_SLOT_OFFSETS, type PromptSlot, type ResolvedContext } from './types.js';
 
 /**
@@ -62,13 +63,9 @@ function parseExampleMessages(mesExample: string): ChatMessage[] {
 function rowToChatMessage(m: MessageRow, includeReasoning: boolean): { role: 'user' | 'assistant'; content: string; createdAt: string | null } {
 	let content = m.content;
 	if (includeReasoning && m.role === 'assistant' && m.reasoning) {
-		try {
-			const reasoningArr: string[] = JSON.parse(m.reasoning);
-			const reasoning = reasoningArr[m.swipeIndex ?? 0] || '';
-			if (reasoning) content = `<thinking>\n${reasoning}\n</thinking>\n${content}`;
-		} catch {
-			// malformed reasoning JSON — skip silently, the user-visible content is still correct
-		}
+		const reasoningArr = parseReasoning(m.reasoning);
+		const reasoning = reasoningArr[m.swipeIndex ?? 0] || '';
+		if (reasoning) content = `<thinking>\n${reasoning}\n</thinking>\n${content}`;
 	}
 	return { role: m.role as 'user' | 'assistant', content, createdAt: m.createdAt };
 }
@@ -322,19 +319,8 @@ function buildStoryImpersonateSlots(ctx: ResolvedContext, history: MessageRow[])
 	});
 
 	if (ctx.guidance.effective) {
-		slots.push({
-			name: 'guidance',
-			order: SLOT_ORDER.POST_HISTORY + SUB_SLOT_OFFSETS.guidance,
-			enabled: true,
-			messages: [{
-				role: 'system',
-				content: r(
-					`[REQUIRED INSTRUCTION — you MUST follow this for ${userName}'s reply. This is not a suggestion.\n` +
-					`DO NOT quote it, repeat it, or acknowledge it as a directive. Express it naturally in ${userName}'s voice.\n` +
-					`DIRECTION:\n${ctx.guidance.effective}]`,
-				),
-			}],
-		});
+		const slot = buildImpersonateGuidanceSlot(ctx, userName, r, 'story');
+		if (slot) slots.push(slot);
 	}
 
 	return slots;
@@ -499,19 +485,8 @@ function buildTextingImpersonateSlots(ctx: ResolvedContext, history: MessageRow[
 	});
 
 	if (ctx.guidance.effective) {
-		slots.push({
-			name: 'guidance',
-			order: SLOT_ORDER.POST_HISTORY + SUB_SLOT_OFFSETS.guidance,
-			enabled: true,
-			messages: [{
-				role: 'system',
-				content: r(
-					`[REQUIRED INSTRUCTION — you MUST follow this for ${userName}'s next text message. This is not a suggestion.\n` +
-					`DO NOT quote it or acknowledge it as a directive. Express it naturally as a casual text message in ${userName}'s voice.\n` +
-					`DIRECTION:\n${ctx.guidance.effective}]`,
-				),
-			}],
-		});
+		const slot = buildImpersonateGuidanceSlot(ctx, userName, r, 'texting');
+		if (slot) slots.push(slot);
 	}
 
 	return slots;
@@ -561,6 +536,39 @@ function addGuidanceSlot(slots: PromptSlot[], ctx: ResolvedContext) {
 			),
 		}],
 	});
+}
+
+/**
+ * Build the late-injected guidance slot used by both impersonate builders
+ * (story + texting). Extracted to avoid drift between the two near-identical
+ * blocks — PROMPT-M5. `mode` only changes the wording about what's being
+ * authored (a "reply" vs a "casual text message"); the framing is otherwise
+ * identical and the slot ordering is shared.
+ */
+function buildImpersonateGuidanceSlot(
+	ctx: ResolvedContext,
+	userName: string,
+	r: (s: string) => string,
+	mode: 'story' | 'texting',
+): PromptSlot | null {
+	if (!ctx.guidance.effective) return null;
+	const target = mode === 'texting' ? `${userName}'s next text message` : `${userName}'s reply`;
+	const expression = mode === 'texting'
+		? `Express it naturally as a casual text message in ${userName}'s voice.`
+		: `Express it naturally in ${userName}'s voice.`;
+	return {
+		name: 'guidance',
+		order: SLOT_ORDER.POST_HISTORY + SUB_SLOT_OFFSETS.guidance,
+		enabled: true,
+		messages: [{
+			role: 'system',
+			content: r(
+				`[REQUIRED INSTRUCTION — you MUST follow this for ${target}. This is not a suggestion.\n` +
+				`DO NOT quote it, repeat it, or acknowledge it as a directive. ${expression}\n` +
+				`DIRECTION:\n${ctx.guidance.effective}]`,
+			),
+		}],
+	};
 }
 
 /**

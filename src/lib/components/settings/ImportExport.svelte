@@ -302,7 +302,7 @@
 	let importing = $state(false);
 	let importProgress = $state(0);
 	let dragOver = $state(false);
-	let importSummary = $state<{ counts: Record<string, number>; providersWarning: boolean } | null>(null);
+	let importSummary = $state<{ counts: Record<string, number>; providersWarning: boolean; warnings?: string[] } | null>(null);
 	let showProvidersWarning = $state(false);
 
 	let resolverOpen = $state(false);
@@ -417,7 +417,7 @@
 			await charactersStore.load(true);
 			await lorebooksStore.load(true);
 			await chatsStore.load(true);
-			importSummary = { counts: data.counts, providersWarning: !!data.providersWarning };
+			importSummary = { counts: data.counts, providersWarning: !!data.providersWarning, warnings: Array.isArray(data.warnings) ? data.warnings : [] };
 			showProvidersWarning = !!data.providersWarning;
 			if (Array.isArray(data.unresolvedChats) && data.unresolvedChats.length > 0) {
 				resolverItems = data.unresolvedChats.map((u: any, i: number) => ({
@@ -857,6 +857,14 @@
 							<AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 							<span>Imported providers are disabled — re-enter API keys in <strong>Settings → Providers</strong> to enable them.</span>
 						</div>
+					{/if}
+					{#if importSummary.warnings && importSummary.warnings.length > 0}
+						{#each importSummary.warnings as warning}
+							<div class="mt-3 flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400">
+								<AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+								<span>{warning}</span>
+							</div>
+						{/each}
 					{/if}
 				</div>
 			</div>

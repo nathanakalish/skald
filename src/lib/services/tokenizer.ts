@@ -122,15 +122,27 @@ export function _clearTokenCacheForTests(): void {
  * (role + delimiters). Based on OpenAI's token counting guide — ~4 tokens
  * of overhead per message.
  *
- * Pass `providerType` to use a provider-appropriate encoding (PROV-H2).
+ * Pass `providerType` to use a provider-appropriate encoding (PROV-H2). The
+ * provider's safety multiplier is also applied to the framing constants so
+ * non-OpenAI providers (whose chat-template overhead we can't measure
+ * directly) get the same conservative margin on framing as on content
+ * (PROMPT-M1). For openai/clones the multiplier is 1.0 so this is a no-op.
  */
 export function countMessageTokens(messages: ChatMessage[], providerType?: string): number {
+	const p = profileFor(providerType);
 	let total = 0;
 	for (const msg of messages) {
 		total += 4; // per-message framing overhead
 		total += countTokens(msg.content, providerType);
 	}
 	total += 2; // conversation priming
+	// Apply the multiplier to the framing constants too — they were the
+	// only piece of the budget left at a flat OpenAI estimate.
+	if (p.safetyMultiplier !== 1.0) {
+		const framing = messages.length * 4 + 2;
+		const content = total - framing;
+		total = content + Math.ceil(framing * p.safetyMultiplier);
+	}
 	return total;
 }
 

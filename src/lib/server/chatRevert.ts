@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/impersonationSwipes.js';
+import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
 import { isChatProcessing } from '$lib/server/messageQueue.js';
 
 interface RevertResult {
@@ -61,12 +62,8 @@ export function revertLeafUserMessages(chatId: number, userId: number): RevertRe
 		// Convert user msg's per-swipe data into impersonation swipes.
 		// guidance lives only on the formerly-active swipe — the others
 		// were never bound to any specific guidance text.
-		const userSwipes: string[] = (() => {
-			try { return JSON.parse(leaf.swipes ?? '[]'); } catch { return []; }
-		})();
-		const userReasoning: string[] = (() => {
-			try { return JSON.parse(leaf.reasoning ?? '[]'); } catch { return []; }
-		})();
+		const userSwipes = parseSwipes(leaf.swipes);
+		const userReasoning = parseReasoning(leaf.reasoning);
 		const userIdx = leaf.swipeIndex ?? 0;
 		// Fall back to leaf.content if swipes JSON is empty/corrupt — the
 		// user's text shouldn't be silently lost.

@@ -35,12 +35,12 @@ function getKeywordRegex(keyword: string, caseSensitive: boolean): RegExp {
 		// Touch for LRU ordering.
 		_regexCache.delete(cacheKey);
 		_regexCache.set(cacheKey, hit);
-		// `test()` advances `lastIndex` on the `g` flag — reset before reuse.
-		hit.lastIndex = 0;
 		return hit;
 	}
 	const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const re = new RegExp(`\\b${escaped}\\b`, caseSensitive ? 'g' : 'gi');
+	// No `g` flag — we only ever call `.test()`, where `g` does nothing useful
+	// and forces `lastIndex` bookkeeping that would surprise the next caller.
+	const re = new RegExp(`\\b${escaped}\\b`, caseSensitive ? '' : 'i');
 	_regexCache.set(cacheKey, re);
 	if (_regexCache.size > REGEX_CACHE_MAX) {
 		const oldest = _regexCache.keys().next().value;

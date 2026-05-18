@@ -5,6 +5,7 @@
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { providerProfiles, defaultEndpoints, getProfile, type ProviderType } from '$lib/providers/profiles.js';
@@ -81,6 +82,7 @@
 
 	// Test & model state
 	let testResult = $state<'testing' | 'success' | 'fail' | null>(null);
+	let testDetails = $state<{ latencyMs?: number; modelCount?: number; error?: string } | null>(null);
 	let modelList = $state<string[]>([]);
 	let modelLoading = $state(false);
 
@@ -100,6 +102,7 @@
 			loadedId = pid;
 			activeTab = 'connection';
 			testResult = null;
+			testDetails = null;
 			modelList = [];
 
 			if (provider) {
@@ -242,10 +245,16 @@
 	async function testConnection() {
 		if (!provider) return;
 		testResult = 'testing';
+		testDetails = null;
 		const res = await fetch(`/api/providers/${provider.id}/test`, { method: 'POST' });
 		const result = await res.json();
 		testResult = result.ok ? 'success' : 'fail';
-		setTimeout(() => { testResult = null; }, 3000);
+		testDetails = {
+			latencyMs: typeof result.latencyMs === 'number' ? result.latencyMs : undefined,
+			modelCount: typeof result.modelCount === 'number' ? result.modelCount : undefined,
+			error: typeof result.error === 'string' ? result.error : undefined,
+		};
+		setTimeout(() => { testResult = null; testDetails = null; }, 5000);
 	}
 
 	async function fetchModels() {
@@ -292,7 +301,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Edit Provider" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Edit Provider" tabindex="-1" use:focusTrap
 		onkeydown={(e) => e.key === 'Escape' && onclose()}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -426,25 +435,40 @@
 
 						<!-- Test button (edit mode only) -->
 						{#if !isCreate}
-							<button
-								onclick={testConnection}
-								disabled={testResult === 'testing'}
-								class="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-accent"
-							>
-								{#if testResult === 'testing'}
-									<Loader2 class="h-4 w-4 animate-spin" />
-									Testing...
-								{:else if testResult === 'success'}
-									<Check class="h-4 w-4 text-green-500" />
-									Connected
-								{:else if testResult === 'fail'}
-									<X class="h-4 w-4 text-destructive" />
-									Failed
-								{:else}
-									<TestTube class="h-4 w-4" />
-									Test Connection
+							<div class="flex flex-col gap-1">
+								<button
+									onclick={testConnection}
+									disabled={testResult === 'testing'}
+									class="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-accent"
+								>
+									{#if testResult === 'testing'}
+										<Loader2 class="h-4 w-4 animate-spin" />
+										Testing...
+									{:else if testResult === 'success'}
+										<Check class="h-4 w-4 text-green-500" />
+										Connected
+									{:else if testResult === 'fail'}
+										<X class="h-4 w-4 text-destructive" />
+										Failed
+									{:else}
+										<TestTube class="h-4 w-4" />
+										Test Connection
+									{/if}
+								</button>
+								{#if testDetails && (testDetails.latencyMs != null || testDetails.modelCount != null || testDetails.error)}
+									<div class="px-1 text-xs text-muted-foreground">
+										{#if testDetails.latencyMs != null}
+											<span>{testDetails.latencyMs}ms</span>
+										{/if}
+										{#if testDetails.modelCount != null}
+											<span class="ml-2">{testDetails.modelCount} model{testDetails.modelCount === 1 ? '' : 's'}</span>
+										{/if}
+										{#if testDetails.error}
+											<div class="mt-0.5 text-destructive">{testDetails.error}</div>
+										{/if}
+									</div>
 								{/if}
-							</button>
+							</div>
 						{/if}
 					</div>
 				{:else if activeTab === 'generation'}

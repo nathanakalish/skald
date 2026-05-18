@@ -3,6 +3,7 @@
 	import { X, Info, StickyNote } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
+	import { focusTrap } from '$lib/focusTrap.js';
 	import { page } from '$app/stores';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import { sanitizeRichHtml } from '$lib/markdown.js';
@@ -61,7 +62,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-[60] flex items-end justify-center overflow-y-auto p-0 sm:items-start sm:p-4 sm:pt-[5vh] bg-black/60 {modal.closing ? 'backdrop-exit' : 'backdrop-enter'}"
-		role="dialog" aria-modal="true" aria-label="Character Info" tabindex="-1"
+		role="dialog" aria-modal="true" aria-label="Character Info" tabindex="-1" use:focusTrap
 		onkeydown={(e) => { if (e.key === 'Escape') onclose(); }}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
