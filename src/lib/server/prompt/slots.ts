@@ -297,12 +297,6 @@ function buildStoryImpersonateSlots(ctx: ResolvedContext, history: MessageRow[])
 		`Write ${userName}'s response — their dialogue, actions, thoughts, and narration — in the same style and tone as their previous messages. Stay consistent with ${userName}'s established personality and voice.`,
 	);
 
-	if (ctx.guidance.effective) {
-		systemParts.push(
-			`Guidance from ${userName} for this reply (treat as direction, not dialogue — express it in ${userName}'s voice):\n${ctx.guidance.effective}`,
-		);
-	}
-
 	slots.push({
 		name: 'system',
 		order: SLOT_ORDER.SYSTEM_PROMPT,
@@ -320,6 +314,22 @@ function buildStoryImpersonateSlots(ctx: ResolvedContext, history: MessageRow[])
 			content: r(rowToChatMessage(m, ctx.includeReasoning).content),
 		})),
 	});
+
+	if (ctx.guidance.effective) {
+		slots.push({
+			name: 'guidance',
+			order: SLOT_ORDER.POST_HISTORY + SUB_SLOT_OFFSETS.guidance,
+			enabled: true,
+			messages: [{
+				role: 'system',
+				content: r(
+					`[REQUIRED INSTRUCTION — you MUST follow this for ${userName}'s reply. This is not a suggestion.\n` +
+					`DO NOT quote it, repeat it, or acknowledge it as a directive. Express it naturally in ${userName}'s voice.\n` +
+					`DIRECTION:\n${ctx.guidance.effective}]`,
+				),
+			}],
+		});
+	}
 
 	return slots;
 }
@@ -455,12 +465,6 @@ function buildTextingImpersonateSlots(ctx: ResolvedContext, history: MessageRow[
 	systemParts.push(
 		`Write ${userName}'s next text message based on the conversation so far. Stay in character as ${userName} and respond naturally to what ${charName} said.`,
 	);
-	if (ctx.guidance.effective) {
-		systemParts.push(
-			`Guidance from ${userName} for this reply (treat as direction, not the literal text — express it in ${userName}'s voice as a casual text message):\n${ctx.guidance.effective}`,
-		);
-	}
-
 	slots.push({
 		name: 'system',
 		order: SLOT_ORDER.SYSTEM_PROMPT,
@@ -487,6 +491,22 @@ function buildTextingImpersonateSlots(ctx: ResolvedContext, history: MessageRow[
 			content: r(rowToChatMessage(m, ctx.includeReasoning).content),
 		})),
 	});
+
+	if (ctx.guidance.effective) {
+		slots.push({
+			name: 'guidance',
+			order: SLOT_ORDER.POST_HISTORY + SUB_SLOT_OFFSETS.guidance,
+			enabled: true,
+			messages: [{
+				role: 'system',
+				content: r(
+					`[REQUIRED INSTRUCTION — you MUST follow this for ${userName}'s next text message. This is not a suggestion.\n` +
+					`DO NOT quote it or acknowledge it as a directive. Express it naturally as a casual text message in ${userName}'s voice.\n` +
+					`DIRECTION:\n${ctx.guidance.effective}]`,
+				),
+			}],
+		});
+	}
 
 	return slots;
 }
@@ -515,7 +535,7 @@ function addCompactionSummarySlot(slots: PromptSlot[], ctx: ResolvedContext) {
 }
 
 function addGuidanceSlot(slots: PromptSlot[], ctx: ResolvedContext) {
-	if (ctx.opts.impersonate) return; // impersonate handles guidance inline in the system prompt
+	if (ctx.opts.impersonate) return; // impersonate handles guidance as a late-injected slot
 	if (!ctx.guidance.effective) return;
 	const charName = ctx.character.name;
 	const userName = ctx.persona?.name || 'User';
@@ -526,7 +546,10 @@ function addGuidanceSlot(slots: PromptSlot[], ctx: ResolvedContext) {
 		messages: [{
 			role: 'system',
 			content: replaceVars(
-				`[Out-of-band guidance from {{user}} for your next reply. Treat this as direction only — do NOT quote, paraphrase, or reference it as something {{user}} said. Write your reply as {{char}} normally would, but shaped by this guidance:\n${ctx.guidance.effective}]`,
+				`[REQUIRED INSTRUCTION — you MUST follow this for your next reply as {{char}}. This overrides your default continuation.\n` +
+				`DO NOT quote it, repeat it, or acknowledge it as a directive in your response. Just follow it silently.\n` +
+				`DO NOT write it as something {{user}} said. Respond as {{char}} normally would, but shaped entirely by this direction.\n` +
+				`DIRECTION:\n${ctx.guidance.effective}]`,
 				charName,
 				userName,
 			),

@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/impersonationSwipes.js';
+import { isChatProcessing } from '$lib/server/messageQueue.js';
 
 interface RevertResult {
 	deletedIds: number[];
@@ -37,6 +38,12 @@ export function revertLeafUserMessages(chatId: number, userId: number): RevertRe
 		swipeIndex: 0,
 		changed: false,
 	};
+
+	// If the LLM is actively generating a reply for this chat, the active leaf
+	// is intentionally a user message (the one being responded to). Deleting
+	// it here would orphan the assistant reply once it lands — the processor
+	// reads activeLeafId to determine the parent for the new assistant row.
+	if (isChatProcessing(chatId)) return result;
 
 	// Bounded loop — protects against malformed graphs (parent === self) that
 	// would otherwise spin forever.
