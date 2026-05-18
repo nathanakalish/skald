@@ -52,6 +52,7 @@
 		WifiOff,
 		Sparkles,
 		Type,
+		PackageOpen,
 	} from 'lucide-svelte';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -1456,6 +1457,7 @@
 		{ id: 'appearance' as const, label: 'Appearance', icon: Palette },
 		{ id: 'chat' as const, label: 'Chat', icon: MessageSquare },
 		{ id: 'notifications' as const, label: 'Notifications', icon: Bell },
+		{ id: 'import-export' as const, label: 'Import / Export', icon: PackageOpen },
 		{ id: 'account' as const, label: 'Account', icon: User },
 	];
 	const settingsAdminTabs = [
