@@ -112,6 +112,7 @@ export const PUT: RequestHandler = async (event) => {
 		.where(and(eq(chats.userId, user.id), eq(chats.characterId, id)))
 		.get();
 	const chatCount = Number(chatCountRow?.n ?? 0);
+	event.locals.logger.debug('characters: updated', { characterId: id, chatCount });
 	return json({ ...updated, light, chatCount, previousName });
 };
 
@@ -166,5 +167,6 @@ export const DELETE: RequestHandler = async (event) => {
 	tryDeleteUnreferencedAvatar(character.avatarPath);
 
 	broadcast(user.id, { type: 'character:deleted', id });
+	event.locals.logger.warn('characters: deleted', { characterId: id, cascadedChats: chatIds.length, keepLorebook });
 	return json({ ok: true });
 };

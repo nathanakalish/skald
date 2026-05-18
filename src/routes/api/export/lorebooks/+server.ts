@@ -22,6 +22,10 @@ export const POST: RequestHandler = async (event) => {
 		? `skald-lorebook-${stamp}.skald.zip`
 		: `skald-lorebooks-${stamp}.skald.zip`;
 
+	event.locals.logger?.info('export: lorebooks', {
+		requested: ids.length, bytes: result.buffer.byteLength, counts: result.counts,
+	});
+
 	return new Response(new Uint8Array(result.buffer), {
 		headers: {
 			'Content-Type': 'application/zip',

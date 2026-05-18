@@ -13,5 +13,8 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	removeSubscription(user.id, endpoint);
+	event.locals.logger?.info('push: unsubscribed', {
+		endpointHost: (() => { try { return new URL(endpoint).host; } catch { return null; } })(),
+	});
 	return json({ ok: true });
 };

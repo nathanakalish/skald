@@ -5,6 +5,7 @@ import { users } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createSession, getSessionCookieName, getSessionMaxAge } from '$lib/server/auth.js';
 import { isDevAuthBypassEnabled, DEV_AUTH_USERNAME } from '$lib/server/devAuth.js';
+import { logger } from '$lib/server/logger.js';
 
 /**
  * Dev-only auth bypass.
@@ -44,6 +45,7 @@ function signIn(url: URL, cookies: Cookies, userAgent: string | null): { id: num
 		sameSite: 'lax',
 		maxAge: getSessionMaxAge(),
 	});
+	logger.warn('auth: dev bypass login', { userId: user.id, username: user.username });
 	return { id: user.id, username: user.username, role: user.role };
 }
 

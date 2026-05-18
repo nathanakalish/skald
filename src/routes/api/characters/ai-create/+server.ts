@@ -153,9 +153,12 @@ export const POST: RequestHandler = async (event) => {
 	];
 
 	let raw: string;
+	const t0 = Date.now();
+	event.locals.logger?.debug('characters: ai-create start', { providerId: provider.id, model: activeModel, historyTurns: history.length });
 	try {
 		raw = await streamFull(llm, messages, samplerSettings, event.request.signal);
 	} catch (err) {
+		event.locals.logger?.warn('characters: ai-create failed', { providerId: provider.id, durationMs: Date.now() - t0, err: String(err) });
 		return json({ error: err instanceof Error ? err.message : 'Provider error' }, { status: 502 });
 	}
 
@@ -184,6 +187,11 @@ export const POST: RequestHandler = async (event) => {
 	for (const [k, v] of Object.entries(parsed.changes) as [FieldKey, string][]) {
 		if (v !== currentFields[k]) filteredChanges[k] = v;
 	}
+
+	event.locals.logger?.info('characters: ai-create complete', {
+		providerId: provider.id, durationMs: Date.now() - t0,
+		changedFields: Object.keys(filteredChanges),
+	});
 
 	return json({
 		message: parsed.message || 'Done.',

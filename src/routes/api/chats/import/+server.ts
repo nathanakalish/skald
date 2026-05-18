@@ -235,6 +235,9 @@ export const POST: RequestHandler = async (event) => {
 
 	const fresh = db.select().from(chats).where(eq(chats.id, chatId)).get();
 	if (!fresh) return json({ error: 'Chat vanished after import' }, { status: 500 });
+	event.locals.logger?.info('chats: imported', {
+		chatId, characterId: character.id, format, messageCount, bytes: content.length,
+	});
 	return json({
 		id: chatId,
 		messageCount,

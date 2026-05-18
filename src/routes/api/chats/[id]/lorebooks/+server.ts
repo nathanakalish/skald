@@ -125,6 +125,7 @@ export const POST: RequestHandler = async (event) => {
 		// already linked, no-op
 	}
 
+	event.locals.logger?.debug('chats: lorebook attached', { chatId, lorebookId });
 	return json({ ok: true });
 };
 
@@ -144,5 +145,6 @@ export const DELETE: RequestHandler = async (event) => {
 		.where(and(eq(chatLorebooks.chatId, chatId), eq(chatLorebooks.lorebookId, lorebookId)))
 		.run();
 
+	event.locals.logger?.debug('chats: lorebook detached', { chatId, lorebookId });
 	return json({ ok: true });
 };

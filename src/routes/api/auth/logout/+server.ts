@@ -8,8 +8,9 @@ import {
 import { db } from '$lib/db/index.js';
 import { pushSubscriptions } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { logger } from '$lib/server/logger.js';
 
-export const POST: RequestHandler = async ({ cookies }) => {
+export const POST: RequestHandler = async ({ cookies, locals }) => {
 	const token = cookies.get(getSessionCookieName());
 	if (token) {
 		// Drop any push subscriptions tied to this session before the FK on
@@ -20,6 +21,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		const hashed = hashSessionToken(token);
 		db.delete(pushSubscriptions).where(eq(pushSubscriptions.sessionId, hashed)).run();
 		deleteSession(token);
+		(locals.logger ?? logger).info('auth: logout', { sessionIdPrefix: hashed.slice(0, 8) });
 	}
 
 	cookies.delete(getSessionCookieName(), { path: '/' });

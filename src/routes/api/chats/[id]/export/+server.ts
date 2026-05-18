@@ -46,6 +46,7 @@ export const GET: RequestHandler = async (event) => {
 		}
 		const content = lines.join('\n');
 		const safeName = character.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+		event.locals.logger?.info('chats: exported', { chatId: id, format: 'md', bytes: content.length, messageCount: path.length });
 		return new Response(content, {
 			headers: {
 				'Content-Type': 'text/markdown',
@@ -76,7 +77,9 @@ export const GET: RequestHandler = async (event) => {
 	};
 
 	const safeName = character.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-	return new Response(JSON.stringify(body, null, 2), {
+	const payload = JSON.stringify(body, null, 2);
+	event.locals.logger?.info('chats: exported', { chatId: id, format: 'json', bytes: payload.length, messageCount: body.messages.length });
+	return new Response(payload, {
 		headers: {
 			'Content-Type': 'application/json',
 			'Content-Disposition': `attachment; filename="${safeName}_${chat.id}.json"`

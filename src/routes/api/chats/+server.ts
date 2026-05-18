@@ -191,5 +191,6 @@ export const POST: RequestHandler = async (event) => {
 		unread: 0
 	} as any;
 	broadcast(user.id, { type: 'chat:created', chat: sidebarChat });
+	event.locals.logger.info('chats: created', { chatId: chat.id, characterId, mode });
 	return json({ id: chat.id, chat: sidebarChat });
 };

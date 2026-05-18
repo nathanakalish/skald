@@ -101,6 +101,7 @@ export const PATCH: RequestHandler = async (event) => {
 				.where(and(eq(chatLorebookEntryOverrides.chatId, chatId), eq(chatLorebookEntryOverrides.entryId, entryId)))
 				.run();
 		}
+		event.locals.logger?.debug('chats: lorebook entry override cleared', { chatId, entryId });
 		return json({ ok: true, cleared: true });
 	}
 
@@ -114,6 +115,7 @@ export const PATCH: RequestHandler = async (event) => {
 			.values({ chatId, entryId, ...next })
 			.run();
 	}
+	event.locals.logger?.debug('chats: lorebook entry override set', { chatId, entryId, enabled: next.enabled, constant: next.constant });
 	return json({ ok: true });
 };
 
@@ -127,5 +129,6 @@ export const DELETE: RequestHandler = async (event) => {
 		.where(and(eq(chatLorebookEntryOverrides.chatId, chatId), eq(chatLorebookEntryOverrides.entryId, entryId)))
 		.run();
 
+	event.locals.logger?.debug('chats: lorebook entry override deleted', { chatId, entryId });
 	return json({ ok: true });
 };

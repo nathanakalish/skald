@@ -53,5 +53,9 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
+	event.locals.logger?.info('characters: regenerated themes', {
+		total: allChars.length, updated, skipped,
+	});
+
 	return json({ ok: true, updated, skipped });
 };

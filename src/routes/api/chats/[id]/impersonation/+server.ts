@@ -44,6 +44,8 @@ export const DELETE: RequestHandler = async (event) => {
 		swipeIndex: 0
 	});
 
+	event.locals.logger?.debug('chats: impersonation cleared', { chatId });
+
 	return json({ ok: true });
 };
 
@@ -89,6 +91,8 @@ export const PATCH: RequestHandler = async (event) => {
 		swipes,
 		swipeIndex
 	});
+
+	event.locals.logger?.debug('chats: impersonation patched', { chatId, swipeCount: swipes.length, swipeIndex, status });
 
 	return json({ ok: true, swipes, swipeIndex });
 };

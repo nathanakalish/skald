@@ -22,10 +22,16 @@ export const POST: RequestHandler = async (event) => {
 	const body = await event.request.json().catch(() => ({}));
 	const redo = body?.redo === true;
 
+	event.locals.logger?.info('chats: manual compaction requested', { chatId: id, redo });
 	const result = redo ? await runReprocess(id) : await runCompaction(id, { force: true });
 	if (!result.ran) {
+		event.locals.logger?.warn('chats: manual compaction skipped', { chatId: id, redo, reason: result.reason ?? 'unknown' });
 		return json({ ok: false, reason: result.reason ?? 'unknown' }, { status: 400 });
 	}
+	event.locals.logger?.info('chats: manual compaction complete', {
+		chatId: id, redo, compactedCount: result.compactedCount,
+		summaryChars: result.summary?.length ?? 0,
+	});
 	return json({
 		ok: true,
 		summary: result.summary,

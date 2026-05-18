@@ -76,6 +76,10 @@ export const POST: RequestHandler = async (event) => {
 	// Update activeLeafId
 	db.update(chats).set({ activeLeafId: targetLeafId }).where(eq(chats.id, message.chatId)).run();
 
+	event.locals.logger?.debug('messages: switch-branch', {
+		chatId: message.chatId, messageId, direction, targetLeafId,
+	});
+
 	// Unsend any user message that ended up as the new leaf
 	const reverted = revertLeafUserMessages(message.chatId, user.id);
 	const finalLeafId = reverted.changed ? (reverted.newActiveLeafId ?? targetLeafId) : targetLeafId;

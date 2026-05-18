@@ -17,6 +17,7 @@ import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { parseImpersonationSwipes, type ImpersonationSwipe } from '$lib/chat/impersonationSwipes.js';
 import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
 import { isChatProcessing } from '$lib/server/messageQueue.js';
+import { logger } from '$lib/server/logger.js';
 
 interface RevertResult {
 	deletedIds: number[];
@@ -103,6 +104,9 @@ export function revertLeafUserMessages(chatId: number, userId: number): RevertRe
 
 	if (result.changed) {
 		recomputeChatTail(chatId);
+		logger.info('chatRevert: reverted leaf user messages', {
+			chatId, deletedCount: result.deletedIds.length, newActiveLeafId: result.newActiveLeafId,
+		});
 		broadcast(userId, {
 			type: 'message:deleted',
 			chatId,

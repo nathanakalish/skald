@@ -30,5 +30,7 @@ export const POST: RequestHandler = async (event) => {
 
 	eventBus.emit({ type: 'chat-muted', chatId, userId: user.id, data: { muted: next } });
 
+	event.locals.logger?.debug('chats: mute toggled', { chatId, muted: next });
+
 	return json({ ok: true, muted: next });
 };

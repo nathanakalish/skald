@@ -111,6 +111,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	if (Object.keys(updates).length > 0) {
 		db.update(chats).set(updates).where(eq(chats.id, id)).run();
+		event.locals.logger.debug('chats: updated', { chatId: id, keys: Object.keys(updates) });
 	}
 
 	const row = getSidebarRow(id);
@@ -138,6 +139,7 @@ export const DELETE: RequestHandler = async (event) => {
 
 	db.update(chats).set({ deletedAt: Date.now() }).where(eq(chats.id, id)).run();
 	broadcast(user.id, { type: 'chat:deleted', id });
+	event.locals.logger.warn('chats: deleted (soft)', { chatId: id, messageCount: chatMessages.length });
 	return json({ ok: true });
 };
 
@@ -181,6 +183,7 @@ export const POST: RequestHandler = async (event) => {
 
 		const row = getSidebarRow(id);
 		if (row) broadcast(user.id, { type: 'chat:updated', id, chat: row as any });
+		event.locals.logger.info('chats: reset', { chatId: id, deletedCount: toDelete.length, keptMessageId: keepId });
 		return json({ ok: true, chat: row });
 	}
 

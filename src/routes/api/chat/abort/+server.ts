@@ -16,5 +16,6 @@ export const POST: RequestHandler = async (event) => {
 	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
 
 	const aborted = abortChat(chatId);
+	event.locals.logger?.info('chat: abort requested', { chatId, aborted });
 	return json({ ok: true, aborted });
 };

@@ -102,6 +102,8 @@ export const POST: RequestHandler = async (event) => {
 
 	// Reformat each greeting
 	const results: { index: number; original: string; reformatted: string }[] = [];
+	const t0 = Date.now();
+	event.locals.logger?.debug('characters: reformat-greetings start', { characterId: id, providerId: provider.id, model: activeModel, count: greetings.length });
 
 	for (const greeting of greetings) {
 		const messages: ChatMessage[] = [
@@ -130,11 +132,15 @@ export const POST: RequestHandler = async (event) => {
 				reformatted: fullResponse.trimEnd(),
 			});
 		} catch (err) {
+			const durationMs = Date.now() - t0;
+			const msg = err instanceof Error ? err.message : 'Unknown error';
+			event.locals.logger?.warn('characters: reformat-greetings failed', { characterId: id, greetingIndex: greeting.index, durationMs, err: msg });
 			return json({
-				error: `Failed to reformat greeting ${greeting.index === -1 ? 'first message' : `alt #${greeting.index + 1}`}: ${err instanceof Error ? err.message : 'Unknown error'}`
+				error: `Failed to reformat greeting ${greeting.index === -1 ? 'first message' : `alt #${greeting.index + 1}`}: ${msg}`
 			}, { status: 500 });
 		}
 	}
 
+	event.locals.logger?.info('characters: reformat-greetings complete', { characterId: id, count: results.length, durationMs: Date.now() - t0 });
 	return json({ results });
 };

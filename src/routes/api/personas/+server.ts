@@ -65,5 +65,6 @@ export const POST: RequestHandler = async (event) => {
 	// Return all personas — setting isDefault may have demoted others
 	const list = db.select().from(personas).where(eq(personas.userId, user.id)).all();
 	broadcast(user.id, { type: 'persona:replaced', personas: list as any });
+	event.locals.logger.info('personas: created', { personaId: result?.id, isDefault: !!body.isDefault });
 	return json({ ...(result ?? {}), personas: list });
 };

@@ -30,6 +30,8 @@ export const PATCH: RequestHandler = async (event) => {
 
 	db.update(chats).set({ activeLeafId }).where(eq(chats.id, chatId)).run();
 
+	event.locals.logger?.debug('chats: branch set', { chatId, activeLeafId });
+
 	// Return the new message window inline so the client can render immediately
 	// without a second GET to /api/chats/[id]/data.
 	const page = loadActivePathPage(activeLeafId, limit, 0);

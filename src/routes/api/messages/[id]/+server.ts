@@ -21,6 +21,9 @@ export const PATCH: RequestHandler = async (event) => {
 	const chat = db.select().from(chats).where(and(eq(chats.id, message.chatId), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Not found' }, { status: 404 });
 
+	const patchKinds = Object.keys(body).filter((k) => ['swipeIndex', 'content', 'reasoning', 'guidance'].includes(k));
+	event.locals.logger?.debug('messages: patch', { messageId: id, chatId: message.chatId, kinds: patchKinds });
+
 	// Swipe navigation: change active swipe index
 	if ('swipeIndex' in body) {
 		const swipes = parseSwipes(message.swipes);
@@ -159,6 +162,8 @@ export const DELETE: RequestHandler = async (event) => {
 	// Verify ownership through chat
 	const ownerChat = db.select().from(chats).where(and(eq(chats.id, message.chatId), eq(chats.userId, user.id))).get();
 	if (!ownerChat) return json({ error: 'Not found' }, { status: 404 });
+
+	event.locals.logger?.warn('messages: deleted', { messageId: id, chatId: message.chatId, mode: deleteMode });
 
 	if (deleteMode === 'single') {
 		const result = db.transaction(() => {

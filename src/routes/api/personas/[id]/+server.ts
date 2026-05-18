@@ -49,6 +49,7 @@ export const PUT: RequestHandler = async (event) => {
 	// Return all personas — setting isDefault may have changed others' isDefault
 	const list = db.select().from(personas).where(eq(personas.userId, user.id)).all();
 	broadcast(user.id, { type: 'persona:replaced', personas: list as any });
+	event.locals.logger.debug('personas: updated', { personaId: id, isDefault: !!body.isDefault });
 	return json({ ok: true, personas: list });
 };
 
@@ -56,5 +57,6 @@ export const DELETE: RequestHandler = async (event) => {
 	const { user, row: existing } = requireOwned(event, personas, event.params.id);
 	db.delete(personas).where(eq(personas.id, existing.id)).run();
 	broadcast(user.id, { type: 'persona:deleted', id: existing.id });
+	event.locals.logger.warn('personas: deleted', { personaId: existing.id });
 	return json({ ok: true });
 };

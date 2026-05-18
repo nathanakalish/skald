@@ -15,6 +15,8 @@ export const GET: RequestHandler = async (event) => {
 	const buffer = readFileSync(filePath);
 	const stamp = new Date().toISOString().slice(0, 10);
 
+	event.locals.logger?.info('export: everything downloaded', { bytes: buffer.length });
+
 	return new Response(buffer, {
 		headers: {
 			'Content-Type': 'application/zip',

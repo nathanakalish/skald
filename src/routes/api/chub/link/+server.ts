@@ -52,5 +52,7 @@ export const POST: RequestHandler = async (event) => {
 		.where(and(eq(table.id, id), eq(table.userId, user.id)))
 		.run();
 
+	event.locals.logger?.info('chub: link updated', { type, id, fullPath, cleared: fullPath === null });
+
 	return json({ id: row.id, name: row.name, fullPath, lastActivityAt: fullPath ? lastActivityAt : null });
 };

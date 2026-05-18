@@ -33,5 +33,9 @@ export const POST: RequestHandler = async (event) => {
 		.returning()
 		.get();
 
+	event.locals.logger?.debug('lorebookEntry: created', {
+		lorebookId, entryId: entry.id, keywords: entry.keywords, constant: entry.constant,
+	});
+
 	return json(entry);
 };

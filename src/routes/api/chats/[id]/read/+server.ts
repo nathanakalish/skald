@@ -17,5 +17,7 @@ export const POST: RequestHandler = async (event) => {
 	db.update(chats).set({ unread: 0 }).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).run();
 	eventBus.emit({ type: 'unread', chatId, userId: user.id, data: { count: 0 } });
 
+	event.locals.logger?.debug('chats: marked read', { chatId });
+
 	return json({ ok: true });
 };

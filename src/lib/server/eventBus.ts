@@ -13,6 +13,7 @@
  * There's a recent-event buffer too, so reconnecting clients can replay what
  * they missed during the gap.
  */
+import { logger } from '$lib/server/logger.js';
 
 interface ChatEvent {
 	/**
@@ -67,8 +68,9 @@ class EventBus {
 		for (const listener of this.listeners) {
 			try {
 				listener(sequenced);
-			} catch {
+			} catch (err) {
 				// One broken listener doesn't get to take the others down with it.
+				logger.debug('eventBus: listener threw', { type: event.type, err: String(err) });
 			}
 		}
 	}
@@ -85,11 +87,17 @@ class EventBus {
 	/** Drop expired or excess entries from the replay buffer. */
 	private pruneBuffer(): void {
 		const cutoff = Date.now() - BUFFER_TTL_MS;
+		let dropped = 0;
 		while (this.buffer.length > 0 && this.buffer[0].ts < cutoff) {
 			this.buffer.shift();
+			dropped++;
 		}
 		while (this.buffer.length > BUFFER_MAX) {
 			this.buffer.shift();
+			dropped++;
+		}
+		if (dropped > 0) {
+			logger.debug('eventBus: buffer pruned', { dropped, bufferSize: this.buffer.length });
 		}
 	}
 
@@ -111,7 +119,9 @@ class EventBus {
 			data: { reason: 'graceful' },
 		};
 		for (const listener of this.listeners) {
-			try { listener(sequenced); } catch { /* swallow */ }
+			try { listener(sequenced); } catch (err) {
+				logger.debug('eventBus: shutdown listener threw', { err: String(err) });
+			}
 		}
 	}
 }

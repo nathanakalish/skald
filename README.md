@@ -53,10 +53,12 @@ See the comments in `docker-compose.yml` for the full list, including:
 - `IMAGE_CACHE_MAX_BYTES` — cap on the image cache LRU (default 1 GiB)
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — web push notifications. Generate a pair with `npx web-push generate-vapid-keys`; push is disabled if either key is missing.
 - `LOG_LEVEL` — trace, debug, info (default), warn, error
+- `LOG_FILE` — optional path to mirror logs to a file (e.g. `/app/data/logs/skald.log`)
+- `LOG_FILE_MAX_BYTES` / `LOG_FILE_MAX_FILES` — file rotation (defaults: 10 MiB, 5 backups)
 
 ### Logs
 
-Logs are written as one JSON object per line to **stderr**. Each HTTP request is assigned a UUID, exposed both in every log line for that request and as the `x-request-id` response header, so users can quote it in bug reports.
+Logs are written as one JSON object per line to **stderr**, and (when `LOG_FILE` is set) also appended to a file with size-based rotation. Each HTTP request is assigned a UUID, exposed both in every log line for that request and as the `x-request-id` response header, so users can quote it in bug reports.
 
 ```
 LOG_LEVEL=info     # default — quiet, lifecycle events only
@@ -64,6 +66,14 @@ LOG_LEVEL=debug    # investigating — adds decisions, cache hits, queue moves
 LOG_LEVEL=trace    # deep dive — per-token streaming, per-event SSE, per-query DB
 LOG_LEVEL=warn     # only handled failures and security guard rejections
 LOG_LEVEL=error    # only fatal/unhandled errors
+```
+
+To persist logs to disk for later inspection or external log shippers:
+
+```
+LOG_FILE=/app/data/logs/skald.log   # mirrors stderr to a rotated file
+LOG_FILE_MAX_BYTES=10485760          # default 10 MiB
+LOG_FILE_MAX_FILES=5                 # default 5 (skald.log.1 .. skald.log.5)
 ```
 
 Filter live with `jq`:

@@ -58,6 +58,7 @@ export const POST: RequestHandler = async (event) => {
 		.get();
 
 	broadcast(user.id, { type: 'theme:created', theme: theme as any });
+	event.locals.logger.info('themes: created', { themeId: theme.id, mode });
 	return json(theme);
 };
 

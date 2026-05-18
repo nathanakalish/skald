@@ -25,5 +25,6 @@ export const POST: RequestHandler = async (event) => {
 
 	const list = db.select().from(providers).where(eq(providers.userId, user.id)).orderBy(providers.sortOrder).all();
 	broadcast(user.id, { type: 'provider:replaced', providers: list.map(toLight) as any });
+	event.locals.logger?.debug('providers: reordered', { count: order.length });
 	return json({ ok: true });
 };

@@ -33,5 +33,6 @@ export const POST: RequestHandler = async (event) => {
 
 	themeCache.invalidateForUser(user.id);
 	broadcast(user.id, { type: 'theme:activated', theme: theme as any });
+	event.locals.logger?.debug('themes: activated', { themeId: id, builtin: theme.isBuiltin });
 	return json({ ok: true, theme });
 };

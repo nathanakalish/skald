@@ -144,7 +144,7 @@ export function saveSubscription(
 		})
 		.run();
 	let endpointHost = '';
-	try { endpointHost = new URL(subscription.endpoint).host; } catch { /* ignore */ }
+	try { endpointHost = new URL(subscription.endpoint).host; } catch (err) { logger.debug('push: endpoint URL parse failed', { err: String(err) }); }
 	logger.info('push subscription saved', { userId, endpointHost });
 }
 
@@ -155,7 +155,7 @@ export function removeSubscription(userId: number, endpoint: string): void {
 		.run();
 	if (result.changes > 0) {
 		let endpointHost = '';
-		try { endpointHost = new URL(endpoint).host; } catch { /* ignore */ }
+		try { endpointHost = new URL(endpoint).host; } catch (err) { logger.debug('push: endpoint URL parse failed', { err: String(err) }); }
 		logger.info('push subscription removed', { userId, endpointHost });
 	}
 }

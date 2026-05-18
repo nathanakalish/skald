@@ -31,6 +31,10 @@ export const PATCH: RequestHandler = async (event) => {
 		if (entries.some(([k]) => THEME_AFFECTING_KEYS.has(k))) {
 			themeCache.invalidateForUser(user.id);
 		}
+		event.locals.logger?.debug('settings: updated', {
+			keys: entries.map(([k]) => k),
+			themeAffected: entries.some(([k]) => THEME_AFFECTING_KEYS.has(k)),
+		});
 	}
 
 	return json({ ok: true });

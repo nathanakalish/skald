@@ -31,5 +31,9 @@ export const POST: RequestHandler = async (event) => {
 		sessionId,
 		userAgent
 	});
+	event.locals.logger?.info('push: subscribed', {
+		endpointHost: (() => { try { return new URL(endpoint).host; } catch { return null; } })(),
+		hasSessionId: !!sessionId,
+	});
 	return json({ ok: true });
 };

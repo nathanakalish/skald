@@ -26,6 +26,8 @@ export const GET: RequestHandler = async (event) => {
 	const cardJSON = toCharaCardJSON(character as Parameters<typeof toCharaCardJSON>[0]);
 
 	if (format === 'json') {
+		const payload = JSON.stringify(cardJSON);
+		event.locals.logger?.info('characters: exported', { characterId: id, format: 'json', bytes: payload.length });
 		return json(cardJSON);
 	}
 
@@ -53,6 +55,8 @@ export const GET: RequestHandler = async (event) => {
 
 		const outputBuffer = embedCharaCardInPNG(pngBuffer, cardJSON);
 		const safeName = character.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+		event.locals.logger?.info('characters: exported', { characterId: id, format: 'png', bytes: outputBuffer.length });
 
 		return new Response(new Uint8Array(outputBuffer), {
 			headers: {

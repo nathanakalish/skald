@@ -22,6 +22,9 @@ export const GET: RequestHandler = async (event) => {
 	});
 
 	const stamp = new Date().toISOString().slice(0, 10);
+	event.locals.logger?.info('export: everything (sync)', {
+		bytes: result.buffer.byteLength, counts: result.counts,
+	});
 	return new Response(new Uint8Array(result.buffer), {
 		headers: {
 			'Content-Type': 'application/zip',
@@ -44,9 +47,11 @@ export const POST: RequestHandler = async (event) => {
 	};
 
 	if (isExportRunning(user.id)) {
+		event.locals.logger?.warn('export: everything (async) rejected — already running', {});
 		return json({ ok: false, reason: 'already_running' }, { status: 409 });
 	}
 
 	startExportJob(user.id, opts);
+	event.locals.logger?.info('export: everything (async) started', { opts });
 	return json({ ok: true });
 };

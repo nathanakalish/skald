@@ -200,11 +200,13 @@ export const POST: RequestHandler = async (event) => {
 					broadcast(user.id, { type: 'message:deleted', chatId, ids: [userMsgId] });
 				} catch { /* best-effort cleanup */ }
 			}
+			event.locals.logger?.warn('chat: send rejected (already processing)', { chatId });
 			return json(
 				{ error: 'Chat is already processing a message — wait for it to finish or abort it first.' },
 				{ status: 409 }
 			);
 		}
+		event.locals.logger?.info('chat: send accepted', { chatId, jobId, userMsgId, regenerate: !!regenerate, greeting: !!greeting, hasGuidance: !!jobGuidance, impersonationSwipes: impSwipes.length });
 		return json({ ok: true, jobId, userMsgId });
 	} catch (err) {
 		// M5: roll back the user message we just inserted; otherwise the chat is
@@ -216,6 +218,7 @@ export const POST: RequestHandler = async (event) => {
 				broadcast(user.id, { type: 'message:deleted', chatId, ids: [userMsgId] });
 			} catch { /* best-effort cleanup */ }
 		}
+		event.locals.logger?.warn('chat: send enqueue failed', { chatId, err: err instanceof Error ? err.message : String(err) });
 		return json({ error: err instanceof Error ? err.message : 'Failed to enqueue job' }, { status: 500 });
 	}
 };

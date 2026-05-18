@@ -37,6 +37,8 @@ export const POST: RequestHandler = async (event) => {
 			.run();
 	});
 
+	event.locals.logger.info('session: notifications disabled', { sessionIdPrefix: target.id.slice(0, 8) });
+
 	return json({ ok: true, notificationsDisabledAt: now });
 };
 
@@ -53,6 +55,7 @@ export const DELETE: RequestHandler = async (event) => {
 		.set({ notificationsDisabledAt: null })
 		.where(eq(sessions.id, target.id))
 		.run();
+	event.locals.logger.info('session: notifications re-enabled', { sessionIdPrefix: target.id.slice(0, 8) });
 	return json({ ok: true });
 };
 

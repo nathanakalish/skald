@@ -44,11 +44,13 @@ export const PATCH: RequestHandler = async (event) => {
 
 	db.update(regexScripts).set(updates).where(eq(regexScripts.id, id)).run();
 	const updated = db.select().from(regexScripts).where(eq(regexScripts.id, id)).get();
+	event.locals.logger?.debug('regexScript: updated', { scriptId: id, keys: Object.keys(updates) });
 	return json(updated);
 };
 
 export const DELETE: RequestHandler = async (event) => {
 	const { row: existing } = requireOwned(event, regexScripts, event.params.id);
 	db.delete(regexScripts).where(eq(regexScripts.id, existing.id)).run();
+	event.locals.logger?.info('regexScript: deleted', { scriptId: existing.id });
 	return json({ ok: true });
 };

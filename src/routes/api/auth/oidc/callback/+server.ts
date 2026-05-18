@@ -78,6 +78,7 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 		cookies.delete('oidc_state', { path: '/' });
 		cookies.delete('oidc_verifier', { path: '/' });
 		cookies.delete('oidc_nonce', { path: '/' });
+		logger.warn('auth: oidc state mismatch');
 		return popupResponse(false, 'Invalid state');
 	}
 
@@ -99,11 +100,14 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 
 		// userGroup gate, when configured. Admins bypass (admin group implies access).
 		if (config.userGroup && role !== 'admin' && !claims.groups.includes(config.userGroup)) {
+			logger.warn('auth: oidc user not in required group', { username: claims.username, requiredGroup: config.userGroup });
 			return popupResponse(false, 'Account not authorized for this app.');
 		}
 
 		// Look up an existing user by username.
 		let user = db.select().from(users).where(eq(users.username, claims.username)).get();
+
+		let createdNewUser = false;
 
 		if (user) {
 			// Refresh role + picture from OIDC on each login.
@@ -134,6 +138,8 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 					pictureUrl: claims.picture,
 					createdAt: new Date().toISOString(),
 				};
+				createdNewUser = true;
+				logger.info('auth: oidc user auto-created', { userId: user.id, username: user.username, role: user.role });
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : String(e);
 				if (/UNIQUE constraint failed/i.test(msg)) {
@@ -157,6 +163,8 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 			sameSite: 'lax',
 			maxAge: getSessionMaxAge(),
 		});
+
+		logger.info('auth: oidc login success', { userId: user.id, username: user.username, newUser: createdNewUser });
 
 		return popupResponse(true);
 	} catch (err) {

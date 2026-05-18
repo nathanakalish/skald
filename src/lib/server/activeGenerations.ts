@@ -11,6 +11,8 @@
  * (enforced upstream by messageQueue.isChatProcessing).
  */
 
+import { logger } from '$lib/server/logger.js';
+
 export interface ActiveGeneration {
 	chatId: number;
 	userId: number;
@@ -81,8 +83,15 @@ const STALE_GENERATION_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const sweep = setInterval(() => {
 	const cutoff = Date.now() - STALE_GENERATION_MS;
+	let deletedCount = 0;
 	for (const [chatId, gen] of _byChatId) {
-		if (gen.startedAt < cutoff) _byChatId.delete(chatId);
+		if (gen.startedAt < cutoff) {
+			_byChatId.delete(chatId);
+			deletedCount++;
+		}
+	}
+	if (deletedCount > 0) {
+		logger.warn('activeGenerations: swept stale entries', { deletedCount });
 	}
 }, SWEEP_INTERVAL_MS);
 sweep.unref?.();

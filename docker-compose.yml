@@ -18,6 +18,12 @@ services:
       # Logs are JSON-per-line on stderr; tail with `docker logs -f skald`.
       # Each request gets a UUID echoed back as the `x-request-id` header.
       - LOG_LEVEL=info
+      # File sink (mirrors stderr). Set to a path inside the data volume so logs
+      # persist across container restarts. Rotates at LOG_FILE_MAX_BYTES, keeps
+      # LOG_FILE_MAX_FILES backups (.1, .2, ...).
+      - LOG_FILE=/app/data/logs/skald.log
+      # - LOG_FILE_MAX_BYTES=10485760   # 10 MiB
+      # - LOG_FILE_MAX_FILES=5
       #
       # ─── Image cache ───
       # Hard cap on data/image-cache/ in bytes (default 1 GiB). LRU evicts oldest

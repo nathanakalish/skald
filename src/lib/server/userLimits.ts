@@ -43,7 +43,8 @@ function fileSizeBytes(path: string | null | undefined): number {
 		const file = join(process.cwd(), 'static', path.replace(/^\//, ''));
 		if (!existsSync(file)) return 0;
 		return statSync(file).size;
-	} catch {
+	} catch (err) {
+		logger.debug('userLimits: file size read failed', { path, err: String(err) });
 		return 0;
 	}
 }
@@ -185,9 +186,11 @@ export function enforceCreate(resource: Resource, userId: number, incomingBytes 
 	}
 
 	if (limits.maxCount > 0 && usage.count >= limits.maxCount) {
+		logger.info('userLimits: limit exceeded', { resource, userId, kind: 'count', current: usage.count, max: limits.maxCount });
 		return createLimitError(resource, 'count', usage.count, limits.maxCount);
 	}
 	if (limits.maxBytes > 0 && usage.bytes + incomingBytes > limits.maxBytes) {
+		logger.info('userLimits: limit exceeded', { resource, userId, kind: 'size', current: usage.bytes + incomingBytes, max: limits.maxBytes });
 		return createLimitError(resource, 'size', usage.bytes + incomingBytes, limits.maxBytes);
 	}
 	return null;

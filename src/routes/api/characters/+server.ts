@@ -65,5 +65,6 @@ export const POST: RequestHandler = async (event) => {
 	// `light` projection so the client store can insert without a refetch.
 	const light = db.select(characterLight).from(characters).where(eq(characters.id, result.id)).get();
 	if (light) broadcast(user.id, { type: 'character:created', character: light as any });
+	event.locals.logger.info('characters: created', { characterId: result.id });
 	return json({ ...result, light });
 };

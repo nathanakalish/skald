@@ -37,6 +37,7 @@ interface QueueJob {
 	providerId: number;
 	userId: number;
 	options: ProcessOptions;
+	enqueuedAt: number;
 }
 
 let jobIdCounter = 0;
@@ -116,7 +117,7 @@ async function executeJob(job: QueueJob) {
 			controller.abort();
 		}, JOB_TIMEOUT_MS)
 		: null;
-	logger.debug('queue: job started', { jobId: job.id, chatId: job.chatId, providerId: job.providerId });
+	logger.debug('queue: job started', { jobId: job.id, chatId: job.chatId, providerId: job.providerId, waitMs: startedAt - job.enqueuedAt });
 	try {
 		await processChat(job.options, controller.signal);
 		logger.info('queue: job completed', {
@@ -231,6 +232,7 @@ export function enqueueJob(options: ProcessOptions): number {
 		providerId,
 		userId,
 		options,
+		enqueuedAt: Date.now(),
 	};
 
 	const maxConcurrent = getMaxConcurrent(providerId);

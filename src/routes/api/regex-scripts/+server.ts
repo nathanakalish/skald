@@ -57,5 +57,10 @@ export const POST: RequestHandler = async (event) => {
 		sortOrder: body.sortOrder ?? 0
 	}).returning().get();
 
+	event.locals.logger?.info('regexScript: created', {
+		scriptId: result.id, name, characterId: characterId ?? null,
+		affectUserInput: result.affectUserInput, affectAiResponse: result.affectAiResponse,
+	});
+
 	return json(result, { status: 201 });
 };

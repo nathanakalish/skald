@@ -22,6 +22,7 @@ export const POST: RequestHandler = async (event) => {
 	if (chat.deletedAt != null) return json({ error: 'Chat has been deleted' }, { status: 410 });
 
 	if (isChatProcessing(chatId)) {
+		event.locals.logger?.warn('chat: stream rejected (already processing)', { chatId });
 		return json({ error: 'Chat already has an in-flight generation' }, { status: 409 });
 	}
 
@@ -31,9 +32,11 @@ export const POST: RequestHandler = async (event) => {
 			impersonate: !!impersonate,
 			guidance: typeof guidance === 'string' && guidance.trim() ? guidance : undefined,
 		});
+		event.locals.logger?.info('chat: impersonation enqueued', { chatId, jobId, hasGuidance: !!(guidance && String(guidance).trim()) });
 		return json({ ok: true, jobId });
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Failed to enqueue';
+		event.locals.logger?.warn('chat: stream enqueue failed', { chatId, err: message });
 		return json({ error: message }, { status: 500 });
 	}
 };

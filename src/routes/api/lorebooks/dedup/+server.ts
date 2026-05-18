@@ -74,5 +74,7 @@ export const POST: RequestHandler = async (event) => {
 		deletedCount += dupeIds.length;
 	}
 
+	event.locals.logger?.info('lorebooks: deduped', { mergedCount, deletedCount });
+
 	return json({ mergedCount, deletedCount });
 };

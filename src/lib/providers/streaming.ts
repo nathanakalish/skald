@@ -7,6 +7,8 @@
  * "stream complete".
  */
 
+import { logger } from '$lib/server/logger.js';
+
 /**
  * Async-iterator over an SSE stream that prefixes every line with `data: `.
  * Yields the JSON-text payload (the bit after `data: `) for each event.
@@ -44,10 +46,10 @@ export async function* iterateSSE(
 					badLines++;
 					if (!badWarned && badLines >= BAD_LINE_WARN_THRESHOLD) {
 						badWarned = true;
-						console.warn(
-							`[sse] ${badLines} non-SSE lines from provider stream; ` +
-							`first offending line: ${trimmed.slice(0, 120)}`
-						);
+						logger.warn('sse: non-SSE lines from provider stream', {
+							badLines,
+							firstOffendingLine: trimmed.slice(0, 120),
+						});
 					}
 					continue;
 				}

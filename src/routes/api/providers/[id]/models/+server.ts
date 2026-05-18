@@ -24,11 +24,11 @@ export const GET: RequestHandler = async (event) => {
 		});
 
 		const models = await retryOnce(() => llm.listModels());
+		event.locals.logger?.debug('providers: models listed', { providerId: id, type: provider.type, count: models.length });
 		return json({ models });
 	} catch (err) {
-		return json(
-			{ error: err instanceof Error ? err.message : 'Failed to fetch models' },
-			{ status: 500 }
-		);
+		const msg = err instanceof Error ? err.message : 'Failed to fetch models';
+		event.locals.logger?.warn('providers: models list failed', { providerId: id, type: provider.type, err: msg });
+		return json({ error: msg }, { status: 500 });
 	}
 };

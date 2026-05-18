@@ -79,5 +79,6 @@ export const POST: RequestHandler = async (event) => {
 		.get();
 
 	broadcast(user.id, { type: 'lorebook:created', lorebook: lorebook as any });
+	event.locals.logger.info('lorebooks: created', { lorebookId: lorebook.id });
 	return json(lorebook);
 };

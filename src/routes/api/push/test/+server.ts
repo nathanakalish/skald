@@ -13,8 +13,11 @@ export const POST: RequestHandler = async (event) => {
 			icon: '/icon-192.png',
 			data: {}
 		});
+		event.locals.logger?.info('push: test sent');
 		return json({ ok: true });
 	} catch (err) {
-		return json({ error: err instanceof Error ? err.message : 'Push failed' }, { status: 500 });
+		const msg = err instanceof Error ? err.message : 'Push failed';
+		event.locals.logger?.warn('push: test failed', { err: msg });
+		return json({ error: msg }, { status: 500 });
 	}
 };

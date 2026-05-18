@@ -46,5 +46,9 @@ export const POST: RequestHandler = async (event) => {
 		broadcast(user.id, { type: 'chat:patched', id: chat.id, patch });
 	}
 
+	event.locals.logger?.info('characters: sync-chats', {
+		characterId: id, affected: affected.length, renamed,
+	});
+
 	return json({ count: affected.length, renamed });
 };

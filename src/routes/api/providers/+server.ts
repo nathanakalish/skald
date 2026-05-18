@@ -59,5 +59,6 @@ export const POST: RequestHandler = async (event) => {
 
 	const light = toLight(provider);
 	broadcast(user.id, { type: 'provider:created', provider: light as any });
+	event.locals.logger.info('providers: created', { providerId: provider.id, type: provider.type });
 	return json(light);
 };

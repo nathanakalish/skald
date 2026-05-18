@@ -28,6 +28,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	const updated = db.select().from(lorebooks).where(eq(lorebooks.id, id)).get();
 	if (updated) broadcast(user.id, { type: 'lorebook:updated', id, lorebook: updated as any });
+	event.locals.logger.debug('lorebooks: updated', { lorebookId: id });
 	return json({ ok: true, lorebook: updated });
 };
 
@@ -35,5 +36,6 @@ export const DELETE: RequestHandler = async (event) => {
 	const { user, row: existing } = requireOwned(event, lorebooks, event.params.id);
 	db.delete(lorebooks).where(eq(lorebooks.id, existing.id)).run();
 	broadcast(user.id, { type: 'lorebook:deleted', id: existing.id });
+	event.locals.logger.warn('lorebooks: deleted', { lorebookId: existing.id });
 	return json({ ok: true });
 };

@@ -40,6 +40,11 @@ export const DELETE: RequestHandler = async (event) => {
 		event.cookies.delete(getSessionCookieName(), { path: '/' });
 	}
 
+	event.locals.logger.info('auth: session revoked', {
+		sessionIdPrefix: target.id.slice(0, 8),
+		signedOutSelf,
+	});
+
 	return json({ ok: true, signedOutSelf });
 };
 

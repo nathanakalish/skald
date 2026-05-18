@@ -25,5 +25,6 @@ export const PUT: RequestHandler = async (event) => {
 		.run();
 
 	themeCache.invalidateForUser(user.id);
+	event.locals.logger?.debug('themes: color mode set', { colorMode });
 	return json({ ok: true });
 };

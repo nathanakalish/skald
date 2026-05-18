@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { builtinThemes } from './themes.js';
+import { logger } from '$lib/server/logger.js';
 
 /**
  * Idempotent baseline migrations: runs every boot, every step is guarded
@@ -973,7 +974,7 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 						// We don't throw — orphan override_*_id values just get
 						// silently retained. With foreign_keys back ON future
 						// writes will start enforcing. Log for visibility.
-						console.warn('[migration] chats rebuild: foreign_key_check returned', violations.length, 'orphan refs (left as-is)');
+						logger.warn('migration: chats rebuild left orphan refs', { count: violations.length });
 					}
 				})();
 			} finally {

@@ -24,6 +24,10 @@ export const POST: RequestHandler = async (event) => {
 		? `skald-character-${stamp}.skald.zip`
 		: `skald-characters-${stamp}.skald.zip`;
 
+	event.locals.logger?.info('export: characters', {
+		requested: ids.length, bytes: result.buffer.byteLength, counts: result.counts, includeChats,
+	});
+
 	return new Response(new Uint8Array(result.buffer), {
 		headers: {
 			'Content-Type': 'application/zip',

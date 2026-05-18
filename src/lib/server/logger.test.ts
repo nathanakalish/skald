@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // LOG_LEVEL is read once at module load, so we have to reset modules between tests
 // to actually change the threshold. That's what loadLogger() does.
@@ -129,6 +132,67 @@ describe('logger', () => {
 			expect(rec.hint).toBe('a');
 			expect(rec.extra).toBe('b');
 			expect(typeof rec.durationMs).toBe('number');
+		});
+	});
+
+	describe('file sink', () => {
+		let tmp: string;
+		const origFile = process.env.LOG_FILE;
+		const origMax = process.env.LOG_FILE_MAX_BYTES;
+		const origKeep = process.env.LOG_FILE_MAX_FILES;
+
+		beforeEach(() => {
+			tmp = mkdtempSync(join(tmpdir(), 'skald-log-'));
+		});
+
+		afterEach(() => {
+			process.env.LOG_FILE = origFile;
+			process.env.LOG_FILE_MAX_BYTES = origMax;
+			process.env.LOG_FILE_MAX_FILES = origKeep;
+			try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+		});
+
+		it('appends JSON lines to LOG_FILE alongside stderr', async () => {
+			const file = join(tmp, 'nested', 'skald.log');
+			process.env.LOG_FILE = file;
+			const { logger } = await loadLogger('info');
+			logger.info('hello', { a: 1 });
+			logger.warn('careful', { b: 2 });
+
+			expect(existsSync(file)).toBe(true);
+			const fileLines = readFileSync(file, 'utf8').split('\n').filter(Boolean);
+			expect(fileLines).toHaveLength(2);
+			expect(JSON.parse(fileLines[0]).msg).toBe('hello');
+			expect(JSON.parse(fileLines[1]).msg).toBe('careful');
+		});
+
+		it('rotates when the file exceeds LOG_FILE_MAX_BYTES', async () => {
+			const file = join(tmp, 'skald.log');
+			process.env.LOG_FILE = file;
+			process.env.LOG_FILE_MAX_BYTES = '200';
+			process.env.LOG_FILE_MAX_FILES = '2';
+			const { logger } = await loadLogger('info');
+
+			// Write enough lines to force multiple rotations.
+			for (let i = 0; i < 20; i++) {
+				logger.info('rotate-me', { i, padding: 'x'.repeat(40) });
+			}
+
+			const entries = readdirSync(tmp).sort();
+			// Should have skald.log + at most 2 backups (.1, .2), no .3
+			expect(entries).toContain('skald.log');
+			expect(entries.some((e) => e === 'skald.log.1')).toBe(true);
+			expect(entries.some((e) => e === 'skald.log.3')).toBe(false);
+		});
+
+		it('redacted fields are scrubbed in the file sink too', async () => {
+			const file = join(tmp, 'skald.log');
+			process.env.LOG_FILE = file;
+			const { logger } = await loadLogger('info');
+			logger.info('auth', { password: 'hunter2', apiKey: 'sk-x' });
+			const rec = JSON.parse(readFileSync(file, 'utf8').trim());
+			expect(rec.password).toBe('[REDACTED]');
+			expect(rec.apiKey).toBe('[REDACTED]');
 		});
 	});
 });

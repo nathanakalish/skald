@@ -68,6 +68,7 @@ export const PUT: RequestHandler = async (event) => {
 	const { apiKey, ...rest } = updated;
 	const light = { ...rest, hasKey: !!apiKey };
 	broadcast(user.id, { type: 'provider:updated', id, provider: light as any });
+	event.locals.logger.debug('providers: updated', { providerId: id, keys: Object.keys(updates) });
 	return json({ ok: true, provider: light });
 };
 
@@ -95,5 +96,6 @@ export const DELETE: RequestHandler = async (event) => {
 	});
 
 	broadcast(user.id, { type: 'provider:deleted', id });
+	event.locals.logger.warn('providers: deleted', { providerId: id, wasEnabled });
 	return json({ ok: true });
 };

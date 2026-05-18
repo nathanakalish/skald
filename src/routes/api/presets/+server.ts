@@ -82,5 +82,8 @@ export const PUT: RequestHandler = async (event) => {
 		.run();
 
 	const updated = db.select().from(presets).where(eq(presets.id, preset.id)).get();
+	event.locals.logger?.debug('presets: default updated', {
+		presetId: preset.id, keys: Object.keys(body),
+	});
 	return json(updated);
 };

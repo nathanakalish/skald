@@ -31,6 +31,8 @@ export const PUT: RequestHandler = async (event) => {
 		.where(and(eq(lorebookEntries.id, entryId), eq(lorebookEntries.lorebookId, lorebookId)))
 		.run();
 
+	event.locals.logger?.debug('lorebookEntry: updated', { lorebookId, entryId, keys: Object.keys(body) });
+
 	return json({ ok: true });
 };
 
@@ -44,5 +46,6 @@ export const DELETE: RequestHandler = async (event) => {
 	if (!lorebook) return json({ error: 'Not found' }, { status: 404 });
 
 	db.delete(lorebookEntries).where(and(eq(lorebookEntries.id, entryId), eq(lorebookEntries.lorebookId, lorebookId))).run();
+	event.locals.logger?.debug('lorebookEntry: deleted', { lorebookId, entryId });
 	return json({ ok: true });
 };

@@ -124,5 +124,8 @@ export const POST: RequestHandler = async (event) => {
 		};
 	});
 
+	const exactCount = results.reduce((n, r) => n + (r.exact ? 1 : 0), 0);
+	const byNameCount = results.reduce((n, r) => n + r.byName.length, 0);
+	event.locals.logger?.debug('chub: check', { type, cardCount: cards.length, exactCount, byNameCount });
 	return json({ results });
 };

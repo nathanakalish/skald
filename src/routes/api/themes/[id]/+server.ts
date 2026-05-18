@@ -48,6 +48,7 @@ export const PUT: RequestHandler = async (event) => {
 	themeCache.invalidateForTheme(id);
 	const updated = db.select().from(themes).where(eq(themes.id, id)).get();
 	if (updated) broadcast(user.id, { type: 'theme:updated', id, theme: updated as any });
+	event.locals.logger.debug('themes: updated', { themeId: id, keys: Object.keys(updates) });
 	return json({ ok: true, theme: updated });
 };
 
@@ -64,5 +65,6 @@ export const DELETE: RequestHandler = async (event) => {
 	db.delete(themes).where(eq(themes.id, id)).run();
 	themeCache.invalidateForTheme(id);
 	broadcast(user.id, { type: 'theme:deleted', id });
+	event.locals.logger.warn('themes: deleted', { themeId: id });
 	return json({ ok: true });
 };

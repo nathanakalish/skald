@@ -94,6 +94,8 @@ export const POST: RequestHandler = async (event) => {
 
 	let fullResponse = '';
 	let contentStarted = false;
+	const t0 = Date.now();
+	event.locals.logger?.debug('messages: reformat start', { messageId: id, providerId: provider.id, model: activeModel });
 	try {
 		for await (const chunk of llm.stream(llmMessages, samplerSettings)) {
 			if (chunk.type === 'content') {
@@ -107,11 +109,13 @@ export const POST: RequestHandler = async (event) => {
 			}
 		}
 
+		event.locals.logger?.debug('messages: reformat complete', { messageId: id, chars: fullResponse.length, durationMs: Date.now() - t0 });
 		return json({
 			original: message.content,
 			reformatted: fullResponse.trimEnd(),
 		});
 	} catch (err) {
+		event.locals.logger?.warn('messages: reformat failed', { messageId: id, durationMs: Date.now() - t0, err: String(err) });
 		return json({
 			error: `Failed to reformat: ${err instanceof Error ? err.message : 'Unknown error'}`
 		}, { status: 500 });

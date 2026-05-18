@@ -57,5 +57,8 @@ export const DELETE: RequestHandler = async (event) => {
 	db.delete(pushSubscriptions)
 		.where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.endpoint, endpoint)))
 		.run();
+	event.locals.logger?.info('push: device removed', {
+		endpointHost: (() => { try { return new URL(endpoint).host; } catch { return null; } })(),
+	});
 	return json({ ok: true });
 };

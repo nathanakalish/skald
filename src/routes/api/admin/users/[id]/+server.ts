@@ -20,6 +20,7 @@ export const PUT: RequestHandler = async (event) => {
 		// Check for duplicate
 		const existing = db.select().from(users).where(eq(users.username, username.trim())).get();
 		if (existing && existing.id !== userId) {
+			event.locals.logger.warn('admin: rename rejected, duplicate username', { actorId: admin.id, targetUserId: userId, attemptedUsername: username.trim() });
 			return json({ error: 'Username already taken' }, { status: 409 });
 		}
 		updates.username = username.trim();
@@ -34,6 +35,7 @@ export const PUT: RequestHandler = async (event) => {
 				.where(eq(users.role, 'admin'))
 				.all().length;
 			if (adminCount <= 1) {
+				event.locals.logger.warn('admin: role change rejected, would remove last admin', { actorId: admin.id, targetUserId: userId });
 				return json({ error: 'Cannot remove the last admin' }, { status: 400 });
 			}
 		}
@@ -63,6 +65,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const userId = Number(event.params.id);
 
 	if (userId === admin.id) {
+		event.locals.logger.warn('admin: self-deletion rejected', { actorId: admin.id });
 		return json({ error: 'Cannot delete yourself' }, { status: 400 });
 	}
 
@@ -77,6 +80,7 @@ export const DELETE: RequestHandler = async (event) => {
 			.where(eq(users.role, 'admin'))
 			.all().length;
 		if (adminCount <= 1) {
+			event.locals.logger.warn('admin: deletion rejected, would remove last admin', { actorId: admin.id, targetUserId: userId });
 			return json({ error: 'Cannot delete the last admin' }, { status: 400 });
 		}
 	}

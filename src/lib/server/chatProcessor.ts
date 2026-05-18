@@ -79,7 +79,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			// Rebuild even on throw so we don't reuse a stale ctx — the provider
 			// then either fits the over-budget prompt or returns its own context
 			// error, which is more accurate than us silently truncating.
-			try { ctx = buildChatContext(chatId, opts); } catch { /* keep original ctx */ }
+			try { ctx = buildChatContext(chatId, opts); } catch (rebuildErr) {
+				logger.warn('chatProcessor: context rebuild failed; reusing stale ctx', { chatId, err: String(rebuildErr) });
+			}
 		}
 	}
 
@@ -154,6 +156,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 
 	const streamStartedAt = Date.now();
 	let chunkCount = 0;
+	let firstChunkAt = 0;
 	logger.debug('chatProcessor: stream start', {
 		chatId, userId: chatUserId,
 		provider: activeProvider.type, model: activeModel,
@@ -182,7 +185,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 				.set({ impersonationSwipes: JSON.stringify(impSwipes) })
 				.where(eq(chats.id, chatId))
 				.run();
-		} catch { /* best-effort checkpoint */ }
+		} catch (err) {
+			logger.debug('chatProcessor: impersonation draft checkpoint failed', { chatId, err: String(err) });
+		}
 	};
 	const scheduleImpDraftFlush = () => {
 		if (impFlushTimer) return;
@@ -235,6 +240,7 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 
 		for await (const chunk of llm.stream(llmMessages, samplerSettings, signal)) {
 			chunkCount++;
+			if (firstChunkAt === 0) firstChunkAt = Date.now();
 			if (chunk.type === 'reasoning') {
 				parser.handleReasoningChunk(chunk.text);
 			} else {
@@ -259,12 +265,15 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 		if (aborted) {
 			logger.info('chatProcessor: stream aborted', {
 				chatId, userId: chatUserId, durationMs: Date.now() - streamStartedAt,
+				ttftMs: firstChunkAt > 0 ? firstChunkAt - streamStartedAt : null,
 				chunkCount, partialChars: fullResponse.length,
 			});
 		} else {
 			logger.error('chatProcessor: stream failed', {
 				chatId, userId: chatUserId, provider: activeProvider.type, model: activeModel,
-				durationMs: Date.now() - streamStartedAt, chunkCount, err,
+				durationMs: Date.now() - streamStartedAt,
+				ttftMs: firstChunkAt > 0 ? firstChunkAt - streamStartedAt : null,
+				chunkCount, err,
 			});
 		}
 		// For impersonation: keep whatever partial draft we have. Save it
@@ -314,9 +323,15 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 	logger.debug('chatProcessor: stream finished', {
 		chatId, userId: chatUserId,
 		durationMs: Date.now() - streamStartedAt,
+		ttftMs: firstChunkAt > 0 ? firstChunkAt - streamStartedAt : null,
 		chunkCount,
 		contentChars: fullResponse.length,
 		reasoningChars: fullReasoning.length,
+		charsPerSec: (() => {
+			const total = fullResponse.length + fullReasoning.length;
+			const sec = (Date.now() - streamStartedAt) / 1000;
+			return sec > 0 ? Math.round(total / sec) : null;
+		})(),
 	});
 
 	// Reasoning-only fallback: surface a placeholder so users see *something*

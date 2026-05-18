@@ -27,8 +27,10 @@ export const GET: RequestHandler = async (event) => {
 
 	try {
 		const preview = await chubFetchPreview({ type, fullPath });
+		event.locals.logger?.debug('chub: preview', { type, fullPath });
 		return json(preview);
 	} catch (err) {
+		event.locals.logger?.warn('chub: preview failed', { type, fullPath, err: err instanceof Error ? err.message : String(err) });
 		return json(
 			{ error: 'Preview failed', message: err instanceof Error ? err.message : 'Unknown' },
 			{ status: 502 },

@@ -1,9 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { isOidcEnabled, getOidcConfig, getDiscovery, generatePkce, generateState, generateNonce } from '$lib/server/oidc.js';
+import { logger } from '$lib/server/logger.js';
 
 /** Initiate OIDC Authorization Code + PKCE flow */
-export const GET: RequestHandler = async ({ url, cookies }) => {
+export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 	if (!isOidcEnabled()) {
 		return new Response(JSON.stringify({ error: 'OIDC is not enabled' }), {
 			status: 400,
@@ -70,6 +71,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	authUrl.searchParams.set('code_challenge', challenge);
 	authUrl.searchParams.set('code_challenge_method', 'S256');
 	authUrl.searchParams.set('prompt', 'login');
+
+	(locals.logger ?? logger).info('auth: oidc redirect issued', { reused: reuse });
 
 	redirect(302, authUrl.toString());
 };

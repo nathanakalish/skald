@@ -18,6 +18,7 @@ logger.info('skald server starting', {
 	version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown',
 	nodeVersion: process.version,
 	logLevel: process.env.LOG_LEVEL || 'info',
+	logFile: process.env.LOG_FILE || null,
 	oidcEnabled: isOidcEnabled(),
 	allowLocalProviders: process.env.ALLOW_LOCAL_PROVIDERS === 'true',
 	devAuthEnabled: process.env.DEV_AUTH_ENABLED === 'true',
