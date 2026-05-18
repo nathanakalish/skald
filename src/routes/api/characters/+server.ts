@@ -8,6 +8,22 @@ import { cacheCharacterTextImages } from '$lib/services/characterImageCache.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { characterLight } from '$lib/server/projections.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const CHARACTER_FIELD_LIMITS = {
+	name: 'name',
+	description: 'description',
+	personality: 'personality',
+	scenario: 'scenario',
+	systemPrompt: 'systemPrompt',
+	firstMessage: 'firstMessage',
+	creatorNotes: 'creatorNotes',
+	tags: 'tags',
+	mesExample: 'mesExample',
+	postHistoryInstructions: 'postHistoryInstructions',
+	creator: 'name',
+	characterVersion: 'name',
+} as const;
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -29,6 +45,9 @@ export const POST: RequestHandler = async (event) => {
 	// which then display as a blank entry in every list.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+
+	const tooLong = validateLengths(body, CHARACTER_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	const limitResponse = enforceCreate('characters', user.id, JSON.stringify(body ?? {}).length);
 	if (limitResponse) return limitResponse;

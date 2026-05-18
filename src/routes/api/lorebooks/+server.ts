@@ -7,6 +7,12 @@ import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const LOREBOOK_FIELD_LIMITS = {
+	name: 'name',
+	description: 'description',
+} as const;
 
 // One-time lorebook deduplication (runs once per server start per user). Used
 // to live in +layout.server.ts; moved here so the slim layout load stays slim.
@@ -64,6 +70,9 @@ export const GET: RequestHandler = async (event) => {
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const body = await event.request.json();
+
+	const tooLong = validateLengths(body, LOREBOOK_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	const limitResponse = enforceCreate('lorebooks', user.id, JSON.stringify(body ?? {}).length);
 	if (limitResponse) return limitResponse;

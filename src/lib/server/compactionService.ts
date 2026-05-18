@@ -218,6 +218,8 @@ export async function runCompaction(chatId: number, opts: RunCompactionOptions =
 				summaryLength: result.summary?.length ?? 0,
 				compactedCount: result.compactedCount ?? 0,
 			});
+			logger.metric('compaction.durationMs', Date.now() - startedAt);
+			logger.metric('compaction.summaryLength', result.summary?.length ?? 0);
 		} else {
 			logger.debug('compaction: skipped', { chatId, reason: result.reason, durationMs: Date.now() - startedAt });
 		}

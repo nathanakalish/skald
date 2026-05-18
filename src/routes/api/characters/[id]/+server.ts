@@ -12,6 +12,22 @@ import { requireUser } from '$lib/server/auth.js';
 import { requireOwned } from '$lib/server/ownership.js';
 import { tryDeleteUnreferencedAvatar } from '$lib/services/imageOptimizer.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const CHARACTER_FIELD_LIMITS = {
+	name: 'name',
+	description: 'description',
+	personality: 'personality',
+	scenario: 'scenario',
+	systemPrompt: 'systemPrompt',
+	firstMessage: 'firstMessage',
+	creatorNotes: 'creatorNotes',
+	tags: 'tags',
+	mesExample: 'mesExample',
+	postHistoryInstructions: 'postHistoryInstructions',
+	creator: 'name',
+	characterVersion: 'name',
+} as const;
 
 export const GET: RequestHandler = async (event) => {
 	const { row: character } = requireOwned(event, characters, event.params.id);
@@ -29,6 +45,9 @@ export const PUT: RequestHandler = async (event) => {
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+
+	const tooLong = validateLengths(body, CHARACTER_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// Capture the pre-update name so the editor can ask the user whether
 	// to also rename existing chats whose default title still references

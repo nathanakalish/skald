@@ -333,6 +333,9 @@ export async function processChat(opts: ProcessOptions, signal?: AbortSignal): P
 			return sec > 0 ? Math.round(total / sec) : null;
 		})(),
 	});
+	logger.metric('chat.stream.durationMs', Date.now() - streamStartedAt);
+	if (firstChunkAt > 0) logger.metric('chat.stream.ttftMs', firstChunkAt - streamStartedAt);
+	logger.metric('chat.stream.chars', fullResponse.length + fullReasoning.length);
 
 	// Reasoning-only fallback: surface a placeholder so users see *something*
 	// rather than an empty bubble / empty draft. Applies to both regular

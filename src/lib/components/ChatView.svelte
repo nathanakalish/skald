@@ -260,9 +260,20 @@
 			const data = await res.json();
 			const earlier = (data.messages ?? []).map(parseMessage);
 			if (earlier.length > 0) {
-				// Preserve scroll position when prepending
+				// Preserve scroll position when prepending. The messages list lives
+				// inside a `flex-col-reverse` container, so prepending older messages
+				// to the array inserts them visually just below the "Load earlier"
+				// button. The bottom (newest message) stays anchored; everything
+				// above shifts upward by the height delta. To keep the user looking
+				// at the same content (typically the button itself), `scrollTop`
+				// needs to move further in the scrolled-up direction by `delta` —
+				// that's `prevScroll - delta` in column-reverse (scrollTop becomes
+				// more negative on WebKit / larger positive distance from bottom on
+				// other engines). The old `+=` formula scrolled the wrong way and
+				// snapped the viewport to a jarring new position.
 				const container = messagesContainer;
 				const prevHeight = container?.scrollHeight ?? 0;
+				const prevScroll = container?.scrollTop ?? 0;
 				messageList = [...earlier, ...messageList];
 				// Keep the rendered window pointing at the same set of messages
 				// the user was looking at — newly fetched older messages enter
@@ -272,7 +283,8 @@
 				if (data.totalMessages) totalMsgCount = data.totalMessages;
 				await tick();
 				if (container) {
-					container.scrollTop += container.scrollHeight - prevHeight;
+					const delta = container.scrollHeight - prevHeight;
+					container.scrollTop = prevScroll - delta;
 				}
 			}
 		} finally {
@@ -310,9 +322,13 @@
 			try {
 				const container = messagesContainer;
 				const prevHeight = container?.scrollHeight ?? 0;
+				const prevScroll = container?.scrollTop ?? 0;
 				renderedStart = Math.max(0, renderedStart - RENDER_WINDOW_GROW);
 				await tick();
-				if (container) container.scrollTop += container.scrollHeight - prevHeight;
+				if (container) {
+					const delta = container.scrollHeight - prevHeight;
+					container.scrollTop = prevScroll - delta;
+				}
 			} finally {
 				expandingWindow = false;
 			}

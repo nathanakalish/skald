@@ -5,6 +5,13 @@ import { personas } from '$lib/db/schema.js';
 import { eq, and, ne } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const PERSONA_FIELD_LIMITS = {
+	name: 'name',
+	displayName: 'name',
+	description: 'description',
+} as const;
 
 export const PUT: RequestHandler = async (event) => {
 	const { user, row: existing } = requireOwned(event, personas, event.params.id);
@@ -14,6 +21,9 @@ export const PUT: RequestHandler = async (event) => {
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+
+	const tooLong = validateLengths(body, PERSONA_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// CRUD-L2: per-user name uniqueness (excluding self).
 	const dupe = db

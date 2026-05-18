@@ -195,4 +195,41 @@ describe('logger', () => {
 			expect(rec.apiKey).toBe('[REDACTED]');
 		});
 	});
+
+	describe('metric', () => {
+		it('aggregates observations and flushes a snapshot', async () => {
+			const mod = await loadLogger('info');
+			mod._resetMetricsForTest();
+			for (let i = 1; i <= 100; i++) mod.logger.metric('test.ms', i);
+			mod.logger.metric('other.count', 5);
+			mod._flushMetricsForTest();
+
+			const snap = lines().find((l) => l.msg === 'metrics: snapshot');
+			expect(snap).toBeDefined();
+			const t = (snap as any)['test.ms'];
+			expect(t.count).toBe(100);
+			expect(t.min).toBe(1);
+			expect(t.max).toBe(100);
+			expect(t.p50).toBeGreaterThanOrEqual(40);
+			expect(t.p50).toBeLessThanOrEqual(60);
+			expect(t.p95).toBeGreaterThanOrEqual(90);
+			expect((snap as any)['other.count'].count).toBe(1);
+		});
+
+		it('emits nothing when no observations recorded', async () => {
+			const mod = await loadLogger('info');
+			mod._resetMetricsForTest();
+			mod._flushMetricsForTest();
+			expect(lines().find((l) => l.msg === 'metrics: snapshot')).toBeUndefined();
+		});
+
+		it('ignores non-finite values', async () => {
+			const mod = await loadLogger('info');
+			mod._resetMetricsForTest();
+			mod.logger.metric('bad', NaN);
+			mod.logger.metric('bad', Infinity);
+			mod._flushMetricsForTest();
+			expect(lines().find((l) => l.msg === 'metrics: snapshot')).toBeUndefined();
+		});
+	});
 });

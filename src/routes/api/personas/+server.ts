@@ -5,6 +5,13 @@ import { personas } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const PERSONA_FIELD_LIMITS = {
+	name: 'name',
+	displayName: 'name',
+	description: 'description',
+} as const;
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -19,6 +26,9 @@ export const POST: RequestHandler = async (event) => {
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+
+	const tooLong = validateLengths(body, PERSONA_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// CRUD-L2: per-user name uniqueness. Enforced at the app layer rather
 	// than a schema-level UNIQUE because old accounts may already have dupes

@@ -5,6 +5,13 @@ import { providers } from '$lib/db/schema.js';
 import { count, sql, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const PROVIDER_FIELD_LIMITS = {
+	name: 'name',
+	endpoint: 'url',
+	defaultModel: 'name',
+} as const;
 
 // Strip the api key from a provider row and replace with a `hasKey` flag —
 // matches the shape layout.server.ts ships and what the client store holds.
@@ -22,6 +29,9 @@ export const GET: RequestHandler = async (event) => {
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const body = await event.request.json();
+
+	const tooLong = validateLengths(body, PROVIDER_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// Validate endpoint URL — only allow http/https protocols
 	if (body.endpoint) {

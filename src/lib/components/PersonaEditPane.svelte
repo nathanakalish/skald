@@ -370,6 +370,7 @@
 						<input
 							id="pe-display"
 							bind:value={displayName}
+							maxlength={200}
 							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 							placeholder="e.g. My Fantasy Persona"
 						/>
@@ -379,6 +380,7 @@
 						<input
 							id="pe-name"
 							bind:value={name}
+							maxlength={200}
 							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 							placeholder={"Name used for {{user}}"}
 						/>
@@ -390,6 +392,7 @@
 						id="pe-desc"
 						bind:value={description}
 						rows={8}
+						maxlength={10000}
 						class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 						placeholder="Describe your persona — this is injected into context for the AI."
 					></textarea>

@@ -5,6 +5,14 @@ import { providers, chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const PROVIDER_FIELD_LIMITS = {
+	name: 'name',
+	endpoint: 'url',
+	defaultModel: 'name',
+	customPrompt: 'systemPrompt',
+} as const;
 
 export const GET: RequestHandler = async (event) => {
 	const { row: provider } = requireOwned(event, providers, event.params.id);
@@ -15,6 +23,9 @@ export const PUT: RequestHandler = async (event) => {
 	const { user } = requireOwned(event, providers, event.params.id);
 	const id = Number(event.params.id);
 	const body = await event.request.json();
+
+	const tooLong = validateLengths(body, PROVIDER_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// Validate endpoint URL — only allow http/https protocols
 	if ('endpoint' in body && body.endpoint) {

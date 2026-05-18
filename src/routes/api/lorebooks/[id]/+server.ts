@@ -5,6 +5,12 @@ import { lorebooks, lorebookEntries } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const LOREBOOK_FIELD_LIMITS = {
+	name: 'name',
+	description: 'description',
+} as const;
 
 export const GET: RequestHandler = async (event) => {
 	const { row: lorebook } = requireOwned(event, lorebooks, event.params.id);
@@ -20,6 +26,9 @@ export const PUT: RequestHandler = async (event) => {
 	const { user, row: existing } = requireOwned(event, lorebooks, event.params.id);
 	const id = existing.id;
 	const body = await event.request.json();
+
+	const tooLong = validateLengths(body, LOREBOOK_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	db.update(lorebooks)
 		.set({ name: body.name, description: body.description, enabled: body.enabled })

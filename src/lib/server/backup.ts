@@ -28,6 +28,7 @@ function getConfig() {
 /** Run a single backup right now. Returns the resulting filename or null on failure. */
 async function runBackup(): Promise<string | null> {
 	const { dir, retention } = getConfig();
+	const startedAt = Date.now();
 	try {
 		mkdirSync(dir, { recursive: true });
 		const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -81,7 +82,11 @@ async function runBackup(): Promise<string | null> {
 		}
 
 		renameSync(tmpTarget, target);
-		logger.info('db backup complete', { target });
+		let bytes = 0;
+		try { bytes = statSync(target).size; } catch { /* best-effort */ }
+		logger.info('db backup complete', { target, bytes, durationMs: Date.now() - startedAt });
+		logger.metric('backup.durationMs', Date.now() - startedAt);
+		logger.metric('backup.bytes', bytes);
 
 		// Retention prune + .tmp cleanup are pure filesystem grunt work — punt
 		// them off the hot path so the caller (cron tick, manual trigger) gets
@@ -115,7 +120,7 @@ async function runBackup(): Promise<string | null> {
 
 		return filename;
 	} catch (err) {
-		logger.error('db backup failed', { err });
+		logger.error('db backup failed', { err, durationMs: Date.now() - startedAt });
 		return null;
 	}
 }

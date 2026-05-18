@@ -7,6 +7,9 @@ import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import * as themeCache from '$lib/server/themeCache.js';
 import { _validateThemeColors } from '../+server.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const THEME_FIELD_LIMITS = { name: 'name' } as const;
 
 // PUT update a theme (only custom themes owned by user)
 export const PUT: RequestHandler = async (event) => {
@@ -14,6 +17,9 @@ export const PUT: RequestHandler = async (event) => {
 	const id = Number(event.params.id);
 	const body = await event.request.json();
 	const { mode, colors } = body;
+
+	const tooLong = validateLengths(body, THEME_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	const existing = db.select().from(themes).where(eq(themes.id, id)).get();
 	if (!existing) return json({ error: 'Theme not found' }, { status: 404 });

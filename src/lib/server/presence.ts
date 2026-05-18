@@ -16,6 +16,8 @@
  *     an SSE backing it can't leak forever.
  */
 
+import { logger } from './logger.js';
+
 interface Session {
 	activeChatId: number | null;
 	focused: boolean;
@@ -132,11 +134,16 @@ class PresenceTracker {
 
 	private gc(): void {
 		const cutoff = Date.now() - SESSION_GC_MS;
+		let sessionsRemoved = 0;
+		let usersRemoved = 0;
 		for (const [userId, userSessions] of this.sessions) {
 			for (const [sessionId, session] of userSessions) {
-				if (session.lastUpdate < cutoff) userSessions.delete(sessionId);
+				if (session.lastUpdate < cutoff) { userSessions.delete(sessionId); sessionsRemoved++; }
 			}
-			if (userSessions.size === 0) this.sessions.delete(userId);
+			if (userSessions.size === 0) { this.sessions.delete(userId); usersRemoved++; }
+		}
+		if (sessionsRemoved > 0 || usersRemoved > 0) {
+			logger.debug('presence: gc swept', { sessionsRemoved, usersRemoved, remainingUsers: this.sessions.size });
 		}
 	}
 }

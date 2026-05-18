@@ -587,16 +587,16 @@
 				<div class="flex-1 space-y-4">
 					<div>
 						<label for="edit-name" class={labelClass}>Name <span class="text-destructive">*</span></label>
-						<input id="edit-name" bind:value={name} class={inputClass} placeholder="Character name" />
+						<input id="edit-name" bind:value={name} maxlength={200} class={inputClass} placeholder="Character name" />
 					</div>
 					<div class="grid grid-cols-2 gap-3">
 						<div>
 							<label for="edit-creator" class={labelClass}>Creator</label>
-							<input id="edit-creator" bind:value={creator} class={inputClass} placeholder="Author name" />
+							<input id="edit-creator" bind:value={creator} maxlength={200} class={inputClass} placeholder="Author name" />
 						</div>
 						<div>
 							<label for="edit-version" class={labelClass}>Version</label>
-							<input id="edit-version" bind:value={characterVersion} class={inputClass} placeholder="1.0" />
+							<input id="edit-version" bind:value={characterVersion} maxlength={200} class={inputClass} placeholder="1.0" />
 						</div>
 					</div>
 				</div>
@@ -604,18 +604,18 @@
 
 			<div>
 				<label for="edit-desc" class={labelClass}>Description</label>
-				<textarea id="edit-desc" bind:value={description} rows={6} class={textareaClass} placeholder="Character description, background, appearance..."></textarea>
+				<textarea id="edit-desc" bind:value={description} rows={6} maxlength={10000} class={textareaClass} placeholder="Character description, background, appearance..."></textarea>
 				<p class={hintClass}>Supports plain text or markdown-style formatting (e.g. ### headings).</p>
 			</div>
 
 			<div>
 				<label for="edit-personality" class={labelClass}>Personality</label>
-				<textarea id="edit-personality" bind:value={personality} rows={3} class={textareaClass} placeholder="Personality traits, behavior patterns..."></textarea>
+				<textarea id="edit-personality" bind:value={personality} rows={3} maxlength={10000} class={textareaClass} placeholder="Personality traits, behavior patterns..."></textarea>
 			</div>
 
 			<div>
 				<label for="edit-tags" class={labelClass}>Tags</label>
-				<input id="edit-tags" bind:value={tags} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
+				<input id="edit-tags" bind:value={tags} maxlength={2000} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
 			</div>
 		</div>
 		{:else}
@@ -688,7 +688,7 @@
 			</div>
 			<div>
 				<label for="edit-first" class={labelClass}>First Message</label>
-				<textarea id="edit-first" bind:value={firstMessage} rows={8} class={textareaClass} placeholder="The opening message when a new chat starts..."></textarea>
+				<textarea id="edit-first" bind:value={firstMessage} rows={8} maxlength={50000} class={textareaClass} placeholder="The opening message when a new chat starts..."></textarea>
 				<p class={hintClass}>Use &#123;&#123;char&#125;&#125; for the character's name and &#123;&#123;user&#125;&#125; for the user's name.</p>
 			</div>
 
@@ -713,6 +713,7 @@
 						<textarea
 							bind:value={alternateGreetings[i]}
 							rows={3}
+							maxlength={50000}
 							class="{textareaClass} flex-1"
 							placeholder="Alternate greeting #{i + 1}"
 						></textarea>
@@ -732,6 +733,7 @@
 					id="edit-example"
 					bind:value={mesExample}
 					rows={8}
+					maxlength={50000}
 					class={textareaClass}
 					placeholder={"<START>\n{{char}}: Example dialogue here...\n{{user}}: Example response...\n{{char}}: Another example..."}
 				></textarea>
@@ -788,19 +790,19 @@
 		<div class="space-y-5">
 			<div>
 				<label for="edit-scenario" class={labelClass}>Scenario</label>
-				<textarea id="edit-scenario" bind:value={scenario} rows={4} class={textareaClass} placeholder="The setting, situation, or context for the roleplay..."></textarea>
+				<textarea id="edit-scenario" bind:value={scenario} rows={4} maxlength={10000} class={textareaClass} placeholder="The setting, situation, or context for the roleplay..."></textarea>
 				<p class={hintClass}>Describes the circumstances and environment for the conversation.</p>
 			</div>
 
 			<div>
 				<label for="edit-system" class={labelClass}>System Prompt</label>
-				<textarea id="edit-system" bind:value={systemPrompt} rows={6} class={textareaClass} placeholder="Custom system prompt for this character..."></textarea>
+				<textarea id="edit-system" bind:value={systemPrompt} rows={6} maxlength={50000} class={textareaClass} placeholder="Custom system prompt for this character..."></textarea>
 				<p class={hintClass}>Overrides or supplements the global system prompt when chatting with this character.</p>
 			</div>
 
 			<div>
 				<label for="edit-post" class={labelClass}>Post-History Instructions</label>
-				<textarea id="edit-post" bind:value={postHistoryInstructions} rows={3} class={textareaClass} placeholder="Instructions injected after the chat history..."></textarea>
+				<textarea id="edit-post" bind:value={postHistoryInstructions} rows={3} maxlength={20000} class={textareaClass} placeholder="Instructions injected after the chat history..."></textarea>
 				<p class={hintClass}>Added after all messages, right before the AI responds. Good for reminders and formatting rules.</p>
 			</div>
 		</div>
@@ -819,7 +821,7 @@
 		<div class="flex h-full flex-col">
 			{#if editing || !creatorNotes.trim()}
 				<label for="edit-notes" class="{labelClass} mb-2">Creator Notes</label>
-				<textarea id="edit-notes" bind:value={creatorNotes} class="{textareaClass} flex-1" style="min-height: 200px;" placeholder="Notes about the character, usage tips, recommended settings..."></textarea>
+				<textarea id="edit-notes" bind:value={creatorNotes} maxlength={5000} class="{textareaClass} flex-1" style="min-height: 200px;" placeholder="Notes about the character, usage tips, recommended settings..."></textarea>
 				<p class="{hintClass} mt-1">Internal notes visible only to you. Not sent to the AI.</p>
 			{:else}
 				<span class="{labelClass} mb-2">Creator Notes</span>

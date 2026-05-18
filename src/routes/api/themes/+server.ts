@@ -5,6 +5,9 @@ import { themes, userSettings } from '$lib/db/schema.js';
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const THEME_FIELD_LIMITS = { name: 'name' } as const;
 
 // GET all themes (builtins + user's) + user's settings
 export const GET: RequestHandler = async (event) => {
@@ -32,6 +35,9 @@ export const POST: RequestHandler = async (event) => {
 	if (!mode || !colors) {
 		return json({ error: 'Missing required fields' }, { status: 400 });
 	}
+
+	const tooLong = validateLengths(body, THEME_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// CRUD-L2: per-user name uniqueness for themes.
 	const dupe = db

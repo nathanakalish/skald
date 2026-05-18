@@ -43,14 +43,19 @@ export function startExportJob(userId: number, opts: BundleOptions): boolean {
 	}
 
 	void (async () => {
+		const startedAt = Date.now();
 		try {
 			const result = await buildEverythingBundle(userId, opts);
 			writeFileSync(tmpPath, result.buffer);
 			renameSync(tmpPath, finalPath); // atomic on the same filesystem
-			logger.info('background export complete', { userId });
+			logger.info('background export complete', {
+				userId, bytes: result.buffer.length, durationMs: Date.now() - startedAt,
+			});
+			logger.metric('export.durationMs', Date.now() - startedAt);
+			logger.metric('export.bytes', result.buffer.length);
 			broadcast(userId, { type: 'export:ready' });
 		} catch (err) {
-			logger.error('background export failed', { userId, err: String(err) });
+			logger.error('background export failed', { userId, err: String(err), durationMs: Date.now() - startedAt });
 			try { unlinkSync(tmpPath); } catch { /* may not exist */ }
 			broadcast(userId, { type: 'export:failed' });
 		} finally {

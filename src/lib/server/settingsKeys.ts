@@ -15,10 +15,20 @@ export const ALLOWED_SETTING_KEYS = [
 	'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd',
 	'userTimezone',
 	'chatPageSize', 'renderMode',
+	'promptSlotOrder',
 	'reformatterProviderId', 'reformatterModel', 'reformatterPrompt',
 	'characterCreatorProviderId', 'characterCreatorModel', 'characterCreatorPrompt',
 	'compactionEnabled', 'compactionThreshold', 'compactionMode',
 	'compactionWindowPercent', 'compactionFixedCount',
 	'compactionProviderId', 'compactionModel', 'compactionPrompt',
-	'systemDarkThemeId', 'systemLightThemeId'
+	'systemDarkThemeId', 'systemLightThemeId',
+	// Roleplay formatting: per-style appearance settings used by the chat
+	// renderer. Patched one-key-at-a-time from the Formatting tab. These were
+	// missing from the allowlist, which silently dropped writes (settings
+	// looked saved in the UI but reverted on next login/page reload).
+	'speechOpacity', 'speechBold', 'speechItalic',
+	'thoughtOpacity', 'thoughtBold', 'thoughtItalic',
+	'linkOpacity', 'linkBold', 'linkItalic',
+	'narrationOpacity', 'narrationBold', 'narrationItalic',
+	'nestedEmphasisInSpeech',
 ];

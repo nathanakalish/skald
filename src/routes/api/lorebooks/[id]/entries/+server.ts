@@ -4,6 +4,12 @@ import { db } from '$lib/db/index.js';
 import { lorebookEntries, lorebooks } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
+
+const ENTRY_FIELD_LIMITS = {
+	keywords: 'lorebookEntryKeys',
+	content: 'lorebookEntryContent',
+} as const;
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -13,6 +19,9 @@ export const POST: RequestHandler = async (event) => {
 	// Verify lorebook ownership
 	const lorebook = db.select().from(lorebooks).where(and(eq(lorebooks.id, lorebookId), eq(lorebooks.userId, user.id))).get();
 	if (!lorebook) return json({ error: 'Not found' }, { status: 404 });
+
+	const tooLong = validateLengths(body, ENTRY_FIELD_LIMITS);
+	if (tooLong) return tooLong;
 
 	// CRUD-L3: coerce to a finite number so NaN/strings from a misbehaving
 	// client don't end up stored verbatim and breaking the ordering pass.

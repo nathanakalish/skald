@@ -3,6 +3,8 @@
  * Tracks sliding-window attempt counts per key. Map size is capped to bound memory.
  */
 
+import { logger } from './logger.js';
+
 interface RateLimitEntry {
 	count: number;
 	resetAt: number;
@@ -16,8 +18,12 @@ const store = new Map<string, RateLimitEntry>();
 // Cleanup stale entries every 5 minutes
 setInterval(() => {
 	const now = Date.now();
+	let deleted = 0;
 	for (const [key, entry] of store) {
-		if (entry.resetAt <= now) store.delete(key);
+		if (entry.resetAt <= now) { store.delete(key); deleted++; }
+	}
+	if (deleted > 0) {
+		logger.debug('rateLimit: swept stale entries', { deleted, remaining: store.size });
 	}
 }, 5 * 60 * 1000).unref();
 

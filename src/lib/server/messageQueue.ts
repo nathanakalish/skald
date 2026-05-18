@@ -118,6 +118,7 @@ async function executeJob(job: QueueJob) {
 		}, JOB_TIMEOUT_MS)
 		: null;
 	logger.debug('queue: job started', { jobId: job.id, chatId: job.chatId, providerId: job.providerId, waitMs: startedAt - job.enqueuedAt });
+	logger.metric('queue.waitMs', startedAt - job.enqueuedAt);
 	try {
 		await processChat(job.options, controller.signal);
 		logger.info('queue: job completed', {

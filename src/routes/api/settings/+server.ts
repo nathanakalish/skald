@@ -14,7 +14,12 @@ export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const body = await event.request.json();
 
+	const allKeys = Object.keys(body);
 	const entries = Object.entries(body).filter(([key]) => ALLOWED_KEYS.includes(key));
+	const rejected = allKeys.filter((k) => !ALLOWED_KEYS.includes(k));
+	if (rejected.length > 0) {
+		event.locals.logger?.warn('settings: rejected unknown keys', { rejected });
+	}
 	if (entries.length > 0) {
 		db.transaction((tx) => {
 			for (const [key, value] of entries) {

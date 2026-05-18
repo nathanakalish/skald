@@ -86,6 +86,12 @@ interface LoggerImpl {
 	error(msg: string, fields?: Record<string, unknown>): void;
 	child(bound: Record<string, unknown>): LoggerImpl;
 	time(label: string, fields?: Record<string, unknown>): { end(extras?: Record<string, unknown>): number };
+	/**
+	 * Record a numeric observation against a named histogram. Aggregated in memory
+	 * and periodically flushed as a single info log (`metrics: snapshot`) with
+	 * count/min/max/p50/p95/p99/avg per metric. Cheap — just an array push.
+	 */
+	metric(name: string, value: number): void;
 }
 
 function emit(level: LogLevelName, msg: string, bound: Record<string, unknown>, fields?: Record<string, unknown>) {
@@ -192,6 +198,84 @@ function writeToFile(line: string): void {
 	}
 }
 
+// --- Metrics ------------------------------------------------------------------
+// Tiny in-process histogram. Per metric we keep a bounded reservoir of recent
+// observations; on flush we compute count/min/max/avg + p50/p95/p99 and emit a
+// single info log. No external deps, no Prometheus — just enough to spot drift
+// in a single-node deployment via grep.
+
+const METRIC_FLUSH_MS = parsePositiveInt(process.env.LOG_METRICS_FLUSH_MS, 60_000);
+const METRIC_RESERVOIR_CAP = parsePositiveInt(process.env.LOG_METRICS_RESERVOIR, 1000);
+const METRICS_ENABLED = (process.env.LOG_METRICS ?? 'true').toLowerCase() !== 'false';
+
+const metricBuckets = new Map<string, number[]>();
+let metricFlushTimer: ReturnType<typeof setInterval> | null = null;
+
+function recordMetric(name: string, value: number): void {
+	if (!METRICS_ENABLED || !Number.isFinite(value)) return;
+	let bucket = metricBuckets.get(name);
+	if (!bucket) {
+		bucket = [];
+		metricBuckets.set(name, bucket);
+	}
+	// Reservoir-ish: once full, randomly replace to keep a representative sample
+	// without unbounded memory under high call rates.
+	if (bucket.length < METRIC_RESERVOIR_CAP) {
+		bucket.push(value);
+	} else {
+		const idx = Math.floor(Math.random() * bucket.length);
+		bucket[idx] = value;
+	}
+	ensureMetricTimer();
+}
+
+function ensureMetricTimer(): void {
+	if (metricFlushTimer || !METRICS_ENABLED) return;
+	if (typeof setInterval === 'undefined') return;
+	metricFlushTimer = setInterval(flushMetrics, METRIC_FLUSH_MS);
+	metricFlushTimer.unref?.();
+}
+
+function percentile(sorted: number[], p: number): number {
+	if (sorted.length === 0) return 0;
+	const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+	return sorted[idx];
+}
+
+function flushMetrics(): void {
+	if (metricBuckets.size === 0) return;
+	const snapshot: Record<string, unknown> = {};
+	for (const [name, values] of metricBuckets) {
+		if (values.length === 0) continue;
+		const sorted = [...values].sort((a, b) => a - b);
+		const sum = sorted.reduce((s, v) => s + v, 0);
+		snapshot[name] = {
+			count: sorted.length,
+			min: round2(sorted[0]),
+			max: round2(sorted[sorted.length - 1]),
+			avg: round2(sum / sorted.length),
+			p50: round2(percentile(sorted, 50)),
+			p95: round2(percentile(sorted, 95)),
+			p99: round2(percentile(sorted, 99)),
+		};
+	}
+	metricBuckets.clear();
+	if (Object.keys(snapshot).length > 0) {
+		emit('info', 'metrics: snapshot', {}, snapshot);
+	}
+}
+
+function round2(n: number): number {
+	return Math.round(n * 100) / 100;
+}
+
+// Test/diagnostic hooks. Not part of the public Logger type.
+export function _flushMetricsForTest(): void { flushMetrics(); }
+export function _resetMetricsForTest(): void {
+	metricBuckets.clear();
+	if (metricFlushTimer) { clearInterval(metricFlushTimer); metricFlushTimer = null; }
+}
+
 function makeLogger(bound: Record<string, unknown>): LoggerImpl {
 	return {
 		trace: (msg, fields) => emit('trace', msg, bound, fields),
@@ -210,6 +294,7 @@ function makeLogger(bound: Record<string, unknown>): LoggerImpl {
 				},
 			};
 		},
+		metric: (name, value) => recordMetric(name, value),
 	};
 }
 

@@ -8,11 +8,20 @@ import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
+import { lengthError, MAX_MESSAGE_CHARS } from '$lib/utils/validate.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
 	const body = await event.request.json();
+
+	// Edits go straight to SQLite + the LLM context budgeter — cap them same
+	// as fresh sends so we don't accept a 50MB paste via PATCH.
+	const lenErr =
+		lengthError('content', body?.content, MAX_MESSAGE_CHARS) ||
+		lengthError('reasoning', body?.reasoning, MAX_MESSAGE_CHARS) ||
+		lengthError('guidance', body?.guidance, MAX_MESSAGE_CHARS);
+	if (lenErr) return json(lenErr, { status: 413 });
 
 	const message = db.select().from(messages).where(eq(messages.id, id)).get();
 	if (!message) return json({ error: 'Message not found' }, { status: 404 });
