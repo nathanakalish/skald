@@ -6,6 +6,20 @@ const ORIGINALS_DIR = join(process.cwd(), 'data', 'avatars-original');
 mkdirSync(ORIGINALS_DIR, { recursive: true });
 
 /**
+ * Returns true if the buffer is a tiny placeholder image (1×1 px or smaller).
+ * Used during import to skip saving a fake avatar and let the UI show the
+ * initial-letter fallback instead.
+ */
+export async function isPlaceholderAvatar(buffer: Buffer): Promise<boolean> {
+	try {
+		const { width, height } = await sharp(buffer).metadata();
+		return (width ?? 2) <= 1 && (height ?? 2) <= 1;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Optimize an avatar image: resize to fit within maxSize while preserving aspect ratio,
  * convert to WebP. Returns the WebP buffer.
  */

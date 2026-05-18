@@ -9,10 +9,14 @@ import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { parseCharaCardFromPNG } from '$lib/services/character.js';
+import {
+	cacheCharacterTextImages,
+	cacheBackgroundFromExtensions
+} from '$lib/services/characterImageCache.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { optimizeAvatar, getAvatarOriginalsDir } from '$lib/services/imageOptimizer.js';
+import { optimizeAvatar, getAvatarOriginalsDir, isPlaceholderAvatar } from '$lib/services/imageOptimizer.js';
 import { extractThemeFromAvatar } from '$lib/services/themeExtractor.js';
 import { characterFingerprint } from '$lib/server/bundle.js';
 import { logger } from '$lib/server/logger.js';
@@ -150,18 +154,35 @@ export const POST: RequestHandler = async (event) => {
 					continue;
 				}
 
-				// Save the original avatar.
+				// Save the original avatar. Skip 1x1 placeholder PNGs and corrupt
+				// image data — both fall back to the initial-letter placeholder in the UI.
 				const avatarDir = join(process.cwd(), 'static', 'avatars');
 				mkdirSync(avatarDir, { recursive: true });
 				const uuid = randomUUID();
-				writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), bytes);
-				const optimized = await optimizeAvatar(bytes);
-				writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
-				const avatarPath = `/avatars/${uuid}.webp`;
+				let avatarPath: string | null = null;
+				if (!(await isPlaceholderAvatar(bytes))) {
+					try {
+						writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), bytes);
+						const optimized = await optimizeAvatar(bytes);
+						writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
+						avatarPath = `/avatars/${uuid}.webp`;
+					} catch (avatarErr) {
+						logger.warn('import: avatar processing failed, importing without avatar', { path, name: cardData.name, err: String(avatarErr) });
+					}
+				}
 
 				let theme: string | undefined;
-				const extracted = await extractThemeFromAvatar(bytes);
-				if (extracted) theme = JSON.stringify(extracted);
+				if (avatarPath) {
+					const extracted = await extractThemeFromAvatar(bytes);
+					if (extracted) theme = JSON.stringify(extracted);
+				}
+
+				const backgroundPath = await cacheBackgroundFromExtensions(cardData.extensions as any);
+				const cachedText = await cacheCharacterTextImages({
+					firstMessage: cardData.firstMessage,
+					alternateGreetings: cardData.alternateGreetings,
+					creatorNotes: cardData.creatorNotes
+				});
 
 				const finalName = dedupeName(cardData.name, existingCharNames);
 				existingCharNames.add(finalName);
@@ -171,16 +192,17 @@ export const POST: RequestHandler = async (event) => {
 					name: finalName,
 					description: cardData.description,
 					personality: cardData.personality,
-					firstMessage: cardData.firstMessage,
+					firstMessage: cachedText.firstMessage ?? '',
 					scenario: cardData.scenario,
 					systemPrompt: cardData.systemPrompt,
 					avatarPath,
+					backgroundPath,
 					theme,
-					creatorNotes: cardData.creatorNotes,
+					creatorNotes: cachedText.creatorNotes ?? '',
 					tags: JSON.stringify(cardData.tags),
 					mesExample: cardData.mesExample,
 					postHistoryInstructions: cardData.postHistoryInstructions,
-					alternateGreetings: JSON.stringify(cardData.alternateGreetings ?? []),
+					alternateGreetings: cachedText.alternateGreetings,
 					creator: cardData.creator,
 					characterVersion: cardData.characterVersion,
 					extensions: JSON.stringify(cardData.extensions)

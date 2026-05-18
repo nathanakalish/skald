@@ -11,7 +11,9 @@ import {
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { optimizeAvatar, getAvatarOriginalsDir } from '$lib/services/imageOptimizer.js';
+import {
+	optimizeAvatar, getAvatarOriginalsDir, isPlaceholderAvatar
+} from '$lib/services/imageOptimizer.js';
 import { extractThemeFromAvatar } from '$lib/services/themeExtractor.js';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
@@ -103,28 +105,30 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Unsupported content type' }, { status: 400 });
 	}
 
-	// Save the avatar if we have one.
+	// Save the avatar if we have one. Skip 1x1 placeholder PNGs (exported from
+	// characters that had no avatar) and corrupt image data — both fall back to
+	// the initial-letter placeholder in the UI.
 	let avatarPath: string | null = null;
-	if (avatarBuffer) {
-		const avatarDir = join(process.cwd(), 'static', 'avatars');
-		mkdirSync(avatarDir, { recursive: true });
-		const uuid = randomUUID();
-
-		// Original sticks around for export / full-res viewing.
-		writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), avatarBuffer);
-
-		// Optimised WebP for actually serving.
-		const optimized = await optimizeAvatar(avatarBuffer);
-		writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
-		avatarPath = `/avatars/${uuid}.webp`;
+	if (avatarBuffer && !(await isPlaceholderAvatar(avatarBuffer))) {
+		try {
+			const avatarDir = join(process.cwd(), 'static', 'avatars');
+			mkdirSync(avatarDir, { recursive: true });
+			const uuid = randomUUID();
+			writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), avatarBuffer);
+			const optimized = await optimizeAvatar(avatarBuffer);
+			writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
+			avatarPath = `/avatars/${uuid}.webp`;
+		} catch (avatarErr) {
+			logger.warn('character import: avatar processing failed, importing without avatar', { userId: user.id, err: String(avatarErr) });
+		}
 	}
 
 	// Background image from extensions, if present.
 	const backgroundPath = await cacheBackgroundFromExtensions(cardData.extensions as any);
 
-	// Pull theme colors out of the avatar.
+	// Pull theme colors out of the avatar (only if a real avatar was saved).
 	let theme: string | undefined;
-	if (avatarBuffer) {
+	if (avatarBuffer && avatarPath) {
 		const extracted = await extractThemeFromAvatar(avatarBuffer);
 		if (extracted) theme = JSON.stringify(extracted);
 	}

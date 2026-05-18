@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { deflateSync } from 'zlib';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import JSZip from 'jszip';
@@ -465,16 +466,16 @@ function safeJSON<T>(s: string | null | undefined, fallback: T): T {
 }
 
 function createMinimalPNG(): Buffer {
-	// 1x1 transparent PNG, copied from existing character export
+	// 1x1 transparent RGBA PNG.
 	const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 	const ihdrData = Buffer.alloc(13);
-	ihdrData.writeUInt32BE(1, 0);
-	ihdrData.writeUInt32BE(1, 4);
-	ihdrData[8] = 8;
-	ihdrData[9] = 6;
+	ihdrData.writeUInt32BE(1, 0); // width
+	ihdrData.writeUInt32BE(1, 4); // height
+	ihdrData[8] = 8;  // bit depth
+	ihdrData[9] = 6;  // color type: RGBA
 	const ihdr = makeChunk('IHDR', ihdrData);
-	const idatRaw = Buffer.from([0x78, 0x01, 0x62, 0x60, 0x60, 0x60, 0x60, 0x00, 0x00, 0x00, 0x05, 0x00, 0x01]);
-	const idat = makeChunk('IDAT', idatRaw);
+	// Scanline: filter byte (0 = None) + R G B A all zero = transparent pixel.
+	const idat = makeChunk('IDAT', deflateSync(Buffer.from([0, 0, 0, 0, 0])));
 	const iend = makeChunk('IEND', Buffer.alloc(0));
 	return Buffer.concat([sig, ihdr, idat, iend]);
 }
