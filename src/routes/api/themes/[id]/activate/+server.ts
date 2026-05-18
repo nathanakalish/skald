@@ -20,13 +20,16 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Theme not found' }, { status: 404 });
 	}
 
-	// Store active theme in user settings
-	const existing = db.select().from(userSettings).where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'activeThemeId'))).get();
-	if (existing) {
-		db.update(userSettings).set({ value: String(id) }).where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'activeThemeId'))).run();
-	} else {
-		db.insert(userSettings).values({ userId: user.id, key: 'activeThemeId', value: String(id) }).run();
-	}
+	// Upsert in one statement — the (userId, key) PK guarantees uniqueness,
+	// so concurrent activations can't double-insert and there's no
+	// SELECT-then-write TOCTOU window. (CRUD-H1)
+	db.insert(userSettings)
+		.values({ userId: user.id, key: 'activeThemeId', value: String(id) })
+		.onConflictDoUpdate({
+			target: [userSettings.userId, userSettings.key],
+			set: { value: String(id) }
+		})
+		.run();
 
 	themeCache.invalidateForUser(user.id);
 	broadcast(user.id, { type: 'theme:activated', theme: theme as any });

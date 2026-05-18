@@ -9,14 +9,8 @@ import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { parseCharaCardFromPNG } from '$lib/services/character.js';
-import {
-	cacheCharacterTextImages,
-	cacheBackgroundFromExtensions
-} from '$lib/services/characterImageCache.js';
-import { writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
-import { optimizeAvatar, getAvatarOriginalsDir, isPlaceholderAvatar } from '$lib/services/imageOptimizer.js';
+import { cacheCharacterTextImages, cacheBackgroundFromExtensions } from '$lib/services/characterImageCache.js';
+import { storeAvatarFromBuffer, isPlaceholderAvatar } from '$lib/services/imageOptimizer.js';
 import { extractThemeFromAvatar } from '$lib/services/themeExtractor.js';
 import { characterFingerprint } from '$lib/server/bundle.js';
 import { logger } from '$lib/server/logger.js';
@@ -156,16 +150,10 @@ export const POST: RequestHandler = async (event) => {
 
 				// Save the original avatar. Skip 1x1 placeholder PNGs and corrupt
 				// image data — both fall back to the initial-letter placeholder in the UI.
-				const avatarDir = join(process.cwd(), 'static', 'avatars');
-				mkdirSync(avatarDir, { recursive: true });
-				const uuid = randomUUID();
 				let avatarPath: string | null = null;
 				if (!(await isPlaceholderAvatar(bytes))) {
 					try {
-						writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), bytes);
-						const optimized = await optimizeAvatar(bytes);
-						writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
-						avatarPath = `/avatars/${uuid}.webp`;
+						avatarPath = await storeAvatarFromBuffer(bytes, 'image/png');
 					} catch (avatarErr) {
 						logger.warn('import: avatar processing failed, importing without avatar', { path, name: cardData.name, err: String(avatarErr) });
 					}
@@ -235,29 +223,35 @@ export const POST: RequestHandler = async (event) => {
 			const charFp = lb.character?.fingerprint as string | undefined;
 			const linkedCharId = charFp ? fingerprintToNewId.get(charFp) ?? null : null;
 
-			const inserted = db.insert(lorebooks).values({
-				userId: user.id,
-				name: finalName,
-				description: lb.description ?? '',
-				characterId: linkedCharId,
-				enabled: lb.enabled ?? true
-			}).returning().get();
+			// Atomic: lorebook header + all entries land or none. A partial
+			// lorebook with missing entries is silently broken for the user.
+			const inserted = db.transaction(() => {
+				const row = db.insert(lorebooks).values({
+					userId: user.id,
+					name: finalName,
+					description: lb.description ?? '',
+					characterId: linkedCharId,
+					enabled: lb.enabled ?? true
+				}).returning().get();
+
+				for (const e of (lb.entries ?? [])) {
+					db.insert(lorebookEntries).values({
+						lorebookId: row.id,
+						keywords: e.keywords ?? '',
+						content: e.content ?? '',
+						insertionOrder: e.insertionOrder ?? 100,
+						enabled: e.enabled ?? true,
+						caseSensitive: e.caseSensitive ?? false,
+						constant: e.constant ?? false
+					}).run();
+				}
+				return row;
+			});
 
 			// Track old→new id mapping via the lorebook_<oldId>.json filename.
 			const m = f.name.match(/lorebook_(\d+)\.json$/);
 			if (m) oldIdToNewId.lorebooks.set(Number(m[1]), inserted.id);
 
-			for (const e of (lb.entries ?? [])) {
-				db.insert(lorebookEntries).values({
-					lorebookId: inserted.id,
-					keywords: e.keywords ?? '',
-					content: e.content ?? '',
-					insertionOrder: e.insertionOrder ?? 100,
-					enabled: e.enabled ?? true,
-					caseSensitive: e.caseSensitive ?? false,
-					constant: e.constant ?? false
-				}).run();
-			}
 			logger.info('import: lorebook imported', { path: f.name, name: finalName, id: inserted.id, entryCount: (lb.entries ?? []).length });
 			counts.lorebooks++;
 		} catch (err) {
@@ -295,52 +289,60 @@ export const POST: RequestHandler = async (event) => {
 				continue;
 			}
 
-			const insertedChat = db.insert(chats).values({
-				userId: user.id,
-				characterId: charId,
-				title: chatJson.title || `Imported chat`,
-				mode: chatJson.mode || 'story'
-			}).returning().get();
-
-			const idMap = new Map<number, number>();
-			const sorted = (Array.isArray(chatJson.messages) ? chatJson.messages : []).slice().sort((a: any, b: any) => a.id - b.id);
-			let lastId: number | null = null;
-			for (const m of sorted) {
-				if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') continue;
-				const remappedParent = m.parentId != null ? idMap.get(m.parentId) ?? null : null;
-				const inserted = db.insert(messages).values({
-					chatId: insertedChat.id,
-					role: m.role,
-					content: m.content || '',
-					swipes: JSON.stringify(Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.content || '']),
-					swipeIndex: m.swipeIndex ?? 0,
-					reasoning: JSON.stringify(m.reasoning ?? []),
-					parentId: remappedParent,
-					...(m.createdAt ? { createdAt: m.createdAt } : {})
+			// Atomic per-chat: chat row + every message + leaf update either all
+			// land or none. A partial chat (header with no messages) shows up as
+			// an empty stub in the sidebar and confuses the branch logic.
+			const { insertedChatId, idMap, lastId } = db.transaction(() => {
+				const insertedChat = db.insert(chats).values({
+					userId: user.id,
+					characterId: charId,
+					title: chatJson.title || `Imported chat`,
+					mode: chatJson.mode || 'story'
 				}).returning().get();
-				idMap.set(m.id, inserted.id);
-				lastId = inserted.id;
-			}
 
-			let leafId = lastId;
-			if (chatJson.activeLeafId != null) {
-				const remapped = idMap.get(chatJson.activeLeafId);
-				if (remapped) leafId = remapped;
-			}
-			if (leafId) {
-				db.update(chats).set({ activeLeafId: leafId }).where(eq(chats.id, insertedChat.id)).run();
-			}
+				const idMap = new Map<number, number>();
+				const sorted = (Array.isArray(chatJson.messages) ? chatJson.messages : []).slice().sort((a: any, b: any) => a.id - b.id);
+				let lastId: number | null = null;
+				for (const m of sorted) {
+					if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') continue;
+					const remappedParent = m.parentId != null ? idMap.get(m.parentId) ?? null : null;
+					const inserted = db.insert(messages).values({
+						chatId: insertedChat.id,
+						role: m.role,
+						content: m.content || '',
+						swipes: JSON.stringify(Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.content || '']),
+						swipeIndex: m.swipeIndex ?? 0,
+						reasoning: JSON.stringify(m.reasoning ?? []),
+						parentId: remappedParent,
+						...(m.createdAt ? { createdAt: m.createdAt } : {})
+					}).returning().get();
+					idMap.set(m.id, inserted.id);
+					lastId = inserted.id;
+				}
+
+				let leafId = lastId;
+				if (chatJson.activeLeafId != null) {
+					const remapped = idMap.get(chatJson.activeLeafId);
+					if (remapped) leafId = remapped;
+				}
+				if (leafId) {
+					db.update(chats).set({ activeLeafId: leafId }).where(eq(chats.id, insertedChat.id)).run();
+				}
+				return { insertedChatId: insertedChat.id, idMap, lastId };
+			});
+			void idMap; void lastId;
+
 			try {
-				recomputeChatTail(insertedChat.id);
+				recomputeChatTail(insertedChatId);
 			} catch (err) {
-				logger.warn('import: recomputeChatTail failed', { chatId: insertedChat.id, err: String(err) });
+				logger.warn('import: recomputeChatTail failed', { chatId: insertedChatId, err: String(err) });
 			}
 
 			// Track old→new for chat_lorebooks linking
 			const m = f.name.match(/chat_(\d+)\.json$/);
-			if (m) oldIdToNewId.chats.set(Number(m[1]), insertedChat.id);
+			if (m) oldIdToNewId.chats.set(Number(m[1]), insertedChatId);
 
-			logger.info('import: chat imported', { path: f.name, title: chatJson.title, charId, newChatId: insertedChat.id, messageCount: sorted.length });
+			logger.info('import: chat imported', { path: f.name, title: chatJson.title, charId, newChatId: insertedChatId });
 			counts.chats++;
 		} catch (err) {
 			logger.warn('bundle import: failed to import chat', { path: f.name, err: String(err) });
@@ -380,13 +382,7 @@ export const POST: RequestHandler = async (event) => {
 					const avatarEntry = zip.file(`personas/avatars/${p.avatarFile}`);
 					if (avatarEntry) {
 						const bytes = await avatarEntry.async('nodebuffer');
-						const avatarDir = join(process.cwd(), 'static', 'avatars');
-						mkdirSync(avatarDir, { recursive: true });
-						const uuid = randomUUID();
-						writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), bytes);
-						const optimized = await optimizeAvatar(bytes);
-						writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
-						avatarPath = `/avatars/${uuid}.webp`;
+						avatarPath = await storeAvatarFromBuffer(bytes, 'image/png');
 					}
 				}
 

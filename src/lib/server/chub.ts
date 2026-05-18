@@ -52,7 +52,10 @@ async function chubThrottle(): Promise<void> {
 
 async function chubFetch(url: string, init: RequestInit): Promise<Response> {
 	await chubThrottle();
-	return fetch(url, init);
+	// `redirect: 'error'` so the SSRF allow-list check we did on `url` can't
+	// be bypassed by the server redirecting us to an internal host. A 3xx
+	// throws instead of silently following.
+	return fetch(url, { ...init, redirect: 'error' });
 }
 
 export type ChubNamespace = 'characters' | 'lorebooks';

@@ -27,25 +27,31 @@
 		aria-label="Notifications"
 	>
 		{#each toasts.all as t (t.id)}
-			{#if t.kind === 'simple'}
-				<NotificationCard
-					accent={accentForSimple(t.type)}
-					iconName={iconForSimple(t.type)}
-					title={t.message}
-					onclick={t.onclick ? () => { t.onclick!(); toasts.remove(t.id); } : null}
-					ondismiss={() => toasts.remove(t.id)}
-				/>
-			{:else}
-				<NotificationCard
-					accent="primary"
-					iconName="message"
-					avatarUrl={t.characterAvatar}
-					title={t.characterName}
-					body={t.preview}
-					onclick={t.onclick ? () => { t.onclick!(t.chatId); toasts.remove(t.id); } : null}
-					ondismiss={() => toasts.remove(t.id)}
-				/>
-			{/if}
+			<div
+				onmouseenter={() => toasts.pause(t.id)}
+				onmouseleave={() => toasts.resume(t.id)}
+				role="presentation"
+			>
+				{#if t.kind === 'simple'}
+					<NotificationCard
+						accent={accentForSimple(t.type)}
+						iconName={iconForSimple(t.type)}
+						title={t.message}
+						onclick={t.onclick ? () => { t.onclick!(); toasts.remove(t.id); } : null}
+						ondismiss={() => toasts.remove(t.id)}
+					/>
+				{:else}
+					<NotificationCard
+						accent="primary"
+						iconName="message"
+						avatarUrl={t.characterAvatar}
+						title={t.characterName}
+						body={t.preview}
+						onclick={t.onclick ? () => { t.onclick!(t.chatId); toasts.remove(t.id); } : null}
+						ondismiss={() => toasts.remove(t.id)}
+					/>
+				{/if}
+			</div>
 		{/each}
 	</div>
 {/if}

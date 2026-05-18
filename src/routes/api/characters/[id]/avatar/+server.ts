@@ -5,30 +5,12 @@ import { characters } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
-import { optimizeAvatar, getAvatarOriginalsDir, getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
+import { storeAvatarFromBuffer, tryDeleteUnreferencedAvatar } from '$lib/services/imageOptimizer.js';
 import { extractThemeFromAvatar } from '$lib/services/themeExtractor.js';
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
-import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
 import { logger } from '$lib/server/logger.js';
 
 const ACCEPTED_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-
-function deleteAvatarFiles(avatarPath: string | null) {
-	if (!avatarPath) return;
-	try {
-		const file = join(process.cwd(), 'static', avatarPath.replace(/^\//, ''));
-		if (existsSync(file)) unlinkSync(file);
-		const basename = avatarPath.split('/').pop() || '';
-		const original = getOriginalAvatarPath(basename);
-		if (original && existsSync(original)) unlinkSync(original);
-	} catch (err) {
-		logger.warn('character avatar: prior file cleanup failed', {
-			err: err instanceof Error ? err.message : String(err)
-		});
-	}
-}
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -58,22 +40,10 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	const buffer = Buffer.from(await file.arrayBuffer());
-	const uuid = randomUUID();
 
 	let avatarPath: string;
 	try {
-		const avatarDir = join(process.cwd(), 'static', 'avatars');
-		mkdirSync(avatarDir, { recursive: true });
-		try {
-			writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), buffer);
-		} catch (err) {
-			logger.warn('character avatar: original save failed', {
-				err: err instanceof Error ? err.message : String(err)
-			});
-		}
-		const optimized = await optimizeAvatar(buffer);
-		writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
-		avatarPath = `/avatars/${uuid}.webp`;
+		avatarPath = await storeAvatarFromBuffer(buffer, file.type);
 	} catch (err) {
 		logger.warn('character avatar: optimize/write failed', {
 			err: err instanceof Error ? err.message : String(err)
@@ -104,8 +74,9 @@ export const POST: RequestHandler = async (event) => {
 		.run();
 
 	// Best-effort: clean up the previous avatar files now that the row is updated.
+	// Skipped automatically if another character/persona still points at the same path.
 	if (existing.avatarPath && existing.avatarPath !== avatarPath) {
-		deleteAvatarFiles(existing.avatarPath);
+		tryDeleteUnreferencedAvatar(existing.avatarPath);
 	}
 
 	const updated = db
@@ -144,12 +115,14 @@ export const DELETE: RequestHandler = async (event) => {
 		.get();
 	if (!existing) return json({ error: 'Character not found' }, { status: 404 });
 
-	deleteAvatarFiles(existing.avatarPath);
-
 	db.update(characters)
 		.set({ avatarPath: null, updatedAt: new Date().toISOString() })
 		.where(and(eq(characters.id, id), eq(characters.userId, user.id)))
 		.run();
+
+	// Cleanup AFTER the row's avatarPath is nulled, so the refcount on this
+	// row is zero. Skipped automatically if anyone else still uses the file.
+	tryDeleteUnreferencedAvatar(existing.avatarPath);
 
 	const updated = db
 		.select()

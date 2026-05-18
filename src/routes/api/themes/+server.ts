@@ -24,33 +24,25 @@ export const GET: RequestHandler = async (event) => {
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const body = await event.request.json();
-	const { name, mode, colors } = body;
+	const { mode, colors } = body;
 
-	if (!name || !mode || !colors) {
+	// CRUD-L1: refuse empty/whitespace-only names at write time.
+	const name = typeof body?.name === 'string' ? body.name.trim() : '';
+	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+	if (!mode || !colors) {
 		return json({ error: 'Missing required fields' }, { status: 400 });
 	}
 
-	// Validate the colours object — both at write time and at SSR-render
-	// time we splat values into a `style="--key:value"` attribute, so
-	// rejecting anything outside [\w-] keys / [\w\s().,#%-] values keeps
-	// us safely on the right side of the CSS injection / XSS line (M15).
-	let parsedColors: Record<string, unknown>;
-	try {
-		parsedColors = typeof colors === 'string' ? JSON.parse(colors) : colors;
-	} catch {
-		return json({ error: 'colors must be valid JSON' }, { status: 400 });
-	}
-	if (!parsedColors || typeof parsedColors !== 'object' || Array.isArray(parsedColors)) {
-		return json({ error: 'colors must be an object' }, { status: 400 });
-	}
-	const safeKey = /^[\w-]+$/;
-	const safeValue = /^[\w\s().,#%-]+$/;
-	for (const [k, v] of Object.entries(parsedColors)) {
-		if (!safeKey.test(k)) return json({ error: `Invalid color key: ${k}` }, { status: 400 });
-		if (typeof v !== 'string' || !safeValue.test(v)) {
-			return json({ error: `Invalid color value for ${k}` }, { status: 400 });
-		}
-	}
+	// CRUD-L2: per-user name uniqueness for themes.
+	const dupe = db
+		.select({ id: themes.id })
+		.from(themes)
+		.where(and(eq(themes.userId, user.id), eq(themes.name, name)))
+		.get();
+	if (dupe) return json({ error: 'A theme with that name already exists' }, { status: 409 });
+
+	const parsed = validateThemeColors(colors);
+	if ('error' in parsed) return json({ error: parsed.error }, { status: 400 });
 
 	const theme = db
 		.insert(themes)
@@ -58,7 +50,7 @@ export const POST: RequestHandler = async (event) => {
 			userId: user.id,
 			name,
 			mode,
-			colors: JSON.stringify(parsedColors),
+			colors: JSON.stringify(parsed.colors),
 			isActive: false,
 			isBuiltin: false
 		})
@@ -68,3 +60,30 @@ export const POST: RequestHandler = async (event) => {
 	broadcast(user.id, { type: 'theme:created', theme: theme as any });
 	return json(theme);
 };
+
+// Validate a `colors` payload — both at write time and at SSR-render time we
+// splat values into a `style="--key:value"` attribute, so rejecting anything
+// outside `[\w-]` keys / `[\w\s().,#%-]` values keeps us safely on the right
+// side of the CSS injection / XSS line (M15, CRUD-L6).
+export function validateThemeColors(colors: unknown): { colors: Record<string, string> } | { error: string } {
+	let parsedColors: Record<string, unknown>;
+	try {
+		parsedColors = typeof colors === 'string' ? JSON.parse(colors) : (colors as Record<string, unknown>);
+	} catch {
+		return { error: 'colors must be valid JSON' };
+	}
+	if (!parsedColors || typeof parsedColors !== 'object' || Array.isArray(parsedColors)) {
+		return { error: 'colors must be an object' };
+	}
+	const safeKey = /^[\w-]+$/;
+	const safeValue = /^[\w\s().,#%-]+$/;
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(parsedColors)) {
+		if (!safeKey.test(k)) return { error: `Invalid color key: ${k}` };
+		if (typeof v !== 'string' || !safeValue.test(v)) {
+			return { error: `Invalid color value for ${k}` };
+		}
+		out[k] = v;
+	}
+	return { colors: out };
+}

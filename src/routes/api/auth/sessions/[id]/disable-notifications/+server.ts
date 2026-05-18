@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { sessions, pushSubscriptions } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
-import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
+import { requireUser, getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 
 /**
  * POST /api/auth/sessions/[id]/disable-notifications
@@ -20,19 +20,22 @@ import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const idParam = event.params.id ?? '';
-	const currentToken = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentTokenRaw = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentSessionId = currentTokenRaw ? hashSessionToken(currentTokenRaw) : '';
 
-	const target = resolveSession(idParam, user.id, currentToken);
+	const target = resolveSession(idParam, user.id, currentSessionId);
 	if (!target) return json({ error: 'Session not found' }, { status: 404 });
 
 	const now = new Date().toISOString();
-	db.update(sessions)
-		.set({ notificationsDisabledAt: now })
-		.where(eq(sessions.id, target.id))
-		.run();
-	db.delete(pushSubscriptions)
-		.where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.sessionId, target.id)))
-		.run();
+	db.transaction(() => {
+		db.update(sessions)
+			.set({ notificationsDisabledAt: now })
+			.where(eq(sessions.id, target.id))
+			.run();
+		db.delete(pushSubscriptions)
+			.where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.sessionId, target.id)))
+			.run();
+	});
 
 	return json({ ok: true, notificationsDisabledAt: now });
 };
@@ -40,9 +43,10 @@ export const POST: RequestHandler = async (event) => {
 export const DELETE: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const idParam = event.params.id ?? '';
-	const currentToken = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentTokenRaw = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentSessionId = currentTokenRaw ? hashSessionToken(currentTokenRaw) : '';
 
-	const target = resolveSession(idParam, user.id, currentToken);
+	const target = resolveSession(idParam, user.id, currentSessionId);
 	if (!target) return json({ error: 'Session not found' }, { status: 404 });
 
 	db.update(sessions)
@@ -52,7 +56,7 @@ export const DELETE: RequestHandler = async (event) => {
 	return json({ ok: true });
 };
 
-function resolveSession(idParam: string, userId: number, currentToken: string) {
+function resolveSession(idParam: string, userId: number, currentSessionId: string) {
 	if (!idParam) return null;
 	if (idParam.length < 4 || idParam.length > 128) return null;
 	if (idParam.length <= 16) {
@@ -60,7 +64,7 @@ function resolveSession(idParam: string, userId: number, currentToken: string) {
 		const match = all.find((s) => s.id.endsWith(idParam));
 		return match ?? null;
 	}
-	if (idParam !== currentToken) return null;
+	if (idParam !== currentSessionId) return null;
 	const row = db.select({ id: sessions.id }).from(sessions)
 		.where(and(eq(sessions.id, idParam), eq(sessions.userId, userId))).get();
 	return row ?? null;

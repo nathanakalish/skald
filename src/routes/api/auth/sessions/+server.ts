@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { sessions } from '$lib/db/schema.js';
 import { eq, and, gt } from 'drizzle-orm';
-import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
+import { requireUser, getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 
 /**
  * Signed-in devices (sessions). Push notification state is intentionally NOT
@@ -26,7 +26,8 @@ interface SessionListItem {
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
-	const currentToken = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentTokenRaw = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentSessionId = currentTokenRaw ? hashSessionToken(currentTokenRaw) : '';
 	const now = new Date().toISOString().replace('T', ' ').replace('Z', '');
 
 	const rows = db
@@ -47,7 +48,7 @@ export const GET: RequestHandler = async (event) => {
 		// Don't expose the raw token. Short fingerprint lets the user tell
 		// devices apart without enabling cross-tab token theft.
 		fingerprint: r.id.slice(-8),
-		current: r.id === currentToken,
+		current: r.id === currentSessionId,
 		userAgent: r.userAgent ?? '',
 		createdAt: r.createdAt,
 		lastSeenAt: r.lastSeenAt,

@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { sessions, pushSubscriptions } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
-import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
+import { requireUser, getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 
 /**
  * DELETE /api/auth/sessions/[id]
@@ -20,37 +20,42 @@ import { requireUser, getSessionCookieName } from '$lib/server/auth.js';
 export const DELETE: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const idParam = event.params.id ?? '';
-	const currentToken = event.cookies.get(getSessionCookieName()) ?? '';
+	const currentTokenRaw = event.cookies.get(getSessionCookieName()) ?? '';
+	// sessions.id stores SHA-256(token), so compare against the hashed value.
+	const currentSessionId = currentTokenRaw ? hashSessionToken(currentTokenRaw) : '';
 
-	const target = resolveSession(idParam, user.id, currentToken);
+	const target = resolveSession(idParam, user.id, currentSessionId);
 	if (!target) return json({ error: 'Session not found' }, { status: 404 });
 
 	// Cascade: drop push subs for this session, then delete the session row.
-	db.delete(pushSubscriptions)
-		.where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.sessionId, target.id)))
-		.run();
-	db.delete(sessions).where(eq(sessions.id, target.id)).run();
+	db.transaction(() => {
+		db.delete(pushSubscriptions)
+			.where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.sessionId, target.id)))
+			.run();
+		db.delete(sessions).where(eq(sessions.id, target.id)).run();
+	});
 
-	// If the caller revoked themselves, clear the cookie.
-	if (target.id === currentToken) {
+	const signedOutSelf = target.id === currentSessionId;
+	if (signedOutSelf) {
 		event.cookies.delete(getSessionCookieName(), { path: '/' });
 	}
 
-	return json({ ok: true, signedOutSelf: target.id === currentToken });
+	return json({ ok: true, signedOutSelf });
 };
 
-function resolveSession(idParam: string, userId: number, currentToken: string) {
+function resolveSession(idParam: string, userId: number, currentSessionId: string) {
 	if (!idParam) return null;
 	if (idParam.length < 4 || idParam.length > 128) return null;
-	// Short-fingerprint match: the UI only ever sees the last 8 chars.
+	// Short-fingerprint match: the UI only ever sees the last 8 chars of the
+	// hashed sessions.id (see GET /api/auth/sessions).
 	if (idParam.length <= 16) {
 		const all = db.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, userId)).all();
 		const match = all.find((s) => s.id.endsWith(idParam));
 		return match ?? null;
 	}
-	// Full-token match: only honored when it equals the caller's own cookie,
-	// otherwise reject — we never accept arbitrary tokens from request input.
-	if (idParam !== currentToken) return null;
+	// Full-id match: only honored when it equals the caller's own session id,
+	// otherwise reject — we never accept arbitrary ids from request input.
+	if (idParam !== currentSessionId) return null;
 	const row = db.select({ id: sessions.id }).from(sessions)
 		.where(and(eq(sessions.id, idParam), eq(sessions.userId, userId))).get();
 	return row ?? null;

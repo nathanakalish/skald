@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
-import { providers } from '$lib/db/schema.js';
+import { providers, chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
 import { broadcast } from '$lib/server/realtime.js';
@@ -76,15 +76,23 @@ export const DELETE: RequestHandler = async (event) => {
 	const id = existing.id;
 	const wasEnabled = existing.enabled;
 
-	db.delete(providers).where(and(eq(providers.id, id), eq(providers.userId, user.id))).run();
+	// One transaction: delete the row, clear any chat overrides pointing at it
+	// (no FK to do this for us — see DB-H1 / CRUD-H4), then promote the next
+	// provider to enabled if the deleted one was the active default.
+	db.transaction(() => {
+		db.delete(providers).where(and(eq(providers.id, id), eq(providers.userId, user.id))).run();
+		db.update(chats)
+			.set({ overrideProviderId: null })
+			.where(and(eq(chats.userId, user.id), eq(chats.overrideProviderId, id)))
+			.run();
 
-	// If the deleted provider was the default, promote the next one
-	if (wasEnabled) {
-		const next = db.select().from(providers).where(eq(providers.userId, user.id)).limit(1).get();
-		if (next) {
-			db.update(providers).set({ enabled: true }).where(eq(providers.id, next.id)).run();
+		if (wasEnabled) {
+			const next = db.select().from(providers).where(eq(providers.userId, user.id)).limit(1).get();
+			if (next) {
+				db.update(providers).set({ enabled: true }).where(eq(providers.id, next.id)).run();
+			}
 		}
-	}
+	});
 
 	broadcast(user.id, { type: 'provider:deleted', id });
 	return json({ ok: true });

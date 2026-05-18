@@ -1,65 +1,52 @@
 /**
  * Web Push notification sender.
- * Auto-generates VAPID keys on first boot (stashed in admin_settings).
- * Sends push notifications to every subscribed device for a user.
+ * VAPID keys must be supplied via env. We deliberately do NOT persist them
+ * to the DB anymore — a DB backup leak would otherwise let an attacker
+ * forge push notifications for every subscribed device.
+ * Run `npx web-push generate-vapid-keys` once and set the env vars.
  */
 import webpush from 'web-push';
 import { db } from '$lib/db/index.js';
-import { pushSubscriptions, adminSettings } from '$lib/db/schema.js';
+import { pushSubscriptions } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { logger } from '$lib/server/logger.js';
 
-/** Ensure VAPID keys exist (env override or auto-generated and persisted). */
-function initVapid() {
-	let publicKey = process.env.VAPID_PUBLIC_KEY || '';
-	let privateKey = process.env.VAPID_PRIVATE_KEY || '';
+let vapidPublicKey: string | null = null;
+let vapidInitialized = false;
+let warnedMissing = false;
+
+/** Ensure VAPID keys exist (env only). Returns the public key or null. */
+function initVapid(): string | null {
+	if (vapidInitialized) return vapidPublicKey;
+	vapidInitialized = true;
+
+	const publicKey = process.env.VAPID_PUBLIC_KEY || '';
+	const privateKey = process.env.VAPID_PRIVATE_KEY || '';
 
 	if (!publicKey || !privateKey) {
-		// Try the DB.
-		const pubRow = db.select().from(adminSettings).where(eq(adminSettings.key, 'vapidPublicKey')).get();
-		const privRow = db.select().from(adminSettings).where(eq(adminSettings.key, 'vapidPrivateKey')).get();
-
-		if (pubRow && privRow) {
-			publicKey = pubRow.value;
-			privateKey = privRow.value;
-		} else {
-			// Generate fresh keys and persist them.
-			const keys = webpush.generateVAPIDKeys();
-			publicKey = keys.publicKey;
-			privateKey = keys.privateKey;
-
-			db.insert(adminSettings)
-				.values({ key: 'vapidPublicKey', value: publicKey })
-				.onConflictDoUpdate({ target: adminSettings.key, set: { value: publicKey } })
-				.run();
-			db.insert(adminSettings)
-				.values({ key: 'vapidPrivateKey', value: privateKey })
-				.onConflictDoUpdate({ target: adminSettings.key, set: { value: privateKey } })
-				.run();
-
-			logger.info('Generated new VAPID keys for web push');
+		if (!warnedMissing) {
+			logger.warn(
+				'Web push disabled: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars are not set. ' +
+				'Generate a pair with `npx web-push generate-vapid-keys` and add them to your environment.'
+			);
+			warnedMissing = true;
 		}
+		vapidPublicKey = null;
+		return null;
 	}
 
 	// Apple APNs requires a valid mailto: or https: subject — 'localhost' is rejected.
 	const subject = process.env.VAPID_SUBJECT
 		|| (process.env.ORIGIN ? process.env.ORIGIN : 'https://github.com/nathanakalish/skald');
 
-	webpush.setVapidDetails(
-		subject,
-		publicKey,
-		privateKey
-	);
-
+	webpush.setVapidDetails(subject, publicKey, privateKey);
+	vapidPublicKey = publicKey;
 	return publicKey;
 }
 
-let vapidPublicKey: string | null = null;
-
-/** Get the VAPID public key (for client subscription). */
-export function getVapidPublicKey(): string {
-	if (!vapidPublicKey) vapidPublicKey = initVapid();
-	return vapidPublicKey;
+/** Get the VAPID public key for client subscription, or null if push is disabled. */
+export function getVapidPublicKey(): string | null {
+	return initVapid();
 }
 
 /** Send a push notification to every subscribed device for a user. */
@@ -67,8 +54,8 @@ export async function sendPushNotification(
 	userId: number,
 	payload: { title: string; body: string; icon?: string; data?: Record<string, unknown> }
 ): Promise<void> {
-	// Make sure VAPID is initialised.
-	getVapidPublicKey();
+	// Make sure VAPID is initialised. Skip silently if push isn't configured.
+	if (!initVapid()) return;
 
 	const subs = db.select().from(pushSubscriptions)
 		.where(eq(pushSubscriptions.userId, userId))

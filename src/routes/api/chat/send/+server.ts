@@ -48,6 +48,7 @@ export const POST: RequestHandler = async (event) => {
 	// Verify ownership.
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (chat.deletedAt != null) return json({ error: 'Chat has been deleted' }, { status: 410 });
 
 	const guidance = typeof rawGuidance === 'string' && rawGuidance.trim() ? rawGuidance : undefined;
 
@@ -187,6 +188,23 @@ export const POST: RequestHandler = async (event) => {
 			greeting: !!greeting,
 			guidance: jobGuidance,
 		});
+		// enqueueJob returns -1 when the chat is already processing (running
+		// or queued). Surface that as a 409 instead of pretending we accepted
+		// the request — otherwise the client thinks a fresh stream is coming
+		// and waits forever for an event that never fires.
+		if (jobId === -1) {
+			if (userMsgId != null) {
+				try {
+					db.delete(messages).where(eq(messages.id, userMsgId)).run();
+					recomputeChatTail(chatId);
+					broadcast(user.id, { type: 'message:deleted', chatId, ids: [userMsgId] });
+				} catch { /* best-effort cleanup */ }
+			}
+			return json(
+				{ error: 'Chat is already processing a message — wait for it to finish or abort it first.' },
+				{ status: 409 }
+			);
+		}
 		return json({ ok: true, jobId, userMsgId });
 	} catch (err) {
 		// M5: roll back the user message we just inserted; otherwise the chat is

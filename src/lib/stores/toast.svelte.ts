@@ -34,11 +34,31 @@ export type ToastItem = SimpleToast | ChatToast;
 let nextId = 0;
 const _toasts = $state<ToastItem[]>([]);
 const _timers = new Map<number, ReturnType<typeof setTimeout>>();
+// Remember each toast's duration so pause/resume can reschedule with the
+// originally requested wall-clock instead of starting over from scratch.
+const _durations = new Map<number, number>();
 
 function scheduleDismiss(id: number, duration: number) {
 	if (duration <= 0) return; // sticky
 	const timer = setTimeout(() => remove(id), duration);
 	_timers.set(id, timer);
+	_durations.set(id, duration);
+}
+
+/** Pause auto-dismiss while the user hovers a toast. Idempotent. */
+function pause(id: number) {
+	const t = _timers.get(id);
+	if (t) { clearTimeout(t); _timers.delete(id); }
+}
+
+/** Resume auto-dismiss with the toast's original duration. */
+function resume(id: number) {
+	if (_timers.has(id)) return;
+	const d = _durations.get(id);
+	if (d && d > 0) {
+		const timer = setTimeout(() => remove(id), d);
+		_timers.set(id, timer);
+	}
 }
 
 function add(message: string, type: SimpleToast['type'] = 'success', duration = 2500, onclick?: () => void) {
@@ -60,6 +80,7 @@ function remove(id: number) {
 	if (idx >= 0) _toasts.splice(idx, 1);
 	const t = _timers.get(id);
 	if (t) { clearTimeout(t); _timers.delete(id); }
+	_durations.delete(id);
 }
 
 /** Drop every chat toast for a given chat (e.g. user opened the chat on another device). */
@@ -78,4 +99,6 @@ export const toasts = {
 	chat,
 	remove,
 	removeChat,
+	pause,
+	resume,
 };

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { logger } from '$lib/server/logger.js';
+import { matchLorebookEntries } from '$lib/services/lorebook.js';
 import { loadPromptContext } from './loadContext.js';
 import { buildSlots } from './slots.js';
 import { enforceBudget } from './budget.js';
@@ -32,7 +33,15 @@ export function buildChatContext(chatId: number, opts: ProcessOptions): BuildCha
 		fullHistory: ctx.chatMessages,
 		contextSize: ctx.contextSize,
 		maxResponseTokens: ctx.maxResponseTokens,
-		rebuild: (trimmedHistory) => buildSlots(ctx, trimmedHistory),
+		providerType: ctx.activeProvider.type,
+		rebuild: (trimmedHistory) => {
+			// PROMPT-H1: lorebook matches must follow the trimmed history.
+			// Keywords that lived only in messages we just dropped should no
+			// longer pull their entries into the prompt; conversely, this also
+			// keeps `constant` entries injecting against the smaller window.
+			ctx.lorebookEntries = matchLorebookEntries(ctx.character.id, ctx.chat.id, trimmedHistory);
+			return buildSlots(ctx, trimmedHistory);
+		},
 		chatId,
 	});
 

@@ -1,5 +1,6 @@
 node_modules
 .vscode
+/docs
 
 # Output
 .output
@@ -41,3 +42,4 @@ static/avatars/
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+SCRATCHPAD.md

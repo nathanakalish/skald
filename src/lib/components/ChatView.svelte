@@ -4,6 +4,7 @@
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
 	import ImageModal from '$lib/components/ImageModal.svelte';
+	import MessageBubble from '$lib/components/MessageBubble.svelte';
 	import ChatSettings from '$lib/components/ChatSettings.svelte';
 	import ReasoningModal from '$lib/components/ReasoningModal.svelte';
 	import CharacterInfoModal from '$lib/components/CharacterInfoModal.svelte';
@@ -125,9 +126,12 @@
 			if (!(e.target as HTMLElement).closest('[data-header-menu]')) closeHeaderMenu();
 		};
 		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeHeaderMenu(); };
-		setTimeout(() => document.addEventListener('click', onDoc), 0);
+		// Defer adding the click listener so the click that opened the menu
+		// doesn't immediately close it.
+		const attachTimer = setTimeout(() => document.addEventListener('click', onDoc), 0);
 		document.addEventListener('keydown', onKey);
 		return () => {
+			clearTimeout(attachTimer);
 			document.removeEventListener('click', onDoc);
 			document.removeEventListener('keydown', onKey);
 		};
@@ -261,6 +265,10 @@
 				const container = messagesContainer;
 				const prevHeight = container?.scrollHeight ?? 0;
 				messageList = [...earlier, ...messageList];
+				// Keep the rendered window pointing at the same set of messages
+				// the user was looking at — newly fetched older messages enter
+				// the unrendered head until the user scrolls up to them.
+				renderedStart += earlier.length;
 				Object.assign(messageSiblings, data.messageSiblings ?? {});
 				if (data.totalMessages) totalMsgCount = data.totalMessages;
 				await tick();
@@ -279,6 +287,49 @@
 	let totalMsgCount = $state(untrack(() => totalMessageCount || (initialMessages ?? []).length));
 	let loadingMore = $state(false);
 	let hasMore = $derived(messageList.length < totalMsgCount);
+
+	// FRONT-C4: windowed render. Most chats stay well under this; long sessions
+	// that have triggered "Load earlier" repeatedly get DOM-node-count relief
+	// without changing pagination semantics. `content-visibility: auto` on
+	// rendered rows still applies as a second-stage paint guard.
+	const RENDER_WINDOW_SIZE = 100;
+	const RENDER_WINDOW_GROW = 100;
+	let renderedStart = $state(untrack(() => Math.max(0, ((initialMessages ?? []).length) - RENDER_WINDOW_SIZE)));
+	let topSentinel: HTMLDivElement | undefined = $state();
+	let expandingWindow = false;
+
+	// Watch the top sentinel; when it enters view (user scrolled near the top of
+	// the rendered window), reveal the next RENDER_WINDOW_GROW older messages and
+	// preserve scroll position by the delta in scrollHeight.
+	$effect(() => {
+		if (!topSentinel) return;
+		const sentinel = topSentinel;
+		const observer = new IntersectionObserver(async (entries) => {
+			if (!entries[0]?.isIntersecting) return;
+			if (expandingWindow || renderedStart === 0) return;
+			expandingWindow = true;
+			try {
+				const container = messagesContainer;
+				const prevHeight = container?.scrollHeight ?? 0;
+				renderedStart = Math.max(0, renderedStart - RENDER_WINDOW_GROW);
+				await tick();
+				if (container) container.scrollTop += container.scrollHeight - prevHeight;
+			} finally {
+				expandingWindow = false;
+			}
+		}, { rootMargin: '600px 0px 0px 0px' });
+		observer.observe(sentinel);
+		return () => observer.disconnect();
+	});
+
+	// Defensive clamp: deletions or replace-by-id paths shouldn't normally take
+	// renderedStart out of range, but if they ever do (e.g. branch reset that
+	// drops earlier messages), pull it back into the valid window so the each-
+	// block doesn't render against a negative slice.
+	$effect(() => {
+		const len = messageList.length;
+		if (renderedStart > len) renderedStart = Math.max(0, len - RENDER_WINDOW_SIZE);
+	});
 
 	let confirmingDeleteIdx: number | null = $state(null);
 	let input = $state(untrack(() => pickDraftForChat(chat)));
@@ -949,10 +1000,11 @@
 		const onScroll = () => { if (!msgMenuScrollSuppressed) closeMsgMenu(); };
 		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeMsgMenu(); };
 		const el = messagesContainer;
-		setTimeout(() => document.addEventListener('click', onClick), 0);
+		const attachTimer = setTimeout(() => document.addEventListener('click', onClick), 0);
 		el?.addEventListener('scroll', onScroll, { passive: true });
 		document.addEventListener('keydown', onKey);
 		return () => {
+			clearTimeout(attachTimer);
 			document.removeEventListener('click', onClick);
 			el?.removeEventListener('scroll', onScroll);
 			document.removeEventListener('keydown', onKey);
@@ -973,9 +1025,10 @@
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') { showImpersonateMenu = false; showSendMenu = false; }
 		};
-		setTimeout(() => document.addEventListener('click', onClick), 0);
+		const attachTimer = setTimeout(() => document.addEventListener('click', onClick), 0);
 		document.addEventListener('keydown', onKey);
 		return () => {
+			clearTimeout(attachTimer);
 			document.removeEventListener('click', onClick);
 			document.removeEventListener('keydown', onKey);
 		};
@@ -1131,6 +1184,7 @@
 				saveScroll(lastSyncedChatId, messagesContainer.scrollTop);
 			}
 			messageList = incoming;
+			renderedStart = Math.max(0, incoming.length - RENDER_WINDOW_SIZE);
 			messageSiblings = newSiblings;
 			totalMsgCount = newTotal || incoming.length;
 			input = pickDraftForChat(chat);
@@ -2380,9 +2434,11 @@
 				if (mode === 'thread') await scrollToBottom(true);
 			} else {
 				messageList = savedList;
+				toasts.error('Failed to delete message');
 			}
 		} catch {
 			messageList = savedList;
+			toasts.error('Failed to delete message');
 		} finally {
 			deletingFromIdx = null;
 			deletingSingleIdx = null;
@@ -2457,7 +2513,12 @@
 	// chatData in layout consistent but its diff-sync will be a no-op.
 	function applyBranchData(data: any) {
 		if (!data?.messages) return;
-		messageList = data.messages.map(parseMessage);
+		const incoming: Message[] = data.messages.map(parseMessage);
+		// Preserve in-flight optimistic messages (negative ids assigned by
+		// sendMessage's appendOptimistic path) so a branch fetch that returns
+		// after a user typed + sent doesn't visually drop their message.
+		const optimisticTail = messageList.filter(m => m.id < 0 && !incoming.some(n => n.id === m.id));
+		messageList = optimisticTail.length ? [...incoming, ...optimisticTail] : incoming;
 		messageSiblings = data.messageSiblings ?? {};
 		if (data.totalMessages != null) totalMsgCount = data.totalMessages;
 		scrollToBottom(true);
@@ -2724,7 +2785,7 @@
 	<!-- Messages -->
 	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6">
 		<div class="mx-auto w-full max-w-5xl space-y-4">
-			{#if hasMore}
+			{#if hasMore && renderedStart === 0}
 				<div class="flex justify-center py-2">
 					<button
 						onclick={loadEarlierMessages}
@@ -2741,7 +2802,15 @@
 					</button>
 				</div>
 			{/if}
-			{#each messageList as message, i (message.id)}
+			{#if renderedStart > 0}
+				<!-- Sentinel for FRONT-C4 windowed render: triggers reveal of older
+				     in-memory messages when scrolled near the top of the window.
+				     Kept tall enough so IntersectionObserver fires comfortably before
+				     the user hits an actual gap. -->
+				<div bind:this={topSentinel} class="h-px" aria-hidden="true"></div>
+			{/if}
+			{#each messageList.slice(renderedStart) as message, localI (message.id)}
+				{@const i = localI + renderedStart}
 				{#if message.role !== 'system'}
 					<!-- Compaction indicator: shown right BEFORE the first uncompacted visible message -->
 					{#if chat.compactionSummary && (chat.compactedUpToMessageId ?? 0) > 0 && !isMessageCompacted(message.id) && ((i === 0 && !hasMore) || isMessageCompacted(messageList[i - 1]?.id))}
@@ -2771,148 +2840,42 @@
 					{@const nextMsg = messageList[i + 1]}
 					{@const groupEnd = !nextMsg || nextMsg.role === 'system' || nextMsg.role !== message.role}
 					{@const isCompacted = isMessageCompacted(message.id)}
-					<div
-						class="{msgEnterClass(message.id, message.role)} {(deletingFromIdx !== null && i >= deletingFromIdx) || (deletingSingleIdx !== null && i === deletingSingleIdx) ? 'msg-exit' : ''} {abortAnimating && isStreaming && i === messageList.length - 1 && message.role === 'assistant' ? 'msg-abort' : ''} group relative flex transition-opacity duration-200 {consecutive ? 'mt-0.5 gap-2 md:gap-3' : 'gap-2 md:gap-3'} {isCompacted ? 'opacity-60' : ''}"
-						class:flex-row-reverse={message.role === 'user'}
-						class:opacity-20={messageSearchQuery.trim() && !messageSearchMatches.has(message.id)}
-					>
-						<!-- Avatar (only at the end of a same-sender group; user messages don't show avatar — iMessage style. Hidden entirely on mobile to maximize bubble width) -->
-						<div class="hidden shrink-0 self-end md:block {message.role === 'user' ? 'md:hidden' : ''} {!groupEnd ? 'md:invisible' : ''}" use:tooltip={`Message #${msgNumber}`}>
-							{#if message.role === 'assistant'}
-								{#if character.avatarPath}
-									<!-- svelte-ignore a11y_click_events_have_key_events -->
-									<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-									<img
-										src={character.avatarPath}
-										alt={character.name}
-										class="h-7 w-7 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-80 md:h-9 md:w-9"
-										onclick={() => (enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null)}
-									/>
-								{:else}
-									<div
-										class="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 md:h-9 md:w-9"
-									>
-										<Bot class="h-3.5 w-3.5 text-primary" />
-									</div>
-								{/if}
-							{/if}
-						</div>
-
-						<!-- Message bubble (iMessage style: blue user / gray assistant) -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div
-							class="chat-bubble relative select-none px-3.5 py-2 shadow-sm shadow-black/5 {editingId === message.id ? 'w-full rounded-2xl' : 'max-w-[88%] md:max-w-[70%]'} {message.role === 'user' ? 'bg-primary text-bubble-user-fg' : 'bg-muted text-bubble-assistant-fg'} {message.role === 'user'
-								? (consecutive && !groupEnd ? 'rounded-2xl rounded-br-md' : consecutive && groupEnd ? 'rounded-2xl rounded-tr-md' : groupEnd ? 'rounded-2xl' : 'rounded-2xl rounded-br-md')
-								: (consecutive && !groupEnd ? 'rounded-2xl rounded-bl-md' : consecutive && groupEnd ? 'rounded-2xl rounded-tl-md' : groupEnd ? 'rounded-2xl' : 'rounded-2xl rounded-bl-md')}"
-							oncontextmenu={(e) => { if (editingId !== message.id) openMsgMenu(i, e); }}
-							ontouchstart={(e) => { if (editingId !== message.id) startMsgLongPress(i, e); }}
-							ontouchmove={(e) => moveMsgLongPress(e)}
-							ontouchend={(e) => endMsgLongPress(e)}
-							ontouchcancel={() => endMsgLongPress()}
-							use:tooltip={messageTimestamps !== 'off' && message.createdAt ? getMessageTime(message.createdAt) : undefined}
-							data-reformatting={reformattingMessageId === message.id ? '' : undefined}
-						>
-							{#if editingId === message.id}
-								<textarea
-									bind:value={editContent}
-									onkeydown={(e) => handleEditKeydown(e, i)}
-									class="w-full resize-none rounded-lg border border-input bg-background p-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-									rows={Math.min(12, Math.max(3, editContent.split('\n').length + 1))}
-								></textarea>
-								<div class="mt-1.5 flex items-center justify-end gap-1.5">
-									<button
-										onclick={() => saveEdit(i)}
-										class="flex h-9 w-9 md:h-6 md:w-6 items-center justify-center rounded border transition-all {message.role === 'user' ? 'border-white/15 bg-white/10 text-bubble-user-fg/80 hover:bg-white/20 hover:text-bubble-user-fg' : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'} active:scale-90"
-										use:tooltip={'Save'}
-										aria-label="Save edit"
-									>
-										<Check class="h-3.5 w-3.5" />
-									</button>
-									<button
-										onclick={cancelEdit}
-										class="flex h-9 w-9 md:h-6 md:w-6 items-center justify-center rounded border transition-all {message.role === 'user' ? 'border-white/15 bg-white/10 text-bubble-user-fg/80 hover:bg-white/20 hover:text-bubble-user-fg' : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'} active:scale-90"
-										use:tooltip={'Cancel'}
-										aria-label="Cancel edit"
-									>
-										<X class="h-3.5 w-3.5" />
-									</button>
-								</div>
-							{:else if isStreaming && !isImpersonating && i === messageList.length - 1 && message.role === 'assistant' && (!message.content || isReasoning)}
-								{#if !message.content}
-									<div class="flex items-center justify-center gap-2.5 py-2 px-1 min-h-[36px]">
-										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-3 w-3 rounded-full bg-muted-foreground/70" style="animation-delay: 320ms"></span>
-										{#if isReasoning}
-											<button
-												onclick={() => { reasoningModalIsImpersonation = false; reasoningModalIsLive = true; showReasoningModal = true; }}
-												class="ml-1 flex items-center justify-center rounded-md p-0.5 text-muted-foreground/60 hover:text-primary hover:bg-accent transition-colors"
-											>
-												<Brain class="h-5 w-5" />
-											</button>
-										{/if}
-									</div>
-								{:else}
-									<!-- Content is streaming alongside reasoning — show content with indicator -->
-									<!-- svelte-ignore a11y_click_events_have_key_events -->
-									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<div
-										class="message-content text-sm leading-relaxed {effectiveRenderMode !== 'markdown' ? 'whitespace-pre-wrap' : ''}"
-										onclick={(e) => {
-											if (e.target instanceof HTMLImageElement) {
-												enlargedImage = e.target.src;
-											}
-										}}
-									>
-										{@html renderContent(message.content, true)}
-									</div>
-									<div class="mt-1 flex items-center gap-2.5 text-xs text-muted-foreground/60">
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-2.5 w-2.5 rounded-full bg-muted-foreground/60" style="animation-delay: 320ms"></span>
-										<button
-										onclick={() => { reasoningModalIsLive = true; showReasoningModal = true; }}
-										class="ml-0.5 flex items-center gap-1 rounded-lg px-2 py-1.5 hover:text-primary hover:bg-accent transition-colors"
-									>
-										<Brain class="h-4 w-4" />
-									</button>
-									</div>
-								{/if}
-							{:else}
-								<!-- svelte-ignore a11y_click_events_have_key_events -->
-									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<div
-										class="message-content text-sm leading-relaxed {effectiveRenderMode !== 'markdown' ? 'whitespace-pre-wrap' : ''}"
-										onclick={(e) => {
-											if (e.target instanceof HTMLImageElement) {
-												enlargedImage = e.target.src;
-											}
-										}}
-									>
-										{@html renderContent(message.content)}
-									</div>
-									{#if message.content.startsWith('Error:') && i === messageList.length - 1 && !isStreaming}
-										<button
-											onclick={() => regenerateMessage()}
-											class="mt-2 flex items-center gap-1.5 rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-medium text-destructive transition-all hover:bg-destructive/25 active:scale-95"
-											aria-label="Retry message generation"
-										>
-											<RefreshCw class="h-3.5 w-3.5" />
-											Retry
-										</button>
-									{/if}
-							{/if}
-							{#if reformattingMessageId === message.id}
-								<div class="reformatting-overlay pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-[inherit] bg-black/10 backdrop-blur-[1px]">
-									<div class="flex items-center justify-center gap-2.5 drop-shadow">
-										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 0ms"></span>
-										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 160ms"></span>
-										<span class="typing-dot h-3.5 w-3.5 rounded-full bg-foreground" style="animation-delay: 320ms"></span>
-									</div>
-								</div>
-							{/if}
-						</div>
-					</div>
+					{@const isLast = i === messageList.length - 1}
+					<MessageBubble
+						{message}
+						{consecutive}
+						{groupEnd}
+						{msgNumber}
+						{isCompacted}
+						{isLast}
+						isExiting={(deletingFromIdx !== null && i >= deletingFromIdx) || (deletingSingleIdx !== null && i === deletingSingleIdx)}
+						isAborting={abortAnimating && isStreaming && isLast && message.role === 'assistant'}
+						isSearchDimmed={!!messageSearchQuery.trim() && !messageSearchMatches.has(message.id)}
+						isEditing={editingId === message.id}
+						bind:editContent
+						{isStreaming}
+						{isImpersonating}
+						{isReasoning}
+						isReformatting={reformattingMessageId === message.id}
+						{effectiveRenderMode}
+						{messageTimestamps}
+						characterAvatarPath={character.avatarPath}
+						characterName={character.name}
+						enterClass={msgEnterClass(message.id, message.role)}
+						{renderContent}
+						{getMessageTime}
+						onsaveEdit={() => saveEdit(i)}
+						oncancelEdit={cancelEdit}
+						onhandleEditKeydown={(e) => handleEditKeydown(e, i)}
+						onregenerate={() => regenerateMessage()}
+						onopenMenu={(e) => openMsgMenu(i, e)}
+						onstartLongPress={(e) => startMsgLongPress(i, e)}
+						onmoveLongPress={(e) => moveMsgLongPress(e)}
+						onendLongPress={(e) => endMsgLongPress(e)}
+						onopenReasoning={(isLive) => { reasoningModalIsImpersonation = false; reasoningModalIsLive = isLive; showReasoningModal = true; }}
+						onimageClick={(src) => (enlargedImage = src)}
+						onenlargeAvatar={(src) => (enlargedImage = src)}
+					/>
 				{/if}
 			{/each}
 
@@ -3577,80 +3540,6 @@
 		}
 	}
 
-	/* Texting mode: iMessage-style bubble pop from right (user) */
-	.msg-enter-texting-user {
-		animation: msg-pop-right 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-
-	@keyframes msg-pop-right {
-		from {
-			opacity: 0;
-			transform: translateX(24px) scale(0.92);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0) scale(1);
-		}
-	}
-
-	/* Texting mode: iMessage-style bubble pop from left (assistant) */
-	.msg-enter-texting-assistant {
-		animation: msg-pop-left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-
-	@keyframes msg-pop-left {
-		from {
-			opacity: 0;
-			transform: translateX(-24px) scale(0.92);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0) scale(1);
-		}
-	}
-
-	/* Story mode: elegant fade up */
-	.msg-enter-story {
-		animation: msg-fade-up 0.35s ease-out;
-	}
-
-	@keyframes msg-fade-up {
-		from {
-			opacity: 0;
-			transform: translateY(14px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	/* Message exit animation (deletion) */
-	.msg-exit {
-		animation: msg-exit 0.3s ease-in forwards;
-		pointer-events: none;
-	}
-
-	@keyframes msg-exit {
-		to {
-			opacity: 0;
-			transform: scale(0.92) translateY(-8px);
-		}
-	}
-
-	/* Abort/stop generation fade-out */
-	.msg-abort {
-		animation: msg-abort-fade 0.25s ease-out forwards;
-		pointer-events: none;
-	}
-
-	@keyframes msg-abort-fade {
-		to {
-			opacity: 0;
-			transform: scale(0.96) translateY(6px);
-		}
-	}
-
 	/* Mobile toolbar slide-in */
 	/* Scroll-to-bottom button entrance */
 	.scroll-btn-enter {
@@ -3682,36 +3571,5 @@
 		100% {
 			box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
 		}
-	}
-
-	/* Story mode RP formatting */
-	.message-content :global(.rp-thought) {
-		font-style: italic;
-		opacity: 0.55;
-	}
-
-	.message-content :global(.rp-code) {
-		display: inline-block;
-		background-color: color-mix(in oklch, var(--background) 85%, var(--foreground));
-		border: 1px solid var(--border);
-		border-radius: 0.375rem;
-		padding: 0.125rem 0.5rem;
-		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-		font-size: 0.875em;
-		white-space: pre-wrap;
-	}
-
-	/* Inline images: hidden until loaded, then fade in */
-	.message-content :global(img) {
-		opacity: 0;
-		transition: opacity 0.15s ease-in;
-	}
-
-	.message-content :global(img.loaded) {
-		opacity: 1;
-	}
-
-	.message-content :global(img:hover) {
-		opacity: 0.8;
 	}
 </style>

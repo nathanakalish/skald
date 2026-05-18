@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, unique, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
@@ -66,31 +66,31 @@ export const chats = sqliteTable('chats', {
 	mode: text('mode').default('story'),
 	pinned: integer('pinned').default(0),
 	pinOrder: integer('pin_order').default(0),
-	activeLeafId: integer('active_leaf_id'),
+	activeLeafId: integer('active_leaf_id').references((): AnySQLiteColumn => messages.id, { onDelete: 'set null' }),
 	// Per-chat overrides (null = use global default)
-	overrideProviderId: integer('override_provider_id'),
+	overrideProviderId: integer('override_provider_id').references((): AnySQLiteColumn => providers.id, { onDelete: 'set null' }),
 	overrideModel: text('override_model'),
 	overrideTemperature: real('override_temperature'),
 	overrideMaxTokens: integer('override_max_tokens'),
 	overrideCustomPrompt: text('override_custom_prompt'),
-	overridePersonaId: integer('override_persona_id'),
+	overridePersonaId: integer('override_persona_id').references((): AnySQLiteColumn => personas.id, { onDelete: 'set null' }),
 	overrideIncludeReasoning: integer('override_include_reasoning', { mode: 'boolean' }),
 	overrideReasoningEffort: text('override_reasoning_effort'),
 	overrideRenderMode: text('override_render_mode'),
 	// Compaction state + per-chat overrides (null override = use global default)
 	compactionSummary: text('compaction_summary'),
-	compactedUpToMessageId: integer('compacted_up_to_message_id'),
+	compactedUpToMessageId: integer('compacted_up_to_message_id').references((): AnySQLiteColumn => messages.id, { onDelete: 'set null' }),
 	compactionLastRunAt: text('compaction_last_run_at'),
 	// Previous-run snapshot so the user can re-process the last batch.
 	previousCompactionSummary: text('previous_compaction_summary'),
-	previousCompactedUpToMessageId: integer('previous_compacted_up_to_message_id'),
+	previousCompactedUpToMessageId: integer('previous_compacted_up_to_message_id').references((): AnySQLiteColumn => messages.id, { onDelete: 'set null' }),
 	overrideCompactionEnabled: integer('override_compaction_enabled', { mode: 'boolean' }),
 	overrideCompactionThreshold: integer('override_compaction_threshold'),
 	overrideCompactionMode: text('override_compaction_mode'),
 	overrideCompactionTargetPercent: integer('override_compaction_target_percent'),
 	overrideCompactionFixedCount: integer('override_compaction_fixed_count'),
 	overrideCompactionWindowPercent: integer('override_compaction_window_percent'),
-	overrideCompactionProviderId: integer('override_compaction_provider_id'),
+	overrideCompactionProviderId: integer('override_compaction_provider_id').references((): AnySQLiteColumn => providers.id, { onDelete: 'set null' }),
 	overrideCompactionModel: text('override_compaction_model'),
 	unread: integer('unread').default(0),
 	muted: integer('muted', { mode: 'boolean' }).default(false),
@@ -127,6 +127,12 @@ export const chats = sqliteTable('chats', {
 	editingMessageId: integer('editing_message_id'),
 	editingMessageContent: text('editing_message_content'),
 	editingMessageAt: integer('editing_message_at'),
+	// CRUD-M8 soft-delete: epoch-ms timestamp when the user deleted the chat.
+	// `null` means live. Hidden from the sidebar list + rejected by send/stream
+	// once set. Row stays around for an out-of-band purge / undelete window;
+	// no scheduled purge yet — deletedAt rows accumulate until a future job
+	// or an admin sweep cleans them.
+	deletedAt: integer('deleted_at'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`),
 	updatedAt: text('updated_at').default(sql`(datetime('now'))`)
 });

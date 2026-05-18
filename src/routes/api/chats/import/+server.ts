@@ -166,81 +166,88 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
-	// Create chat
-	const chat = db.insert(chats).values({
-		userId: user.id,
-		characterId: character.id,
-		title: parsed.title || `Imported: ${character.name}`,
-		mode: parsed.mode
-	}).returning().get();
+	// Create chat + bulk-insert messages atomically. A partial chat (rows
+	// inserted, leaf not yet set) leaves a broken sidebar entry behind.
+	const { chatId, messageCount, lastMessageId } = db.transaction(() => {
+		const chat = db.insert(chats).values({
+			userId: user.id,
+			characterId: character.id,
+			title: parsed.title || `Imported: ${character.name}`,
+			mode: parsed.mode
+		}).returning().get();
 
-	let messageCount = 0;
-	let lastMessageId: number | null = null;
+		let messageCount = 0;
+		let lastMessageId: number | null = null;
 
-	if (parsed.v2) {
-		// Preserve branches: insert all messages, remap parent ids
-		const idMap = new Map<number, number>();
-		// Sort by original id so a parent is always inserted before its children
-		const sorted = [...parsed.v2.messages].sort((a, b) => a.id - b.id);
-		for (const m of sorted) {
-			if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') continue;
-			const remappedParent = m.parentId != null ? idMap.get(m.parentId) ?? null : null;
-			const inserted = db.insert(messages).values({
-				chatId: chat.id,
-				role: m.role as 'user' | 'assistant' | 'system',
-				content: m.content || '',
-				swipes: JSON.stringify(m.swipes && m.swipes.length > 0 ? m.swipes : [m.content || '']),
-				swipeIndex: m.swipeIndex ?? 0,
-				reasoning: JSON.stringify(m.reasoning ?? []),
-				parentId: remappedParent,
-				...(m.createdAt ? { createdAt: m.createdAt } : {})
-			}).returning().get();
-			idMap.set(m.id, inserted.id);
-			lastMessageId = inserted.id;
-			messageCount++;
+		if (parsed.v2) {
+			// Preserve branches: insert all messages, remap parent ids
+			const idMap = new Map<number, number>();
+			// Sort by original id so a parent is always inserted before its children
+			const sorted = [...parsed.v2.messages].sort((a, b) => a.id - b.id);
+			for (const m of sorted) {
+				if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') continue;
+				const remappedParent = m.parentId != null ? idMap.get(m.parentId) ?? null : null;
+				const inserted = db.insert(messages).values({
+					chatId: chat.id,
+					role: m.role as 'user' | 'assistant' | 'system',
+					content: m.content || '',
+					swipes: JSON.stringify(m.swipes && m.swipes.length > 0 ? m.swipes : [m.content || '']),
+					swipeIndex: m.swipeIndex ?? 0,
+					reasoning: JSON.stringify(m.reasoning ?? []),
+					parentId: remappedParent,
+					...(m.createdAt ? { createdAt: m.createdAt } : {})
+				}).returning().get();
+				idMap.set(m.id, inserted.id);
+				lastMessageId = inserted.id;
+				messageCount++;
+			}
+			// Restore active leaf if known
+			if (parsed.v2.activeLeafId != null) {
+				const remappedLeaf = idMap.get(parsed.v2.activeLeafId);
+				if (remappedLeaf) lastMessageId = remappedLeaf;
+			}
+		} else if (parsed.linearMessages) {
+			// Linear chain (v1 / SillyTavern)
+			for (const msg of parsed.linearMessages) {
+				const swipes = msg.swipes && msg.swipes.length > 0 ? msg.swipes : [msg.content];
+				const inserted = db.insert(messages).values({
+					chatId: chat.id,
+					role: msg.role as 'user' | 'assistant',
+					content: msg.content,
+					swipes: JSON.stringify(swipes),
+					swipeIndex: msg.swipeIndex ?? 0,
+					parentId: lastMessageId,
+					...(msg.createdAt ? { createdAt: msg.createdAt } : {})
+				}).returning().get();
+				lastMessageId = inserted.id;
+				messageCount++;
+			}
 		}
-		// Restore active leaf if known
-		if (parsed.v2.activeLeafId != null) {
-			const remappedLeaf = idMap.get(parsed.v2.activeLeafId);
-			if (remappedLeaf) lastMessageId = remappedLeaf;
-		}
-	} else if (parsed.linearMessages) {
-		// Linear chain (v1 / SillyTavern)
-		for (const msg of parsed.linearMessages) {
-			const swipes = msg.swipes && msg.swipes.length > 0 ? msg.swipes : [msg.content];
-			const inserted = db.insert(messages).values({
-				chatId: chat.id,
-				role: msg.role as 'user' | 'assistant',
-				content: msg.content,
-				swipes: JSON.stringify(swipes),
-				swipeIndex: msg.swipeIndex ?? 0,
-				parentId: lastMessageId,
-				...(msg.createdAt ? { createdAt: msg.createdAt } : {})
-			}).returning().get();
-			lastMessageId = inserted.id;
-			messageCount++;
-		}
-	}
 
-	if (lastMessageId) {
-		db.update(chats).set({ activeLeafId: lastMessageId }).where(eq(chats.id, chat.id)).run();
-	}
-	recomputeChatTail(chat.id);
+		if (lastMessageId) {
+			db.update(chats).set({ activeLeafId: lastMessageId }).where(eq(chats.id, chat.id)).run();
+		}
 
-	const fresh = db.select().from(chats).where(eq(chats.id, chat.id)).get() ?? chat;
+		return { chatId: chat.id, messageCount, lastMessageId };
+	});
+	void lastMessageId;
+	recomputeChatTail(chatId);
+
+	const fresh = db.select().from(chats).where(eq(chats.id, chatId)).get();
+	if (!fresh) return json({ error: 'Chat vanished after import' }, { status: 500 });
 	return json({
-		id: chat.id,
+		id: chatId,
 		messageCount,
 		format,
 		chat: {
-			id: chat.id,
+			id: chatId,
 			title: fresh.title,
 			characterId: character.id,
 			characterName: character.name,
 			characterAvatar: character.avatarPath,
-			mode: chat.mode,
-			pinned: chat.pinned ?? 0,
-			pinOrder: chat.pinOrder ?? 0,
+			mode: fresh.mode,
+			pinned: fresh.pinned ?? 0,
+			pinOrder: fresh.pinOrder ?? 0,
 			updatedAt: fresh.updatedAt,
 			unread: 0,
 			muted: false,

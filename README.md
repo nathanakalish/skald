@@ -51,7 +51,7 @@ See the comments in `docker-compose.yml` for the full list, including:
 - `BACKUP_ENABLED` / `BACKUP_INTERVAL_HOURS` / `BACKUP_RETENTION` — periodic SQLite backups
 - `BODY_SIZE_LIMIT` — raise for large character card imports
 - `IMAGE_CACHE_MAX_BYTES` — cap on the image cache LRU (default 1 GiB)
-- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — web push notifications (auto-generated if omitted)
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — web push notifications. Generate a pair with `npx web-push generate-vapid-keys`; push is disabled if either key is missing.
 - `LOG_LEVEL` — trace, debug, info (default), warn, error
 
 ### Logs

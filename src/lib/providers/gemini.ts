@@ -43,6 +43,9 @@ export class GeminiProvider extends OpenAIProvider {
 	}
 
 	async listModels(): Promise<string[]> {
+		// Without this guard the Gemini-specific override bypasses SSRF
+		// validation that the inherited OpenAI implementation does.
+		await this.guardEndpoint();
 		const response = await fetch(`${this.config.endpoint}/models`, {
 			headers: {
 				Authorization: `Bearer ${this.config.apiKey}`

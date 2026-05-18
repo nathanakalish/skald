@@ -9,7 +9,8 @@
  *   BACKUP_DIR            — output directory (default: data/backups)
  */
 import { join } from 'path';
-import { mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { mkdirSync, readdirSync, statSync, unlinkSync, renameSync, existsSync, statfsSync } from 'fs';
+import Database from 'better-sqlite3';
 import { rawDb } from '$lib/db/index.js';
 import { logger } from '$lib/server/logger.js';
 
@@ -32,8 +33,54 @@ export async function runBackup(): Promise<string | null> {
 		const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 		const filename = `skald-${stamp}.db`;
 		const target = join(dir, filename);
+		const tmpTarget = `${target}.tmp`;
 
-		await rawDb.backup(target);
+		// Best-effort disk-space check: refuse to start a copy that obviously
+		// won't fit. A truncated backup looks valid but is useless on restore.
+		try {
+			const srcSize = statSync(rawDb.name).size;
+			const stats = statfsSync(dir);
+			const free = Number(stats.bavail) * Number(stats.bsize);
+			// Need at least source size + 10% slack for WAL pages mid-flight.
+			if (free > 0 && free < srcSize * 1.1) {
+				logger.error('db backup aborted: insufficient disk space', { free, needed: srcSize });
+				return null;
+			}
+		} catch (err) {
+			logger.debug('db backup disk-space check skipped', { err: String(err) });
+		}
+
+		// Write to a .tmp sibling, integrity-check, then atomic rename. A
+		// crash mid-copy leaves a .tmp orphan that the prune step ignores.
+		if (existsSync(tmpTarget)) {
+			try { unlinkSync(tmpTarget); } catch { /* ignore */ }
+		}
+		await rawDb.backup(tmpTarget);
+
+		// PRAGMA integrity_check on the freshly written file. If it doesn't
+		// return "ok", the backup is corrupt and we drop it rather than
+		// shipping a broken file the user might later trust.
+		try {
+			const check = new Database(tmpTarget, { readonly: true, fileMustExist: true });
+			let result: string;
+			try {
+				const row = check.pragma('integrity_check', { simple: true }) as string;
+				result = String(row);
+			} finally {
+				check.close();
+			}
+			if (result !== 'ok') {
+				logger.error('db backup failed integrity_check', { target: tmpTarget, result });
+				try { unlinkSync(tmpTarget); } catch { /* ignore */ }
+				return null;
+			}
+		} catch (err) {
+			logger.error('db backup integrity_check threw', { err: String(err) });
+			try { unlinkSync(tmpTarget); } catch { /* ignore */ }
+			return null;
+		}
+
+		renameSync(tmpTarget, target);
 		logger.info('db backup complete', { target });
 
 		// Retention pruning — anything beyond the keep limit is toast.
@@ -48,6 +95,13 @@ export async function runBackup(): Promise<string | null> {
 				logger.info('db backup pruned', { file: f.name });
 			} catch (err) {
 				logger.warn('db backup prune failed', { file: f.name, err });
+			}
+		}
+
+		// Also clean up any stray .tmp files from previous crashes.
+		for (const name of readdirSync(dir)) {
+			if (name.startsWith('skald-') && name.endsWith('.db.tmp')) {
+				try { unlinkSync(join(dir, name)); } catch { /* ignore */ }
 			}
 		}
 

@@ -4,7 +4,7 @@ import { themes, userSettings, sessions } from '$lib/db/schema.js';
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { isOidcEnabled } from '$lib/server/oidc.js';
 import { isDevAuthBypassEnabled } from '$lib/server/devAuth.js';
-import { getSessionCookieName } from '$lib/server/auth.js';
+import { getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 import { logger } from '$lib/server/logger.js';
 
 // Phase 1.1 — slim root layout load.
@@ -92,12 +92,13 @@ export const load: LayoutServerLoad = async (event) => {
 	// the client can detect a remote toggle ("disable notifications on this
 	// device" from the Signed-in-devices list) and reset its banner-dismissal
 	// flag / unsubscribe push.
-	const currentSessionId = event.cookies.get(getSessionCookieName()) ?? null;
+	const currentSessionToken = event.cookies.get(getSessionCookieName()) ?? null;
 	let currentSessionNotificationsDisabledAt: string | null = null;
-	if (currentSessionId) {
+	if (currentSessionToken) {
+		// sessions.id stores SHA-256(token); the cookie holds the raw token.
 		const row = db.select({ disabledAt: sessions.notificationsDisabledAt })
 			.from(sessions)
-			.where(eq(sessions.id, currentSessionId))
+			.where(eq(sessions.id, hashSessionToken(currentSessionToken)))
 			.get();
 		currentSessionNotificationsDisabledAt = row?.disabledAt ?? null;
 	}
@@ -130,7 +131,7 @@ export const load: LayoutServerLoad = async (event) => {
 	}
 
 	return {
-		currentSessionId,
+		currentSessionId: currentSessionToken ? hashSessionToken(currentSessionToken) : null,
 		currentSessionNotificationsDisabledAt,
 		systemDarkTheme,
 		systemLightTheme,

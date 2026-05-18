@@ -28,6 +28,8 @@ export interface EnforceBudgetArgs {
 	rebuild: (trimmedHistory: MessageRow[]) => PromptSlot[];
 	/** For logging only. */
 	chatId: number;
+	/** Provider type — selects the right tokenizer encoding + safety multiplier. */
+	providerType?: string;
 }
 
 export interface EnforceBudgetResult {
@@ -38,23 +40,23 @@ export interface EnforceBudgetResult {
 }
 
 export function enforceBudget(args: EnforceBudgetArgs): EnforceBudgetResult {
-	const { initialSlots, fullHistory, contextSize, maxResponseTokens, rebuild, chatId } = args;
+	const { initialSlots, fullHistory, contextSize, maxResponseTokens, rebuild, chatId, providerType } = args;
 
 	// Pass 1
 	let activeSlots = initialSlots;
 	let flattened = flattenSlots(activeSlots);
-	let tokenStats = computeTokenBudget(activeSlots, contextSize, maxResponseTokens);
+	let tokenStats = computeTokenBudget(activeSlots, contextSize, maxResponseTokens, providerType);
 	const droppedSlots: string[] = [];
 
 	// Pass 2: history trim + full rebuild
 	if (tokenStats.overflow > 0) {
 		const nonHistoryTokens = activeSlots
 			.filter(s => s.name !== 'history')
-			.reduce((sum, s) => sum + countMessageTokens(s.messages), 0);
+			.reduce((sum, s) => sum + countMessageTokens(s.messages, providerType), 0);
 
 		const historySlot = activeSlots.find(s => s.name === 'history');
 		if (historySlot) {
-			const { trimmed } = trimHistoryToFitBudget(historySlot.messages, nonHistoryTokens, contextSize, maxResponseTokens);
+			const { trimmed } = trimHistoryToFitBudget(historySlot.messages, nonHistoryTokens, contextSize, maxResponseTokens, providerType);
 
 			// Map the trimmed `ChatMessage[]` back to a `MessageRow[]` slice. The
 			// trimmer drops oldest first, so the kept count off the end of the
@@ -67,7 +69,7 @@ export function enforceBudget(args: EnforceBudgetArgs): EnforceBudgetResult {
 
 			activeSlots = rebuild(trimmedHistory);
 			flattened = flattenSlots(activeSlots);
-			tokenStats = computeTokenBudget(activeSlots, contextSize, maxResponseTokens);
+			tokenStats = computeTokenBudget(activeSlots, contextSize, maxResponseTokens, providerType);
 		}
 	}
 
@@ -81,7 +83,7 @@ export function enforceBudget(args: EnforceBudgetArgs): EnforceBudgetResult {
 			const idx = slotsArr.findIndex(s => s.name === dropName);
 			if (idx === -1) continue;
 			const dropped = slotsArr.splice(idx, 1)[0];
-			const newStats = computeTokenBudget(slotsArr, contextSize, maxResponseTokens);
+			const newStats = computeTokenBudget(slotsArr, contextSize, maxResponseTokens, providerType);
 			logger.warn('budget: dropped optional slot to fit context', {
 				chatId,
 				slot: dropName,

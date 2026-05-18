@@ -6,6 +6,7 @@ import { desc, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
+import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
 
 // One-time lorebook deduplication (runs once per server start per user). Used
 // to live in +layout.server.ts; moved here so the slim layout load stays slim.
@@ -29,15 +30,17 @@ function deduplicateLorebooks(userId: number) {
 		const keep = group[0];
 		const dupeIds = group.slice(1).map(d => d.id);
 
-		const keptKeywords = new Set(
-			db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, keep.id)).all().map(e => e.keywords)
+		const keptFingerprints = new Set(
+			db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, keep.id)).all()
+				.map(e => lorebookEntryFingerprint(e.keywords, e.content))
 		);
 
 		for (const dupeId of dupeIds) {
 			for (const entry of db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, dupeId)).all()) {
-				if (!keptKeywords.has(entry.keywords)) {
+				const fp = lorebookEntryFingerprint(entry.keywords, entry.content);
+				if (!keptFingerprints.has(fp)) {
 					db.update(lorebookEntries).set({ lorebookId: keep.id }).where(eq(lorebookEntries.id, entry.id)).run();
-					keptKeywords.add(entry.keywords);
+					keptFingerprints.add(fp);
 				}
 			}
 			db.update(chatLorebooks).set({ lorebookId: keep.id }).where(eq(chatLorebooks.lorebookId, dupeId)).run();

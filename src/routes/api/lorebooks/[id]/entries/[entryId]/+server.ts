@@ -15,11 +15,15 @@ export const PUT: RequestHandler = async (event) => {
 	const lorebook = db.select().from(lorebooks).where(and(eq(lorebooks.id, lorebookId), eq(lorebooks.userId, user.id))).get();
 	if (!lorebook) return json({ error: 'Not found' }, { status: 404 });
 
+	// CRUD-L3: coerce to a finite number (see entries/+server.ts).
+	const rawOrder = Number(body.insertionOrder);
+	const insertionOrder = Number.isFinite(rawOrder) ? rawOrder : 100;
+
 	db.update(lorebookEntries)
 		.set({
 			keywords: body.keywords,
 			content: body.content,
-			insertionOrder: body.insertionOrder,
+			insertionOrder,
 			enabled: body.enabled,
 			caseSensitive: body.caseSensitive,
 			constant: body.constant

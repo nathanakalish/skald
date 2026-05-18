@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { chats, messages, characters, personas } from '$lib/db/schema.js';
-import { desc, eq, and, sql, lt, or, like } from 'drizzle-orm';
+import { desc, eq, and, sql, lt, or, like, isNull } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { bumpChatTail } from '$lib/db/chatTail.js';
@@ -37,6 +37,7 @@ export const GET: RequestHandler = async (event) => {
 			.innerJoin(characters, eq(chats.characterId, characters.id))
 			.where(and(
 				eq(chats.userId, user.id),
+				isNull(chats.deletedAt),
 				or(
 					like(sql`lower(${chats.title})`, needle),
 					like(sql`lower(${characters.name})`, needle)
@@ -60,13 +61,13 @@ export const GET: RequestHandler = async (event) => {
 		const pinned = db.select(chatSidebar)
 			.from(chats)
 			.innerJoin(characters, eq(chats.characterId, characters.id))
-			.where(and(eq(chats.userId, user.id), eq(chats.pinned, 1)))
+			.where(and(eq(chats.userId, user.id), isNull(chats.deletedAt), eq(chats.pinned, 1)))
 			.orderBy(sql`${chats.pinOrder} ASC`)
 			.all();
 		const unpinned = db.select(chatSidebar)
 			.from(chats)
 			.innerJoin(characters, eq(chats.characterId, characters.id))
-			.where(and(eq(chats.userId, user.id), eq(chats.pinned, 0)))
+			.where(and(eq(chats.userId, user.id), isNull(chats.deletedAt), eq(chats.pinned, 0)))
 			.orderBy(desc(chats.updatedAt), desc(chats.id))
 			.limit(limit + 1)
 			.all();
@@ -81,6 +82,7 @@ export const GET: RequestHandler = async (event) => {
 			.innerJoin(characters, eq(chats.characterId, characters.id))
 			.where(and(
 				eq(chats.userId, user.id),
+				isNull(chats.deletedAt),
 				eq(chats.pinned, 0),
 				or(
 					lt(chats.updatedAt, parsedCursor.updatedAt),

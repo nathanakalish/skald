@@ -75,6 +75,9 @@
 	let listEl: HTMLDivElement | null = $state(null);
 	let popupEl: HTMLDivElement | null = $state(null);
 	let popupStyle = $state('');
+	// Stable id so aria-controls / aria-activedescendant can reference the
+	// listbox + active option even when consumers don't pass an `id` prop.
+	const listboxId = `cb-listbox-${Math.random().toString(36).slice(2, 9)}`;
 
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
@@ -198,8 +201,11 @@
 	{disabled}
 	onclick={() => (open ? closeMenu() : openMenu())}
 	onkeydown={onKey}
+	role="combobox"
 	aria-haspopup="listbox"
 	aria-expanded={open}
+	aria-controls={listboxId}
+	aria-activedescendant={open && filtered[activeIdx] ? `${listboxId}-opt-${activeIdx}` : undefined}
 	class="group flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 py-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 {className}"
 >
 	<span class="flex min-w-0 flex-1 items-center gap-2 truncate">
@@ -238,6 +244,7 @@
 	<div
 		bind:this={popupEl}
 		role="listbox"
+		id={listboxId}
 		style={popupStyle}
 		class="z-[100] flex flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
 	>
@@ -260,6 +267,7 @@
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						data-cb-idx={i}
+						id={`${listboxId}-opt-${i}`}
 						role="option"
 						tabindex="-1"
 						aria-selected={selected?.value === it.value}

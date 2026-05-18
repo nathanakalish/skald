@@ -5,6 +5,7 @@ import { messages, chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
+import { isChatProcessing } from '$lib/server/messageQueue.js';
 import {
 	findSiblingIds,
 	walkToDeepestLeaf,
@@ -34,6 +35,13 @@ export const POST: RequestHandler = async (event) => {
 	// Verify ownership through chat
 	const chat = db.select().from(chats).where(and(eq(chats.id, message.chatId), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+
+	// Refuse to switch branches while a generation is in flight on this chat.
+	// Otherwise the worker can finish into the wrong branch and we end up
+	// pointing activeLeafId at a message that's mid-stream on the other branch.
+	if (isChatProcessing(message.chatId)) {
+		return json({ error: 'Chat is generating — cannot switch branches yet' }, { status: 409 });
+	}
 
 	let targetLeafId: number;
 

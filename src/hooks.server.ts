@@ -143,7 +143,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// CSRF defence in depth. The cookie is SameSite=lax so a cross-origin fetch wouldn't
 	// normally include it, but the belt-and-suspenders is cheap and catches misconfigured proxies.
-	if (path.startsWith('/api/') && MUTATING_METHODS.has(event.request.method) && !isAuthRoute) {
+	// OIDC callback is the only mutating endpoint that legitimately receives a cross-origin
+	// request (the IdP redirects the browser back to us); everything else under /api/ is
+	// expected to be same-origin and gets CSRF-checked.
+	const isOidcCallback = path === '/api/auth/oidc/callback';
+	if (path.startsWith('/api/') && MUTATING_METHODS.has(event.request.method) && !isOidcCallback) {
 		const origin = event.request.headers.get('origin');
 		// Internal SvelteKit subrequests (`event.fetch`) drop the Host header,
 		// so fall back to the URL host that SvelteKit derives from forwarded headers.

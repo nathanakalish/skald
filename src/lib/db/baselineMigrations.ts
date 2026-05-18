@@ -240,22 +240,26 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		sqlite.exec("INSERT INTO providers (name, type, endpoint) VALUES ('__test_zai__', 'zai', 'test')");
 		sqlite.exec("DELETE FROM providers WHERE name = '__test_zai__'");
 	} catch {
-		// CHECK constraint blocks 'zai', recreate table
-		sqlite.exec(`
-			CREATE TABLE providers_new (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name TEXT NOT NULL,
-				type TEXT NOT NULL CHECK(type IN ('openai', 'anthropic', 'ollama', 'zai', 'gemini')),
-				endpoint TEXT NOT NULL,
-				api_key TEXT DEFAULT '',
-				default_model TEXT DEFAULT '',
-				enabled INTEGER DEFAULT 1,
-				created_at TEXT DEFAULT (datetime('now'))
-			);
-			INSERT INTO providers_new SELECT * FROM providers;
-			DROP TABLE providers;
-			ALTER TABLE providers_new RENAME TO providers;
-		`);
+		// CHECK constraint blocks 'zai', recreate table.
+		// DB-H2: wrap in a transaction so a mid-copy failure (disk full, etc.)
+		// can't leave us with the old table dropped and the new one empty.
+		sqlite.transaction(() => {
+			sqlite.exec(`
+				CREATE TABLE providers_new (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL,
+					type TEXT NOT NULL CHECK(type IN ('openai', 'anthropic', 'ollama', 'zai', 'gemini')),
+					endpoint TEXT NOT NULL,
+					api_key TEXT DEFAULT '',
+					default_model TEXT DEFAULT '',
+					enabled INTEGER DEFAULT 1,
+					created_at TEXT DEFAULT (datetime('now'))
+				);
+				INSERT INTO providers_new SELECT * FROM providers;
+				DROP TABLE providers;
+				ALTER TABLE providers_new RENAME TO providers;
+			`);
+		})();
 	}
 	
 	// Add reasoning column to messages (JSON array parallel to swipes)
@@ -464,6 +468,18 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		const cols = sqlite.prepare("PRAGMA table_info('chats')").all() as { name: string }[];
 		if (!cols.some(c => c.name === 'muted')) {
 			sqlite.exec('ALTER TABLE chats ADD COLUMN muted INTEGER DEFAULT 0');
+		}
+	}
+
+	// CRUD-M8: soft-delete column for chats. Epoch-ms timestamp; null = live.
+	// Filtered out by the list queries. We don't add a partial index here —
+	// chats has very few rows per user and existing idx_chats_user_updated
+	// already keys on (user_id, updated_at), so an extra `deleted_at IS NULL`
+	// filter on the same rows is essentially free.
+	{
+		const cols = sqlite.prepare("PRAGMA table_info('chats')").all() as { name: string }[];
+		if (!cols.some(c => c.name === 'deleted_at')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN deleted_at INTEGER');
 		}
 	}
 
@@ -808,12 +824,15 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			return def;
 		}).join(', ');
 		const colNames = cols.map(c => c.name).join(', ');
-		sqlite.exec(`
-			CREATE TABLE providers_new (${colDefs});
-			INSERT INTO providers_new (${colNames}) SELECT ${colNames} FROM providers;
-			DROP TABLE providers;
-			ALTER TABLE providers_new RENAME TO providers;
-		`);
+		// DB-H2: transactional rebuild so a failed copy can't leave the table empty.
+		sqlite.transaction(() => {
+			sqlite.exec(`
+				CREATE TABLE providers_new (${colDefs});
+				INSERT INTO providers_new (${colNames}) SELECT ${colNames} FROM providers;
+				DROP TABLE providers;
+				ALTER TABLE providers_new RENAME TO providers;
+			`);
+		})();
 	}
 
 	// Drop the providers.type CHECK constraint entirely. The provider registry
@@ -836,12 +855,15 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			return def;
 		}).join(', ');
 		const colNames = cols.map(c => c.name).join(', ');
-		sqlite.exec(`
-			CREATE TABLE providers_new (${colDefs});
-			INSERT INTO providers_new (${colNames}) SELECT ${colNames} FROM providers;
-			DROP TABLE providers;
-			ALTER TABLE providers_new RENAME TO providers;
-		`);
+		// DB-H2: transactional rebuild so a failed copy can't leave the table empty.
+		sqlite.transaction(() => {
+			sqlite.exec(`
+				CREATE TABLE providers_new (${colDefs});
+				INSERT INTO providers_new (${colNames}) SELECT ${colNames} FROM providers;
+				DROP TABLE providers;
+				ALTER TABLE providers_new RENAME TO providers;
+			`);
+		})();
 	}
 
 	// Hash any plaintext session ids in place (one-time, NOT idempotent by content alone).
@@ -878,6 +900,66 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			// Mark done regardless of whether there were rows — the schema is now
 			// always hashed-at-creation, so this never needs to run again.
 			sqlite.prepare("INSERT OR REPLACE INTO admin_settings (key, value) VALUES ('session_ids_hashed', '1')").run();
+		}
+	}
+
+	// DB-H1: add foreign keys to chats override_* and *_message_id columns.
+	// SQLite can't add FKs in place, so we have to rebuild the table. We turn
+	// foreign_keys OFF during the swap because dropping `chats` with the pragma
+	// on would cascade through messages/chat_lorebooks/etc. and nuke history.
+	// Idempotent: we look at the live CREATE TABLE in sqlite_master and only
+	// rebuild when the new REFERENCES clauses aren't already there.
+	{
+		const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='chats'").get() as { sql: string } | undefined;
+		const currentSql = row?.sql ?? '';
+		const needsRebuild = currentSql && !/override_provider_id\s+INTEGER\s+REFERENCES/i.test(currentSql);
+		if (needsRebuild) {
+			// Inject REFERENCES into each target column. The negative lookahead
+			// stops us double-adding if a future migration ever lands one of
+			// them ahead of this block.
+			const injections: [RegExp, string][] = [
+				[/("?override_provider_id"?\s+INTEGER)(?!\s+REFERENCES)/i, '$1 REFERENCES providers(id) ON DELETE SET NULL'],
+				[/("?override_persona_id"?\s+INTEGER)(?!\s+REFERENCES)/i, '$1 REFERENCES personas(id) ON DELETE SET NULL'],
+				[/("?override_compaction_provider_id"?\s+INTEGER)(?!\s+REFERENCES)/i, '$1 REFERENCES providers(id) ON DELETE SET NULL'],
+				[/("?active_leaf_id"?\s+INTEGER)(?!\s+REFERENCES)/i, '$1 REFERENCES messages(id) ON DELETE SET NULL'],
+				[/("?compacted_up_to_message_id"?\s+INTEGER)(?!\s+REFERENCES)/i, '$1 REFERENCES messages(id) ON DELETE SET NULL'],
+				[/("?previous_compacted_up_to_message_id"?\s+INTEGER)(?!\s+REFERENCES)/i, '$1 REFERENCES messages(id) ON DELETE SET NULL'],
+			];
+			let newSql = currentSql;
+			for (const [pat, rep] of injections) newSql = newSql.replace(pat, rep);
+			newSql = newSql.replace(/CREATE\s+TABLE\s+("?)chats("?)/i, 'CREATE TABLE chats_new');
+
+			// Capture existing indexes — DROP TABLE takes them with it. We skip
+			// auto-indexes (sqlite_autoindex_*) which the engine recreates from
+			// PRIMARY KEY / UNIQUE constraints.
+			const indexes = sqlite.prepare(
+				"SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='chats' AND sql IS NOT NULL"
+			).all() as { sql: string }[];
+
+			const prevFk = sqlite.pragma('foreign_keys', { simple: true });
+			sqlite.pragma('foreign_keys = OFF');
+			try {
+				sqlite.transaction(() => {
+					sqlite.exec(newSql);
+					sqlite.exec('INSERT INTO chats_new SELECT * FROM chats');
+					sqlite.exec('DROP TABLE chats');
+					sqlite.exec('ALTER TABLE chats_new RENAME TO chats');
+					for (const idx of indexes) {
+						try { sqlite.exec(idx.sql); } catch { /* index may collide with sqlite_autoindex; ignore */ }
+					}
+					// Belt-and-braces: surface any orphan refs the new FKs would
+					// otherwise quietly tolerate (foreign_keys is OFF in this scope).
+					const violations = sqlite.prepare('PRAGMA foreign_key_check(chats)').all();
+					if (violations.length) {
+						// We don't throw — orphan override_*_id values just get
+						// silently retained. With foreign_keys back ON future
+						// writes will start enforcing. Log for visibility.
+						console.warn('[migration] chats rebuild: foreign_key_check returned', violations.length, 'orphan refs (left as-is)');
+					}
+				})();
+			} finally {
+				sqlite.pragma(`foreign_keys = ${prevFk ? 'ON' : 'OFF'}`);
+			}
 		}
 	}
 }

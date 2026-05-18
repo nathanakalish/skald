@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { lorebooks, lorebookEntries, chatLorebooks } from '$lib/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -35,37 +36,39 @@ export const POST: RequestHandler = async (event) => {
 		const dupes = group.slice(1);
 		const dupeIds = dupes.map(d => d.id);
 
-		// Move entries from duplicates to the kept lorebook (avoid duplicate entries)
-		const keptEntries = db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, keep.id)).all();
-		const keptKeywords = new Set(keptEntries.map(e => e.keywords));
+		// Whole dedup of one group is atomic: moving entries, relinking chats
+		// and deleting the dupes have to either all land or none. A crash
+		// halfway through leaves chat_lorebooks pointing at FK-violated rows.
+		db.transaction(() => {
+			const keptEntries = db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, keep.id)).all();
+			const keptFingerprints = new Set(keptEntries.map(e => lorebookEntryFingerprint(e.keywords, e.content)));
 
-		for (const dupeId of dupeIds) {
-			const dupeEntries = db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, dupeId)).all();
-			for (const entry of dupeEntries) {
-				if (!keptKeywords.has(entry.keywords)) {
-					// Move unique entry to kept lorebook
-					db.update(lorebookEntries)
-						.set({ lorebookId: keep.id })
-						.where(eq(lorebookEntries.id, entry.id))
-						.run();
-					keptKeywords.add(entry.keywords);
+			for (const dupeId of dupeIds) {
+				const dupeEntries = db.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, dupeId)).all();
+				for (const entry of dupeEntries) {
+					const fp = lorebookEntryFingerprint(entry.keywords, entry.content);
+					if (!keptFingerprints.has(fp)) {
+						db.update(lorebookEntries)
+							.set({ lorebookId: keep.id })
+							.where(eq(lorebookEntries.id, entry.id))
+							.run();
+						keptFingerprints.add(fp);
+					}
+					// Duplicate entries will be cascade-deleted with their lorebook
 				}
-				// Duplicate entries will be cascade-deleted with their lorebook
 			}
-		}
 
-		// Update chatLorebooks references
-		for (const dupeId of dupeIds) {
-			db.update(chatLorebooks)
-				.set({ lorebookId: keep.id })
-				.where(eq(chatLorebooks.lorebookId, dupeId))
-				.run();
-		}
+			for (const dupeId of dupeIds) {
+				db.update(chatLorebooks)
+					.set({ lorebookId: keep.id })
+					.where(eq(chatLorebooks.lorebookId, dupeId))
+					.run();
+			}
 
-		// Delete duplicate lorebooks (entries cascade-delete)
-		for (const dupeId of dupeIds) {
-			db.delete(lorebooks).where(eq(lorebooks.id, dupeId)).run();
-		}
+			for (const dupeId of dupeIds) {
+				db.delete(lorebooks).where(eq(lorebooks.id, dupeId)).run();
+			}
+		});
 
 		mergedCount++;
 		deletedCount += dupeIds.length;

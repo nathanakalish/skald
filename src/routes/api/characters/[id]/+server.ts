@@ -3,8 +3,6 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { characters, chats, messages, lorebooks } from '$lib/db/schema.js';
 import { eq, and, inArray, sql } from 'drizzle-orm';
-import { unlinkSync, existsSync } from 'fs';
-import { join } from 'path';
 import { deleteCachedImagesFromContent } from '$lib/services/imageCache.js';
 import {
 	cacheCharacterTextImages,
@@ -12,7 +10,7 @@ import {
 } from '$lib/services/characterImageCache.js';
 import { requireUser } from '$lib/server/auth.js';
 import { requireOwned } from '$lib/server/ownership.js';
-import { getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
+import { tryDeleteUnreferencedAvatar } from '$lib/services/imageOptimizer.js';
 import { broadcast } from '$lib/server/realtime.js';
 
 export const GET: RequestHandler = async (event) => {
@@ -27,6 +25,10 @@ export const PUT: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
 	const body = await event.request.json();
+
+	// CRUD-L1: refuse empty/whitespace-only names at write time.
+	const name = typeof body?.name === 'string' ? body.name.trim() : '';
+	if (!name) return json({ error: 'Name is required' }, { status: 400 });
 
 	// Capture the pre-update name so the editor can ask the user whether
 	// to also rename existing chats whose default title still references
@@ -63,7 +65,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	db.update(characters)
 		.set({
-			name: body.name,
+			name,
 			description: body.description,
 			personality: body.personality,
 			firstMessage: cached.firstMessage,
@@ -150,20 +152,6 @@ export const DELETE: RequestHandler = async (event) => {
 		deleteCachedImagesFromContent(charContents);
 	}
 
-	// Delete the character avatar file
-	if (character.avatarPath) {
-		const avatarFile = join(process.cwd(), 'static', character.avatarPath.replace(/^\//, ''));
-		if (existsSync(avatarFile)) {
-			unlinkSync(avatarFile);
-		}
-		// Also delete the original
-		const basename = character.avatarPath.split('/').pop() || '';
-		const originalPath = getOriginalAvatarPath(basename);
-		if (originalPath && existsSync(originalPath)) {
-			unlinkSync(originalPath);
-		}
-	}
-
 	// Delete associated lorebooks (unless keepLorebook is requested)
 	const keepLorebook = event.url.searchParams.get('keepLorebook') === 'true';
 	if (!keepLorebook) {
@@ -172,6 +160,10 @@ export const DELETE: RequestHandler = async (event) => {
 
 	// Delete character (cascades to chats → messages via FK)
 	db.delete(characters).where(eq(characters.id, id)).run();
+
+	// CRUD-M2: clean up the avatar file only if no other row still uses it.
+	// Cheap because the row is already gone; the helper just counts remaining refs.
+	tryDeleteUnreferencedAvatar(character.avatarPath);
 
 	broadcast(user.id, { type: 'character:deleted', id });
 	return json({ ok: true });

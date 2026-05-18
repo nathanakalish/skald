@@ -12,17 +12,30 @@ export function isDevAuthBypassEnabled(): boolean {
 	return v === '1' || v === 'true';
 }
 
-// Loud, one-time boot warning if someone accidentally ships the dev bypass to a
-// non-dev environment. Logged at error level so it surfaces in any sane log
-// pipeline. Doesn't refuse to start — that would break legitimate self-hosted
-// installs that intentionally run NODE_ENV=production with the bypass for a
-// single-user setup — but at least it's screamingly obvious.
+// Loud boot-time check if someone accidentally ships the dev bypass to a
+// non-dev environment. Self-hosted single-user setups that intentionally run
+// NODE_ENV=production with the bypass must opt-in via
+// SKALD_DEV_AUTH_BYPASS_ALLOW_PROD=1; otherwise we hard-exit so an accidental
+// misconfig can't ship a wide-open auth bypass.
 if (isDevAuthBypassEnabled() && process.env.NODE_ENV !== 'development') {
+	const allowProd =
+		process.env.SKALD_DEV_AUTH_BYPASS_ALLOW_PROD === '1' ||
+		process.env.SKALD_DEV_AUTH_BYPASS_ALLOW_PROD === 'true';
 	// Lazy import to avoid a logger-loads-devAuth-loads-logger cycle in tests.
 	void import('./logger.js').then(({ logger }) => {
-		logger.error('SKALD_DEV_AUTH_BYPASS is enabled but NODE_ENV is not "development"', {
-			nodeEnv: process.env.NODE_ENV ?? '(unset)',
-			hint: 'unset SKALD_DEV_AUTH_BYPASS in production deploys',
-		});
+		if (allowProd) {
+			logger.warn('SKALD_DEV_AUTH_BYPASS is enabled in non-dev env (explicitly allowed)', {
+				nodeEnv: process.env.NODE_ENV ?? '(unset)',
+			});
+		} else {
+			logger.error('SKALD_DEV_AUTH_BYPASS is enabled but NODE_ENV is not "development"', {
+				nodeEnv: process.env.NODE_ENV ?? '(unset)',
+				hint: 'either unset SKALD_DEV_AUTH_BYPASS, or set SKALD_DEV_AUTH_BYPASS_ALLOW_PROD=1 to opt-in',
+			});
+			// Refusing to boot is the safer default — an accidental bypass in
+			// prod is much worse than a noisy crash that forces an explicit
+			// decision.
+			process.exit(1);
+		}
 	});
 }

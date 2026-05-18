@@ -2,10 +2,51 @@ import { db } from '$lib/db/index.js';
 import { lorebooks, lorebookEntries, chatLorebooks, chatLorebookEntryOverrides } from '$lib/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { logger } from '$lib/server/logger.js';
+import { createHash } from 'node:crypto';
+
+/**
+ * Dedup fingerprint for a lorebook entry. Includes a content hash so two
+ * entries that share the same keyword set but disagree on the actual lore
+ * content are treated as distinct — see IMPORT-H3.
+ */
+export function lorebookEntryFingerprint(keywords: string, content: string): string {
+	const c = createHash('sha256').update(content ?? '').digest('hex').slice(0, 16);
+	return `${keywords}|||${c}`;
+}
 
 export interface MatchedLorebookEntry {
 	content: string;
 	insertionOrder: number;
+}
+
+// Compiled-regex LRU keyed by `${caseSensitive?'s':'i'}|${keyword}`.
+//
+// PERF-H2: every send was rebuilding every entry's RegExp (escape + new
+// RegExp). For a book of 50 entries with 5 keywords each that's 250
+// allocations per send; the pattern source rarely changes between sends.
+// Cap is generous: a few thousand entries' worth of keywords.
+const REGEX_CACHE_MAX = 2000;
+const _regexCache = new Map<string, RegExp>();
+
+function getKeywordRegex(keyword: string, caseSensitive: boolean): RegExp {
+	const cacheKey = (caseSensitive ? 's|' : 'i|') + keyword;
+	const hit = _regexCache.get(cacheKey);
+	if (hit) {
+		// Touch for LRU ordering.
+		_regexCache.delete(cacheKey);
+		_regexCache.set(cacheKey, hit);
+		// `test()` advances `lastIndex` on the `g` flag — reset before reuse.
+		hit.lastIndex = 0;
+		return hit;
+	}
+	const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const re = new RegExp(`\\b${escaped}\\b`, caseSensitive ? 'g' : 'gi');
+	_regexCache.set(cacheKey, re);
+	if (_regexCache.size > REGEX_CACHE_MAX) {
+		const oldest = _regexCache.keys().next().value;
+		if (oldest !== undefined) _regexCache.delete(oldest);
+	}
+	return re;
 }
 
 /**
@@ -100,11 +141,9 @@ export function matchLorebookEntries(
 			.map(k => k.trim())
 			.filter(Boolean);
 
-		const flags = entry.caseSensitive ? 'g' : 'gi';
+		const caseSensitive = !!entry.caseSensitive;
 		const isMatch = keywords.some(keyword => {
-			// Escape regex specials, match as a whole word.
-			const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			const pattern = new RegExp(`\\b${escaped}\\b`, flags);
+			const pattern = getKeywordRegex(keyword, caseSensitive);
 			return pattern.test(searchText);
 		});
 

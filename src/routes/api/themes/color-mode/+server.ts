@@ -2,7 +2,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { userSettings } from '$lib/db/schema.js';
-import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import * as themeCache from '$lib/server/themeCache.js';
 
@@ -16,12 +15,14 @@ export const PUT: RequestHandler = async (event) => {
 		return json({ error: 'Invalid color mode' }, { status: 400 });
 	}
 
-	const existing = db.select().from(userSettings).where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'colorMode'))).get();
-	if (existing) {
-		db.update(userSettings).set({ value: colorMode }).where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'colorMode'))).run();
-	} else {
-		db.insert(userSettings).values({ userId: user.id, key: 'colorMode', value: colorMode }).run();
-	}
+	// Upsert atomically — see CRUD-H1 in /api/themes/[id]/activate for context.
+	db.insert(userSettings)
+		.values({ userId: user.id, key: 'colorMode', value: colorMode })
+		.onConflictDoUpdate({
+			target: [userSettings.userId, userSettings.key],
+			set: { value: colorMode }
+		})
+		.run();
 
 	themeCache.invalidateForUser(user.id);
 	return json({ ok: true });

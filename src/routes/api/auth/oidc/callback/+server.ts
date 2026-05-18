@@ -2,6 +2,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { db } from '$lib/db/index.js';
 import { users } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { timingSafeEqual } from 'node:crypto';
 import { createSession, getSessionCookieName, getSessionMaxAge } from '$lib/server/auth.js';
 import {
 	isOidcEnabled,
@@ -11,6 +12,15 @@ import {
 	roleFromGroups
 } from '$lib/server/oidc.js';
 import { logger } from '$lib/server/logger.js';
+
+// Constant-time compare for two strings that may be attacker-influenced
+// (state token), to avoid leaking which prefix matched via timing.
+function safeEqStr(a: string, b: string): boolean {
+	const ab = Buffer.from(a, 'utf8');
+	const bb = Buffer.from(b, 'utf8');
+	if (ab.length !== bb.length) return false;
+	return timingSafeEqual(ab, bb);
+}
 
 function popupResponse(success: boolean, error?: string): Response {
 	const payload = JSON.stringify({ type: 'oidc-callback', success, error: error ?? null });
@@ -62,7 +72,7 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	const savedVerifier = cookies.get('oidc_verifier');
 	const savedNonce = cookies.get('oidc_nonce') ?? null;
 
-	if (!savedState || !savedVerifier || state !== savedState) {
+	if (!savedState || !savedVerifier || !safeEqStr(state, savedState)) {
 		// Validate state BEFORE clearing cookies — mismatched state means
 		// either CSRF or a stale tab; either way we want a clear error.
 		cookies.delete('oidc_state', { path: '/' });
@@ -104,22 +114,35 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 				db.update(users).set(patch).where(eq(users.id, user.id)).run();
 			}
 		} else if (config.autoCreateUsers) {
-			// Auto-create: role comes from group claims.
-			const result = db
-				.insert(users)
-				.values({
+			// Auto-create: role comes from group claims. Two concurrent OIDC
+			// callbacks for the same brand-new username can race past the
+			// SELECT above; the UNIQUE(username) constraint catches it and we
+			// re-fetch the row the winner inserted.
+			try {
+				const result = db
+					.insert(users)
+					.values({
+						username: claims.username,
+						role,
+						pictureUrl: claims.picture,
+					})
+					.run();
+				user = {
+					id: Number(result.lastInsertRowid),
 					username: claims.username,
 					role,
 					pictureUrl: claims.picture,
-				})
-				.run();
-			user = {
-				id: Number(result.lastInsertRowid),
-				username: claims.username,
-				role,
-				pictureUrl: claims.picture,
-				createdAt: new Date().toISOString(),
-			};
+					createdAt: new Date().toISOString(),
+				};
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				if (/UNIQUE constraint failed/i.test(msg)) {
+					user = db.select().from(users).where(eq(users.username, claims.username)).get();
+					if (!user) throw e;
+				} else {
+					throw e;
+				}
+			}
 		} else {
 			return popupResponse(false, 'Account not found. Contact your administrator.');
 		}

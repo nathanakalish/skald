@@ -160,51 +160,56 @@ export const DELETE: RequestHandler = async (event) => {
 	if (!ownerChat) return json({ error: 'Not found' }, { status: 404 });
 
 	if (deleteMode === 'single') {
-		const allMsgs = db.select().from(messages).where(eq(messages.chatId, message.chatId)).all();
-		const directChildren = allMsgs
-			.filter((m) => m.parentId === id)
-			.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+		const result = db.transaction(() => {
+			const allMsgs = db.select().from(messages).where(eq(messages.chatId, message.chatId)).all();
+			const directChildren = allMsgs
+				.filter((m) => m.parentId === id)
+				.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
 
-		// Promote direct children to this message's parent so deleting one node
-		// keeps the surrounding branch intact.
-		for (const child of directChildren) {
-			db.update(messages)
-				.set({ parentId: message.parentId ?? null })
-				.where(eq(messages.id, child.id))
-				.run();
-		}
-
-		db.delete(messages).where(eq(messages.id, id)).run();
-
-		let newLeafId: number | null = ownerChat.activeLeafId ?? null;
-		if (ownerChat.activeLeafId === id) {
-			if (directChildren.length > 0) {
-				const remainingAfterDelete = db
-					.select()
-					.from(messages)
-					.where(eq(messages.chatId, message.chatId))
-					.all();
-				const childrenOf = new Map<number, typeof remainingAfterDelete>();
-				for (const m of remainingAfterDelete) {
-					if (m.parentId != null) {
-						if (!childrenOf.has(m.parentId)) childrenOf.set(m.parentId, []);
-						childrenOf.get(m.parentId)!.push(m);
-					}
-				}
-				let leaf = directChildren[0];
-				while (true) {
-					const children = childrenOf.get(leaf.id);
-					if (!children || children.length === 0) break;
-					children.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
-					leaf = children[0];
-				}
-				newLeafId = leaf.id;
-			} else {
-				newLeafId = message.parentId ?? null;
+			// Promote direct children to this message's parent so deleting one node
+			// keeps the surrounding branch intact.
+			for (const child of directChildren) {
+				db.update(messages)
+					.set({ parentId: message.parentId ?? null })
+					.where(eq(messages.id, child.id))
+					.run();
 			}
-		}
 
-		db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
+			db.delete(messages).where(eq(messages.id, id)).run();
+
+			let newLeafId: number | null = ownerChat.activeLeafId ?? null;
+			if (ownerChat.activeLeafId === id) {
+				if (directChildren.length > 0) {
+					const remainingAfterDelete = db
+						.select()
+						.from(messages)
+						.where(eq(messages.chatId, message.chatId))
+						.all();
+					const childrenOf = new Map<number, typeof remainingAfterDelete>();
+					for (const m of remainingAfterDelete) {
+						if (m.parentId != null) {
+							if (!childrenOf.has(m.parentId)) childrenOf.set(m.parentId, []);
+							childrenOf.get(m.parentId)!.push(m);
+						}
+					}
+					let leaf = directChildren[0];
+					while (true) {
+						const children = childrenOf.get(leaf.id);
+						if (!children || children.length === 0) break;
+						children.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+						leaf = children[0];
+					}
+					newLeafId = leaf.id;
+				} else {
+					newLeafId = message.parentId ?? null;
+				}
+			}
+
+			db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
+			return newLeafId;
+		});
+
+		let newLeafId = result;
 		recomputeChatTail(message.chatId);
 		broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: [id] });
 
@@ -220,47 +225,60 @@ export const DELETE: RequestHandler = async (event) => {
 	const descendantIds = getDescendantIds(id, message.chatId);
 	const allIdsToDelete = [id, ...descendantIds];
 
-	for (const delId of allIdsToDelete) {
-		db.delete(messages).where(eq(messages.id, delId)).run();
-	}
-
 	const chat = db.select().from(chats).where(eq(chats.id, message.chatId)).get();
+
+	let newLeafForResponse: number | null = null;
 	if (chat) {
-		const parentId = message.parentId ?? null;
-		const allMsgs = db.select().from(messages).where(eq(messages.chatId, message.chatId)).all();
-		const remainingChildren = allMsgs
-			.filter(m => (m.parentId ?? null) === parentId)
-			.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+		newLeafForResponse = db.transaction(() => {
+			for (const delId of allIdsToDelete) {
+				db.delete(messages).where(eq(messages.id, delId)).run();
+			}
 
-		let newLeafId: number | null = parentId;
-		if (remainingChildren.length > 0) {
-			const childrenOf = new Map<number, typeof allMsgs>();
-			for (const m of allMsgs) {
-				if (m.parentId != null) {
-					if (!childrenOf.has(m.parentId)) childrenOf.set(m.parentId, []);
-					childrenOf.get(m.parentId)!.push(m);
+			const parentId = message.parentId ?? null;
+			const allMsgs = db.select().from(messages).where(eq(messages.chatId, message.chatId)).all();
+			const remainingChildren = allMsgs
+				.filter(m => (m.parentId ?? null) === parentId)
+				.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+
+			let newLeafId: number | null = parentId;
+			if (remainingChildren.length > 0) {
+				const childrenOf = new Map<number, typeof allMsgs>();
+				for (const m of allMsgs) {
+					if (m.parentId != null) {
+						if (!childrenOf.has(m.parentId)) childrenOf.set(m.parentId, []);
+						childrenOf.get(m.parentId)!.push(m);
+					}
 				}
+				let leaf = remainingChildren[remainingChildren.length - 1];
+				while (true) {
+					const children = childrenOf.get(leaf.id);
+					if (!children || children.length === 0) break;
+					children.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+					leaf = children[0];
+				}
+				newLeafId = leaf.id;
 			}
-			let leaf = remainingChildren[remainingChildren.length - 1];
-			while (true) {
-				const children = childrenOf.get(leaf.id);
-				if (!children || children.length === 0) break;
-				children.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
-				leaf = children[0];
-			}
-			newLeafId = leaf.id;
-		}
 
-		db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
+			db.update(chats).set({ activeLeafId: newLeafId }).where(eq(chats.id, message.chatId)).run();
+			return newLeafId;
+		});
+
 		recomputeChatTail(message.chatId);
 		broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: allIdsToDelete });
 
+		let finalNewLeaf = newLeafForResponse;
 		const reverted = revertLeafUserMessages(message.chatId, user.id);
-		if (reverted.changed) newLeafId = reverted.newActiveLeafId;
+		if (reverted.changed) finalNewLeaf = reverted.newActiveLeafId;
 
-		return json({ success: true, newActiveLeafId: newLeafId, mode: deleteMode });
+		return json({ success: true, newActiveLeafId: finalNewLeaf, mode: deleteMode });
 	}
 
+	// No chat row — unusual; still drop the messages.
+	db.transaction(() => {
+		for (const delId of allIdsToDelete) {
+			db.delete(messages).where(eq(messages.id, delId)).run();
+		}
+	});
 	recomputeChatTail(message.chatId);
 	broadcast(user.id, { type: 'message:deleted', chatId: message.chatId, ids: allIdsToDelete });
 	const reverted = revertLeafUserMessages(message.chatId, user.id);

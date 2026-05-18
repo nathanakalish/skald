@@ -19,6 +19,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (chat.deletedAt != null) return json({ error: 'Chat has been deleted' }, { status: 410 });
 
 	if (isChatProcessing(chatId)) {
 		return json({ error: 'Chat already has an in-flight generation' }, { status: 409 });

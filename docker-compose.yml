@@ -36,7 +36,7 @@ services:
       # - MAX_QUEUED_PER_PROVIDER=100
       #
       # ─── Web Push Notifications ───
-      # Optional: VAPID keys for web push. Auto-generated and stored in DB if omitted.
+      # VAPID keys for web push. Push is disabled unless both keys are set.
       # Generate with: npx web-push generate-vapid-keys
       # - VAPID_PUBLIC_KEY=
       # - VAPID_PRIVATE_KEY=

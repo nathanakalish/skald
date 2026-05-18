@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { chats, messages, characters } from '$lib/db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { deleteCachedImagesFromContent } from '$lib/services/imageCache.js';
 import { requireUser } from '$lib/server/auth.js';
 import { eventBus } from '$lib/server/eventBus.js';
@@ -122,15 +122,21 @@ export const DELETE: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
 
-	// Verify ownership.
-	const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
+	// Verify ownership and that the chat isn't already deleted (an undelete
+	// flow can pick rows up later by relaxing the isNull filter).
+	const chat = db.select().from(chats)
+		.where(and(eq(chats.id, id), eq(chats.userId, user.id), isNull(chats.deletedAt)))
+		.get();
 	if (!chat) return json({ error: 'Not found' }, { status: 404 });
 
-	// Wipe cached images referenced by these messages.
+	// CRUD-M8: soft-delete. Wipe cached images right away — those eat real
+	// disk and the user has signalled the chat is gone. The DB row stays so
+	// an admin can recover the conversation if needed; a future purge job
+	// will drop rows past the retention window.
 	const chatMessages = db.select({ content: messages.content }).from(messages).where(eq(messages.chatId, id)).all();
 	deleteCachedImagesFromContent(chatMessages.map((m) => m.content));
 
-	db.delete(chats).where(eq(chats.id, id)).run();
+	db.update(chats).set({ deletedAt: Date.now() }).where(eq(chats.id, id)).run();
 	broadcast(user.id, { type: 'chat:deleted', id });
 	return json({ ok: true });
 };
@@ -160,12 +166,16 @@ export const POST: RequestHandler = async (event) => {
 
 		if (toDelete.length > 0) {
 			deleteCachedImagesFromContent(toDelete.map((m) => m.content));
+		}
+
+		// Atomic: nuke messages + reset the leaf together so we never observe
+		// a chat row pointing at an already-deleted leaf.
+		db.transaction(() => {
 			for (const msg of toDelete) {
 				db.delete(messages).where(eq(messages.id, msg.id)).run();
 			}
-		}
-
-		db.update(chats).set({ activeLeafId: keepId, unread: 0 }).where(eq(chats.id, id)).run();
+			db.update(chats).set({ activeLeafId: keepId, unread: 0 }).where(eq(chats.id, id)).run();
+		});
 		recomputeChatTail(id);
 		eventBus.emit({ type: 'unread', chatId: id, userId: user.id, data: { count: 0 } });
 

@@ -8,11 +8,8 @@ import {
 	cacheCharacterTextImages,
 	cacheBackgroundFromExtensions
 } from '$lib/services/characterImageCache.js';
-import { writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
 import {
-	optimizeAvatar, getAvatarOriginalsDir, isPlaceholderAvatar
+	storeAvatarFromBuffer, isPlaceholderAvatar
 } from '$lib/services/imageOptimizer.js';
 import { extractThemeFromAvatar } from '$lib/services/themeExtractor.js';
 import { requireUser } from '$lib/server/auth.js';
@@ -20,7 +17,7 @@ import { broadcast } from '$lib/server/realtime.js';
 import { getAdminSettingBool, getAdminSettingNumber } from '$lib/server/adminSettings.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { logger } from '$lib/server/logger.js';
-
+import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
 /** PNG character cards: configurable cap (default 8 MiB). JSON cards: 2 MiB cap. */
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 
@@ -111,13 +108,9 @@ export const POST: RequestHandler = async (event) => {
 	let avatarPath: string | null = null;
 	if (avatarBuffer && !(await isPlaceholderAvatar(avatarBuffer))) {
 		try {
-			const avatarDir = join(process.cwd(), 'static', 'avatars');
-			mkdirSync(avatarDir, { recursive: true });
-			const uuid = randomUUID();
-			writeFileSync(join(getAvatarOriginalsDir(), `${uuid}.png`), avatarBuffer);
-			const optimized = await optimizeAvatar(avatarBuffer);
-			writeFileSync(join(avatarDir, `${uuid}.webp`), optimized);
-			avatarPath = `/avatars/${uuid}.webp`;
+			// Imports come from chara card PNGs — always PNG. Storing under the
+			// content hash means re-importing the same card is a no-op on disk.
+			avatarPath = await storeAvatarFromBuffer(avatarBuffer, 'image/png');
 		} catch (avatarErr) {
 			logger.warn('character import: avatar processing failed, importing without avatar', { userId: user.id, err: String(avatarErr) });
 		}
@@ -201,14 +194,17 @@ export const POST: RequestHandler = async (event) => {
 					.run();
 			}
 
-			// Only add entries that don't already exist in the lorebook
-			const existingEntries = existing
-				? new Set(tx.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, book.id)).all().map(e => e.keywords))
+			// Only add entries whose (keywords, content) fingerprint isn't
+			// already present. Compares content too — see IMPORT-H3.
+			const existingFingerprints = existing
+				? new Set(tx.select().from(lorebookEntries).where(eq(lorebookEntries.lorebookId, book.id)).all().map(e => lorebookEntryFingerprint(e.keywords, e.content)))
 				: new Set<string>();
 
 			for (const entry of cardData.characterBook.entries) {
 				const keywords = entry.keys.join(', ');
-				if (existingEntries.has(keywords)) continue;
+				const fp = lorebookEntryFingerprint(keywords, entry.content);
+				if (existingFingerprints.has(fp)) continue;
+				existingFingerprints.add(fp);
 				tx.insert(lorebookEntries)
 					.values({
 						lorebookId: book.id,

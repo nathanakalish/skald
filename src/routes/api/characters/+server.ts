@@ -24,6 +24,12 @@ export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const body = await event.request.json();
 
+	// CRUD-L1: refuse empty/whitespace-only names at write time. The client
+	// already validates, but the API was happy to create '' or '   ' rows
+	// which then display as a blank entry in every list.
+	const name = typeof body?.name === 'string' ? body.name.trim() : '';
+	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+
 	const limitResponse = enforceCreate('characters', user.id, JSON.stringify(body ?? {}).length);
 	if (limitResponse) return limitResponse;
 
@@ -37,7 +43,7 @@ export const POST: RequestHandler = async (event) => {
 		.insert(characters)
 		.values({
 			userId: user.id,
-			name: body.name,
+			name,
 			description: body.description || '',
 			personality: body.personality || '',
 			firstMessage: cached.firstMessage || '',
