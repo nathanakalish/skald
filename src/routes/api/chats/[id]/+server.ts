@@ -9,6 +9,7 @@ import { eventBus } from '$lib/server/eventBus.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { ownsProvider, ownsPersona } from '$lib/server/ownership.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
 
 // Build the same sidebar-shaped row that GET /api/chats returns, for one id.
 // Mutation handlers return this so the client store can reconcile without
@@ -50,6 +51,15 @@ export const PATCH: RequestHandler = async (event) => {
 	// Verify ownership.
 	const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
 	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+
+	const lengthError = validateLengths(body, {
+		title: 'name',
+		overrideCustomPrompt: 'prompt',
+		overrideCompactionModel: 'name',
+		compactionSummary: 'compactionSummary',
+		replyGuidance: 'replyGuidance',
+	});
+	if (lengthError) return lengthError;
 
 	const updates: Record<string, unknown> = {};
 	if ('title' in body && typeof body.title === 'string') {

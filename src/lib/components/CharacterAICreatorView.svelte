@@ -4,6 +4,20 @@
 	import { onMount, tick, untrack } from 'svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits, checkAutoSaveLimit } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
+
+	const AI_FIELD_LIMITS = {
+		name: { label: 'Name', limit: FIELD_LIMITS.name },
+		description: { label: 'Description', limit: FIELD_LIMITS.description },
+		personality: { label: 'Personality', limit: FIELD_LIMITS.personality },
+		scenario: { label: 'Scenario', limit: FIELD_LIMITS.scenario },
+		firstMessage: { label: 'First Message', limit: FIELD_LIMITS.firstMessage },
+		systemPrompt: { label: 'System Prompt', limit: FIELD_LIMITS.systemPrompt },
+		tags: { label: 'Tags', limit: FIELD_LIMITS.tags },
+	} as const;
 
 	interface Props {
 		open: boolean;
@@ -169,6 +183,13 @@
 
 	async function persistEditChanges(changedKeys: FieldKey[]) {
 		if (!isEditing || !editingCharacter || changedKeys.length === 0) return;
+		// Auto-save: if any of the changed fields is over its limit, bail with
+		// a toast rather than silently truncating or pushing oversized payloads.
+		for (const k of changedKeys) {
+			const meta = AI_FIELD_LIMITS[k as keyof typeof AI_FIELD_LIMITS];
+			if (!meta) continue;
+			if (!checkAutoSaveLimit(meta.label, fields[k] ?? '', meta.limit)) return;
+		}
 		editAutoSaving = true;
 		editAutoSaveOk = null;
 		try {
@@ -218,6 +239,15 @@
 	async function sendMessage(text: string, opts: { auto?: boolean } = {}) {
 		const trimmed = text.trim();
 		if (!trimmed || isSending) return;
+		// `auto` calls are generated programmatically and never hit the limit;
+		// only gate the interactive path so the modal doesn't pop up out of
+		// nowhere during the initial seed-from-form flow.
+		if (!opts.auto) {
+			const ok = await checkFieldLimits([
+				{ label: 'Message', value: text, limit: FIELD_LIMITS.messageContent, trim: (v) => { input = v; } },
+			]);
+			if (!ok) return;
+		}
 
 		const history = turns
 			.filter(t => (t.role === 'user' || (t.role === 'assistant' && !t.undone)))
@@ -342,6 +372,15 @@
 			return;
 		}
 		if (!fields.name.trim() || creating) return;
+		const ok = await checkFieldLimits(
+			(Object.keys(AI_FIELD_LIMITS) as (keyof typeof AI_FIELD_LIMITS)[]).map((k) => ({
+				label: AI_FIELD_LIMITS[k].label,
+				value: fields[k] ?? '',
+				limit: AI_FIELD_LIMITS[k].limit,
+				trim: (v: string) => { fields[k] = v; },
+			})),
+		);
+		if (!ok) return;
 		creating = true;
 		try {
 			const res = await fetch('/api/characters', {
@@ -485,7 +524,7 @@
 				<div>
 					<label for="ai-name" class={labelClass}>Name <span class="text-destructive">*</span></label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('name') ? '' : undefined}>
-						<input id="ai-name" bind:value={fields.name} disabled={pendingFields.has('name') || isSending} class={inputClass} placeholder="Character name" />
+						<LimitedInput id="ai-name" bind:value={fields.name} disabled={pendingFields.has('name') || isSending} limit={FIELD_LIMITS.name} class={inputClass} placeholder="Character name" />
 						{#if pendingFields.has('name')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -496,7 +535,7 @@
 				<div>
 					<label for="ai-desc" class={labelClass}>Description</label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('description') ? '' : undefined}>
-						<textarea id="ai-desc" bind:value={fields.description} disabled={pendingFields.has('description') || isSending} rows={6} class={textareaClass} placeholder="Character description, background, appearance…"></textarea>
+						<LimitedTextarea id="ai-desc" bind:value={fields.description} disabled={pendingFields.has('description') || isSending} rows={6} limit={FIELD_LIMITS.description} class={textareaClass} placeholder="Character description, background, appearance…" />
 						{#if pendingFields.has('description')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -507,7 +546,7 @@
 				<div>
 					<label for="ai-personality" class={labelClass}>Personality</label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('personality') ? '' : undefined}>
-						<textarea id="ai-personality" bind:value={fields.personality} disabled={pendingFields.has('personality') || isSending} rows={3} class={textareaClass} placeholder="Personality traits, behavior patterns…"></textarea>
+						<LimitedTextarea id="ai-personality" bind:value={fields.personality} disabled={pendingFields.has('personality') || isSending} rows={3} limit={FIELD_LIMITS.personality} class={textareaClass} placeholder="Personality traits, behavior patterns…" />
 						{#if pendingFields.has('personality')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -518,7 +557,7 @@
 				<div>
 					<label for="ai-scenario" class={labelClass}>Scenario</label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('scenario') ? '' : undefined}>
-						<textarea id="ai-scenario" bind:value={fields.scenario} disabled={pendingFields.has('scenario') || isSending} rows={3} class={textareaClass} placeholder="The setting, situation, or context…"></textarea>
+						<LimitedTextarea id="ai-scenario" bind:value={fields.scenario} disabled={pendingFields.has('scenario') || isSending} rows={3} limit={FIELD_LIMITS.scenario} class={textareaClass} placeholder="The setting, situation, or context…" />
 						{#if pendingFields.has('scenario')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -529,7 +568,7 @@
 				<div>
 					<label for="ai-first" class={labelClass}>First Message</label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('firstMessage') ? '' : undefined}>
-						<textarea id="ai-first" bind:value={fields.firstMessage} disabled={pendingFields.has('firstMessage') || isSending} rows={6} class={textareaClass} placeholder="The opening message when a new chat starts…"></textarea>
+						<LimitedTextarea id="ai-first" bind:value={fields.firstMessage} disabled={pendingFields.has('firstMessage') || isSending} rows={6} limit={FIELD_LIMITS.firstMessage} class={textareaClass} placeholder="The opening message when a new chat starts…" />
 						{#if pendingFields.has('firstMessage')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -540,7 +579,7 @@
 				<div>
 					<label for="ai-system" class={labelClass}>System Prompt</label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('systemPrompt') ? '' : undefined}>
-						<textarea id="ai-system" bind:value={fields.systemPrompt} disabled={pendingFields.has('systemPrompt') || isSending} rows={4} class={textareaClass} placeholder="Optional system prompt for chats with this character…"></textarea>
+						<LimitedTextarea id="ai-system" bind:value={fields.systemPrompt} disabled={pendingFields.has('systemPrompt') || isSending} rows={4} limit={FIELD_LIMITS.systemPrompt} class={textareaClass} placeholder="Optional system prompt for chats with this character…" />
 						{#if pendingFields.has('systemPrompt')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -551,7 +590,7 @@
 				<div>
 					<label for="ai-tags" class={labelClass}>Tags</label>
 					<div class="creator-field-wrap" data-pending={pendingFields.has('tags') ? '' : undefined}>
-						<input id="ai-tags" bind:value={fields.tags} disabled={pendingFields.has('tags') || isSending} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
+						<LimitedInput id="ai-tags" bind:value={fields.tags} disabled={pendingFields.has('tags') || isSending} limit={FIELD_LIMITS.tags} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
 						{#if pendingFields.has('tags')}
 							<div class="creator-field-overlay"><Loader2 class="spinner-centered h-6 w-6 animate-spin text-foreground" strokeWidth={2.5} /></div>
 						{/if}
@@ -629,15 +668,16 @@
 
 			<div class="border-t border-border p-2">
 				<div class="flex items-end gap-2">
-					<textarea
+					<LimitedTextarea
 						bind:value={input}
 						onkeydown={onInputKeydown}
 						rows={1}
 						disabled={isSending}
 						placeholder={isSending ? 'AI is working…' : 'Ask the AI to change something…'}
+						limit={FIELD_LIMITS.messageContent}
 						class="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
 						style="max-height: 120px;"
-					></textarea>
+					/>
 					{#if isSending}
 						<button
 							onclick={stop}

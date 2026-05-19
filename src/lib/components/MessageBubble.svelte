@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Bot, Check, X, Brain, RefreshCw } from 'lucide-svelte';
 	import { tooltip } from '$lib/tooltip.js';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	// Lifted from ChatView. Kept structurally identical so callers can pass
 	// their own Message rows without conversion.
@@ -133,12 +135,13 @@
 			<time datetime={message.createdAt} class="sr-only">{getMessageTime(message.createdAt)}</time>
 		{/if}
 		{#if isEditing}
-			<textarea
+			<LimitedTextarea
 				bind:value={editContent}
 				onkeydown={onhandleEditKeydown}
+				limit={FIELD_LIMITS.messageContent}
 				class="w-full resize-none rounded-lg border border-input bg-background p-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				rows={Math.min(12, Math.max(3, editContent.split('\n').length + 1))}
-			></textarea>
+			/>
 			<div class="mt-1.5 flex items-center justify-end gap-1.5">
 				<button
 					onclick={onsaveEdit}

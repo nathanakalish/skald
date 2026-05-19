@@ -2,6 +2,9 @@
 	import { tooltip } from '$lib/tooltip.js';
 	import { onMount } from 'svelte';
 	import { Pencil, Trash2, Plus, Shield } from 'lucide-svelte';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		currentUserId?: number;
@@ -42,6 +45,10 @@
 
 	async function createUser() {
 		createUserError = '';
+		const ok = await checkFieldLimits([
+			{ label: 'Username', value: newUsername, limit: FIELD_LIMITS.username, trim: (v) => (newUsername = v) },
+		]);
+		if (!ok) return;
 		const res = await fetch('/api/admin/users', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -73,6 +80,10 @@
 	async function saveEditUser() {
 		if (editingUserId === null) return;
 		editUserError = '';
+		const ok = await checkFieldLimits([
+			{ label: 'Username', value: editUsername, limit: FIELD_LIMITS.username, trim: (v) => (editUsername = v) },
+		]);
+		if (!ok) return;
 		const body: Record<string, string> = { username: editUsername.trim(), role: editRole };
 		const res = await fetch(`/api/admin/users/${editingUserId}`, {
 			method: 'PUT',
@@ -127,8 +138,9 @@
 			<div class="space-y-3">
 				<div>
 					<span class="mb-1 block text-xs font-medium text-muted-foreground">Username</span>
-					<input
+					<LimitedInput
 						bind:value={newUsername}
+						limit={FIELD_LIMITS.username}
 						class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 						placeholder="username"
 						autocomplete="off"
@@ -178,8 +190,9 @@
 						<div class="space-y-3">
 							<div>
 								<span class="mb-1 block text-xs font-medium text-muted-foreground">Username</span>
-								<input
+								<LimitedInput
 									bind:value={editUsername}
+									limit={FIELD_LIMITS.username}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									autocomplete="off"
 								/>

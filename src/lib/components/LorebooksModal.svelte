@@ -9,6 +9,10 @@
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
 	import ChubBrowseModal from '$lib/components/ChubBrowseModal.svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		open: boolean;
@@ -57,6 +61,11 @@
 
 	async function createLorebook() {
 		if (!name.trim()) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Name', value: name, limit: FIELD_LIMITS.name, trim: (v) => (name = v) },
+			{ label: 'Description', value: description, limit: FIELD_LIMITS.description, trim: (v) => (description = v) },
+		]);
+		if (!ok) return;
 		// Optimistic insert with a temp negative ID so the new card shows
 		// instantly. Swap to the real ID on success, drop on failure.
 		const tempId = -Date.now();
@@ -228,17 +237,19 @@
 	{#if showCreateForm}
 		<div class="mx-3 mb-2 rounded-xl border border-primary/20 bg-card p-3">
 			<div class="space-y-2">
-				<input
+				<LimitedInput
 					bind:value={name}
+					limit={FIELD_LIMITS.name}
 					class="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 					placeholder="Lorebook name *"
 				/>
-				<textarea
+				<LimitedTextarea
 					bind:value={description}
 					rows={2}
+					limit={FIELD_LIMITS.description}
 					class="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 					placeholder="Description (optional)"
-				></textarea>
+				/>
 				<div class="flex justify-end gap-2">
 					<button onclick={() => (showCreateForm = false)} class="rounded-lg border border-border px-3 py-1 text-xs hover:bg-accent">Cancel</button>
 					<button onclick={createLorebook} disabled={!name.trim()} class="rounded-lg bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Create</button>
@@ -378,22 +389,24 @@
 						<div class="space-y-3">
 							<div>
 								<label for="ml-name" class="mb-1 block text-xs font-medium text-muted-foreground">Name *</label>
-								<input
+								<LimitedInput
 									id="ml-name"
 									bind:value={name}
+									limit={FIELD_LIMITS.name}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Lorebook name"
 								/>
 							</div>
 							<div>
 								<label for="ml-desc" class="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
-								<textarea
+								<LimitedTextarea
 									id="ml-desc"
 									bind:value={description}
 									rows={3}
+									limit={FIELD_LIMITS.description}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="What is this lorebook about?"
-								></textarea>
+								/>
 							</div>
 							<div class="flex justify-end gap-3 pt-1">
 								<button

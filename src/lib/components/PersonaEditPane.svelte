@@ -4,6 +4,10 @@
 	import { personasStore, type Persona } from '$lib/stores/personas.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		// `null` means create-new mode.
@@ -83,6 +87,12 @@
 
 	async function save() {
 		if (!name.trim() || saving) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Label', value: displayName, limit: FIELD_LIMITS.name, trim: (v) => (displayName = v) },
+			{ label: 'In-Chat Name', value: name, limit: FIELD_LIMITS.name, trim: (v) => (name = v) },
+			{ label: 'Description', value: description, limit: FIELD_LIMITS.description, trim: (v) => (description = v) },
+		]);
+		if (!ok) return;
 		saving = true;
 		error = null;
 		// Snapshot the existing entry so we can revert on failure.
@@ -367,20 +377,20 @@
 				<div class="grid gap-4 sm:grid-cols-2">
 					<div>
 						<label for="pe-display" class="mb-1 block text-xs font-medium text-muted-foreground">Label</label>
-						<input
+						<LimitedInput
 							id="pe-display"
 							bind:value={displayName}
-							maxlength={200}
+							limit={FIELD_LIMITS.name}
 							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 							placeholder="e.g. My Fantasy Persona"
 						/>
 					</div>
 					<div>
 						<label for="pe-name" class="mb-1 block text-xs font-medium text-muted-foreground">In-Chat Name *</label>
-						<input
+						<LimitedInput
 							id="pe-name"
 							bind:value={name}
-							maxlength={200}
+							limit={FIELD_LIMITS.name}
 							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 							placeholder={"Name used for {{user}}"}
 						/>
@@ -388,14 +398,14 @@
 				</div>
 				<div>
 					<label for="pe-desc" class="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
-					<textarea
+					<LimitedTextarea
 						id="pe-desc"
 						bind:value={description}
 						rows={8}
-						maxlength={10000}
+						limit={FIELD_LIMITS.description}
 						class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 						placeholder="Describe your persona — this is injected into context for the AI."
-					></textarea>
+					/>
 				</div>
 
 				<label class="flex items-center gap-2 text-sm">

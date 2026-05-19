@@ -6,6 +6,9 @@
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import { untrack } from 'svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		open: boolean;
@@ -209,6 +212,12 @@
 	}
 
 	async function save() {
+		const ok = await checkFieldLimits([
+			{ label: 'Custom Instructions', value: customPrompt, limit: FIELD_LIMITS.prompt, trim: (v) => (customPrompt = v) },
+			{ label: 'Reply guidance', value: replyGuidance, limit: FIELD_LIMITS.replyGuidance, trim: (v) => (replyGuidance = v) },
+			{ label: 'Compaction summary', value: compactionSummaryDraft, limit: FIELD_LIMITS.compactionSummary, trim: (v) => (compactionSummaryDraft = v) },
+		]);
+		if (!ok) return;
 		// Close immediately — the form is bound to local state so the UI
 		// already reflects the new values. Persist in the background and
 		// surface failures via a toast rather than blocking the user.
@@ -607,12 +616,13 @@
 										</button>
 									{/if}
 								</div>
-								<textarea
+								<LimitedTextarea
 									bind:value={customPrompt}
 									rows={4}
+									limit={FIELD_LIMITS.prompt}
 									class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Override or extend the global custom instructions for this chat..."
-								></textarea>
+								/>
 								<p class="text-xs text-muted-foreground">Replaces provider custom instructions when set. Supports &#123;&#123;char&#125;&#125; / &#123;&#123;user&#125;&#125; macros.</p>
 							</div>
 
@@ -626,12 +636,13 @@
 										</button>
 									{/if}
 								</div>
-								<textarea
+								<LimitedTextarea
 									bind:value={replyGuidance}
 									rows={3}
+									limit={FIELD_LIMITS.replyGuidance}
 									class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="e.g. keep replies short, avoid breaking the fourth wall…"
-								></textarea>
+								/>
 								<p class="text-xs text-muted-foreground">Sent on every reply in this chat, in addition to any per-message guidance.</p>
 							</div>
 
@@ -871,12 +882,13 @@
 										</div>
 									</div>
 								</div>
-								<textarea
+								<LimitedTextarea
 									bind:value={compactionSummaryDraft}
 									rows={6}
+									limit={FIELD_LIMITS.compactionSummary}
 									placeholder="No summary yet. Run compaction below or write one manually."
 									class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
-								></textarea>
+								/>
 								<p class="text-xs text-muted-foreground">Saved with the rest of the chat settings. Clearing the summary also resets the high-water mark so the next run starts from the very first message.</p>
 								{#if chat.compactionLastRunAt}
 									<p class="text-xs text-muted-foreground">Last run: {new Date(chat.compactionLastRunAt + 'Z').toLocaleString()}</p>

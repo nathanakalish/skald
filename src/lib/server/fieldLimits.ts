@@ -1,41 +1,19 @@
 /**
- * Server-side maximum length caps for user-supplied text fields. SQLite stores
- * unbounded TEXT, so without these the API would happily accept multi-megabyte
- * names or descriptions — which then break list rendering, blow up exports, and
- * make rate-limit/payload guards (M14) the only line of defense.
+ * Server-side validator. Re-exports the shared FIELD_LIMITS so existing
+ * `$lib/server/fieldLimits` imports keep working, and adds the request-time
+ * length check used by API routes.
  *
- * Limits are deliberately generous: they exist to stop pathological abuse
- * (paste-a-novel-into-a-name), not to police normal use.
+ * If the admin has disabled `characterLimitsEnabled`, this becomes a no-op —
+ * the client UI and the server enforcement turn off together so the toggle
+ * has the symmetric effect an admin expects.
  */
 
 import { json } from '@sveltejs/kit';
+import { FIELD_LIMITS, type FieldLimitKey } from '../fieldLimits.js';
+import { getAdminSettingBool } from './adminSettings.js';
 
-export const FIELD_LIMITS = {
-	// short identifiers
-	name: 200,
-	username: 64,
-	tagLine: 500,
-	url: 2048,
-	// medium prose
-	description: 10_000,
-	scenario: 10_000,
-	personality: 10_000,
-	creatorNotes: 5_000,
-	tags: 2_000,
-	// long prose / templates
-	systemPrompt: 50_000,
-	prompt: 50_000,
-	firstMessage: 50_000,
-	mesExample: 50_000,
-	postHistoryInstructions: 20_000,
-	greeting: 50_000,
-	lorebookEntryContent: 50_000,
-	lorebookEntryKeys: 5_000,
-	// chat content — generous since people paste in long roleplay context
-	messageContent: 200_000,
-} as const;
-
-export type FieldLimitKey = keyof typeof FIELD_LIMITS;
+export { FIELD_LIMITS };
+export type { FieldLimitKey };
 
 /**
  * Validate that each provided string field is within its configured maximum.
@@ -47,6 +25,7 @@ export function validateLengths(
 	checks: Partial<Record<string, FieldLimitKey>>,
 ): Response | null {
 	if (!body) return null;
+	if (!getAdminSettingBool('characterLimitsEnabled')) return null;
 	for (const [field, limitKey] of Object.entries(checks)) {
 		if (!limitKey) continue;
 		const value = body[field];

@@ -9,6 +9,10 @@
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { providerProfiles, defaultEndpoints, getProfile, type ProviderType } from '$lib/providers/profiles.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Provider {
 		id: number;
@@ -172,6 +176,12 @@
 
 	async function save() {
 		if (!name.trim()) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Name', value: name, limit: FIELD_LIMITS.name, trim: (v) => (name = v) },
+			{ label: 'Endpoint', value: endpoint, limit: FIELD_LIMITS.url, trim: (v) => (endpoint = v) },
+			{ label: 'Custom Instructions', value: customPrompt, limit: FIELD_LIMITS.prompt, trim: (v) => (customPrompt = v) },
+		]);
+		if (!ok) return;
 		saving = true;
 		const editing = provider;
 		const prev = editing ? { ...editing } : null;
@@ -362,7 +372,7 @@
 						<!-- Name -->
 						<div>
 							<span class={labelClass}>Name</span>
-							<input bind:value={name} class={inputClass} placeholder="My OpenAI Provider" />
+							<LimitedInput bind:value={name} limit={FIELD_LIMITS.name} class={inputClass} placeholder="My OpenAI Provider" />
 						</div>
 
 						<!-- Type -->
@@ -389,7 +399,7 @@
 						<div class="grid gap-3 sm:grid-cols-2">
 							<div>
 								<span class={labelClass}>Endpoint</span>
-								<input bind:value={endpoint} class={inputClass} />
+								<LimitedInput bind:value={endpoint} limit={FIELD_LIMITS.url} class={inputClass} />
 							</div>
 							<div>
 								<span class={labelClass}>API Key</span>
@@ -548,12 +558,13 @@
 									<p class="mb-2 text-xs text-muted-foreground/60">
 										Additional instructions injected into the system prompt. Supports &#123;&#123;char&#125;&#125; and &#123;&#123;user&#125;&#125; macros.
 									</p>
-									<textarea
+									<LimitedTextarea
 										bind:value={customPrompt}
 										rows={4}
+										limit={FIELD_LIMITS.prompt}
 										class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
 										placeholder="e.g. Always respond in first person. Keep responses under 3 paragraphs..."
-									></textarea>
+									/>
 								</div>
 								<div class="flex items-center justify-between rounded-lg border border-border bg-background p-3">
 									<div>

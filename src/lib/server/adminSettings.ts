@@ -8,6 +8,10 @@ const DEFAULTS: Record<string, string> = {
 	allowCharacterExport: 'true',
 	allowChubBrowse: 'true',
 	disableImageCaching: 'false',
+	// Soft character-length caps on text fields. When off, the UI stops
+	// rendering the overflow-red overlay and the server skips validation —
+	// useful for instances that need to ingest unbounded content.
+	characterLimitsEnabled: 'true',
 	// Per-user rate limits (requests per minute)
 	chatRateLimit: '30',
 	characterImportRateLimit: '10',

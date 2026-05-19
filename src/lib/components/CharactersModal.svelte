@@ -14,6 +14,10 @@
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
 	import { tooltip } from '$lib/tooltip.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		open: boolean;
@@ -218,6 +222,16 @@
 
 	async function createCharacter() {
 		if (!name.trim()) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Name', value: name, limit: FIELD_LIMITS.name, trim: (v) => (name = v) },
+			{ label: 'Description', value: description, limit: FIELD_LIMITS.description, trim: (v) => (description = v) },
+			{ label: 'Personality', value: personality, limit: FIELD_LIMITS.personality, trim: (v) => (personality = v) },
+			{ label: 'First Message', value: firstMessage, limit: FIELD_LIMITS.firstMessage, trim: (v) => (firstMessage = v) },
+			{ label: 'Scenario', value: scenario, limit: FIELD_LIMITS.scenario, trim: (v) => (scenario = v) },
+			{ label: 'System Prompt', value: systemPrompt, limit: FIELD_LIMITS.systemPrompt, trim: (v) => (systemPrompt = v) },
+			{ label: 'Tags', value: tags, limit: FIELD_LIMITS.tags, trim: (v) => (tags = v) },
+		]);
+		if (!ok) return;
 
 		const res = await fetch('/api/characters', {
 			method: 'POST',
@@ -583,17 +597,19 @@
 	{#if showCreateForm}
 		<div class="mx-3 mb-2 rounded-xl border border-primary/20 bg-card p-3">
 			<div class="space-y-2">
-				<input
+				<LimitedInput
 					bind:value={name}
+					limit={FIELD_LIMITS.name}
 					class="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 					placeholder="Character name *"
 				/>
-				<textarea
+				<LimitedTextarea
 					bind:value={description}
 					rows={2}
+					limit={FIELD_LIMITS.description}
 					class="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 					placeholder="Description (optional)"
-				></textarea>
+				/>
 				<div class="flex items-center justify-between gap-2">
 					<button
 						onclick={() => {
@@ -843,70 +859,77 @@
 						<div class="space-y-3">
 							<div>
 								<label for="mc-name" class="mb-1 block text-xs font-medium text-muted-foreground">Name *</label>
-								<input
+								<LimitedInput
 									id="mc-name"
 									bind:value={name}
+									limit={FIELD_LIMITS.name}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Character name"
 								/>
 							</div>
 							<div>
 								<label for="mc-desc" class="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
-								<textarea
+								<LimitedTextarea
 									id="mc-desc"
 									bind:value={description}
 									rows={2}
+									limit={FIELD_LIMITS.description}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="A brief description"
-								></textarea>
+								/>
 							</div>
 							<div class="grid gap-3 sm:grid-cols-2">
 								<div>
 									<label for="mc-personality" class="mb-1 block text-xs font-medium text-muted-foreground">Personality</label>
-									<textarea
+									<LimitedTextarea
 										id="mc-personality"
 										bind:value={personality}
 										rows={2}
+										limit={FIELD_LIMITS.personality}
 										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 										placeholder="Personality traits"
-									></textarea>
+									/>
 								</div>
 								<div>
 									<label for="mc-first" class="mb-1 block text-xs font-medium text-muted-foreground">First Message</label>
-									<textarea
+									<LimitedTextarea
 										id="mc-first"
 										bind:value={firstMessage}
 										rows={2}
+										limit={FIELD_LIMITS.firstMessage}
 										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 										placeholder="Opening message"
-									></textarea>
+									/>
 								</div>
 							</div>
 							<div>
 								<label for="mc-scenario" class="mb-1 block text-xs font-medium text-muted-foreground">Scenario</label>
-								<textarea
+								<LimitedTextarea
 									id="mc-scenario"
 									bind:value={scenario}
 									rows={2}
+									limit={FIELD_LIMITS.scenario}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="The setting or scenario"
-								></textarea>
+								/>
 							</div>
 							<div>
 								<label for="mc-system" class="mb-1 block text-xs font-medium text-muted-foreground">System Prompt (optional)</label>
-								<textarea
+								<LimitedTextarea
 									id="mc-system"
 									bind:value={systemPrompt}
 									rows={2}
+									limit={FIELD_LIMITS.systemPrompt}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Custom system prompt"
-								></textarea>
+								/>
 							</div>
 							<div>
 								<label for="mc-tags" class="mb-1 block text-xs font-medium text-muted-foreground">Tags</label>
-								<input
+								<LimitedInput
 									id="mc-tags"
 									bind:value={tags}
+									limit={FIELD_LIMITS.tags}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="fantasy, sci-fi (comma-separated)"
 								/>

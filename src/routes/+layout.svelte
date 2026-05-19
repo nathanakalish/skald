@@ -62,6 +62,10 @@
 	import ChatView from '$lib/components/ChatView.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import { checkAutoSaveLimit } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
+	import { limitsState } from '$lib/limits.svelte.js';
 
 	import { tick, untrack, onMount } from 'svelte';
 	import { slide } from 'svelte/transition';
@@ -71,6 +75,12 @@
 	import { invalidateAll } from '$app/navigation';
 
 	let { children, data } = $props();
+
+	// Sync the global character-limit toggle with the latest layout data so
+	// every LimitedInput/Textarea and check helper sees the admin's choice.
+	$effect(() => {
+		limitsState.set(data.characterLimitsEnabled ?? true);
+	});
 
 	// Extract initial values from props (intentionally non-reactive)
 	const initCollapsed = untrack(() => data.sidebarCollapsed ?? false);
@@ -468,6 +478,10 @@
 	async function renameChat(chatId: number) {
 		const trimmed = renameValue.trim();
 		if (!trimmed) { renamingChatId = null; return; }
+		if (!checkAutoSaveLimit('Chat name', renameValue, FIELD_LIMITS.name)) {
+			// Keep editing open so the user can fix it.
+			return;
+		}
 		const chat = chatsStore.chats.find((c: any) => c.id === chatId);
 		if (chat && trimmed === chat.title) { renamingChatId = null; return; }
 		// Optimistic — flip the title in the store immediately, then PATCH.
@@ -2014,10 +2028,11 @@
 					{#if chat.mode === 'texting'}<Smartphone class="inline h-3 w-3 shrink-0 text-emerald-500" />{:else}<BookOpen class="inline h-3 w-3 shrink-0 text-blue-400" />{/if}
 					{#if renamingChatId === chat.id}
 						<!-- svelte-ignore a11y_autofocus -->
-						<input
+						<LimitedInput
 							type="text"
 							bind:value={renameValue}
 							autofocus
+							limit={FIELD_LIMITS.name}
 							class="w-full rounded border border-border bg-background px-1 py-0.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-primary"
 							onclick={(e) => e.stopPropagation()}
 							onkeydown={(e) => { if (e.key === 'Enter') renameChat(chat.id); if (e.key === 'Escape') renamingChatId = null; }}

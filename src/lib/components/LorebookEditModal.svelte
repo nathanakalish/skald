@@ -5,6 +5,10 @@
 	import { focusTrap } from '$lib/focusTrap.js';
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
 	import { api } from '$lib/api.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkAutoSaveLimit } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		open: boolean;
@@ -62,6 +66,8 @@
 
 	async function saveLorebook() {
 		if (lorebookId === null) return;
+		if (!checkAutoSaveLimit('Lorebook name', lorebookName, FIELD_LIMITS.name)) return;
+		if (!checkAutoSaveLimit('Lorebook description', lorebookDesc, FIELD_LIMITS.description)) return;
 		const body = await api<any>(`/api/lorebooks/${lorebookId}`, {
 			method: 'PUT',
 			json: { name: lorebookName, description: lorebookDesc },
@@ -100,6 +106,8 @@
 
 	async function saveEntry(entry: Entry) {
 		if (lorebookId === null) return;
+		if (!checkAutoSaveLimit('Entry keywords', entry.keywords, FIELD_LIMITS.lorebookEntryKeys)) return;
+		if (!checkAutoSaveLimit('Entry content', entry.content, FIELD_LIMITS.lorebookEntryContent)) return;
 		await fetch(`/api/lorebooks/${lorebookId}/entries/${entry.id}`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
@@ -155,20 +163,22 @@
 					<div class="mb-6 space-y-3">
 						<div>
 							<label for="lbe-emb-name" class="mb-1 block text-sm font-medium text-muted-foreground">Name</label>
-							<input
+							<LimitedInput
 								id="lbe-emb-name"
 								bind:value={lorebookName}
 								onblur={saveLorebook}
+								limit={FIELD_LIMITS.name}
 								class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 								placeholder="Lorebook name"
 							/>
 						</div>
 						<div>
 							<label for="lbe-emb-desc" class="mb-1 block text-sm font-medium text-muted-foreground">Description</label>
-							<input
+							<LimitedInput
 								id="lbe-emb-desc"
 								bind:value={lorebookDesc}
 								onblur={saveLorebook}
+								limit={FIELD_LIMITS.description}
 								class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 								placeholder="Lorebook description"
 							/>
@@ -208,7 +218,7 @@
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
 										<label for="emb-entry-kw-{entry.id}" class="mb-1 block text-xs font-medium text-muted-foreground">Keywords (comma-separated)</label>
-										<input id="emb-entry-kw-{entry.id}" bind:value={entry.keywords} onblur={() => saveEntry(entry)} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="keyword1, keyword2" />
+										<LimitedInput id="emb-entry-kw-{entry.id}" bind:value={entry.keywords} onblur={() => saveEntry(entry)} limit={FIELD_LIMITS.lorebookEntryKeys} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="keyword1, keyword2" />
 									</div>
 									<div>
 										<label for="emb-entry-order-{entry.id}" class="mb-1 block text-xs font-medium text-muted-foreground">Insertion Order</label>
@@ -217,7 +227,7 @@
 								</div>
 								<div class="mt-3">
 									<label for="emb-entry-content-{entry.id}" class="mb-1 block text-xs font-medium text-muted-foreground">Content</label>
-									<textarea id="emb-entry-content-{entry.id}" bind:value={entry.content} onblur={() => saveEntry(entry)} rows={3} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="The content to inject when keywords match..."></textarea>
+									<LimitedTextarea id="emb-entry-content-{entry.id}" bind:value={entry.content} onblur={() => saveEntry(entry)} rows={3} limit={FIELD_LIMITS.lorebookEntryContent} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="The content to inject when keywords match..." />
 								</div>
 							</div>
 						{/each}
@@ -278,20 +288,22 @@
 						<div class="mb-6 space-y-3">
 							<div>
 								<label for="lbe-name" class="mb-1 block text-sm font-medium text-muted-foreground">Name</label>
-								<input
+								<LimitedInput
 									id="lbe-name"
 									bind:value={lorebookName}
 									onblur={saveLorebook}
+									limit={FIELD_LIMITS.name}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Lorebook name"
 								/>
 							</div>
 							<div>
 								<label for="lbe-desc" class="mb-1 block text-sm font-medium text-muted-foreground">Description</label>
-								<input
+								<LimitedInput
 									id="lbe-desc"
 									bind:value={lorebookDesc}
 									onblur={saveLorebook}
+									limit={FIELD_LIMITS.description}
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Lorebook description"
 								/>
@@ -350,10 +362,11 @@
 												for="entry-kw-{entry.id}"
 												class="mb-1 block text-xs font-medium text-muted-foreground"
 											>Keywords (comma-separated)</label>
-											<input
+											<LimitedInput
 												id="entry-kw-{entry.id}"
 												bind:value={entry.keywords}
 												onblur={() => saveEntry(entry)}
+												limit={FIELD_LIMITS.lorebookEntryKeys}
 												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 												placeholder="keyword1, keyword2"
 											/>
@@ -378,14 +391,15 @@
 											for="entry-content-{entry.id}"
 											class="mb-1 block text-xs font-medium text-muted-foreground"
 										>Content</label>
-										<textarea
+										<LimitedTextarea
 											id="entry-content-{entry.id}"
 											bind:value={entry.content}
 											onblur={() => saveEntry(entry)}
 											rows={3}
+											limit={FIELD_LIMITS.lorebookEntryContent}
 											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 											placeholder="The content to inject when keywords match..."
-										></textarea>
+										/>
 									</div>
 								</div>
 							{/each}

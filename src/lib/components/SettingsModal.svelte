@@ -22,6 +22,11 @@
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { themesStore } from '$lib/stores/themes.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits, checkAutoSaveLimit } from '$lib/limitCheck.js';
+	import { limitsState } from '$lib/limits.svelte.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		open: boolean;
@@ -376,6 +381,9 @@
 	async function saveInstanceSetting(key: string, value: string) {
 		const prevValue = (instanceSettings as any)[key];
 		instanceSettings = { ...instanceSettings, [key]: value };
+		// Mirror the character-limits toggle into the reactive client store
+		// immediately so the UI reflects the change without a page reload.
+		if (key === 'characterLimitsEnabled') limitsState.set(value === 'true');
 		try {
 			const res = await fetch('/api/admin/settings', {
 				method: 'PATCH',
@@ -386,6 +394,7 @@
 			toasts.success('Setting saved');
 		} catch {
 			instanceSettings = { ...instanceSettings, [key]: prevValue };
+			if (key === 'characterLimitsEnabled') limitsState.set(prevValue === 'true');
 			toasts.error('Failed to save setting');
 		}
 	}
@@ -494,6 +503,12 @@
 			toasts.error('Name and find pattern are required');
 			return;
 		}
+		const ok = await checkFieldLimits([
+			{ label: 'Name', value: regexName, limit: FIELD_LIMITS.name, trim: (v) => (regexName = v) },
+			{ label: 'Find Regex', value: regexFind, limit: FIELD_LIMITS.regexPattern, trim: (v) => (regexFind = v) },
+			{ label: 'Replace With', value: regexReplace, limit: FIELD_LIMITS.regexReplacement, trim: (v) => (regexReplace = v) },
+		]);
+		if (!ok) return;
 
 		const body = {
 			name: regexName.trim(),
@@ -932,17 +947,18 @@
 									<!-- System Prompt -->
 									<div class="space-y-1.5">
 										<label for="creator-prompt" class="block text-sm font-medium">System Prompt</label>
-										<textarea
+										<LimitedTextarea
 											id="creator-prompt"
 											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring resize-y"
 											rows={6}
-											value={localCreatorPrompt}
+											limit={FIELD_LIMITS.systemPrompt}
+											bind:value={localCreatorPrompt}
 											placeholder="Leave blank for default prompt. The default instructs the LLM to return JSON with minimal field changes."
-											onchange={async (e) => {
-												localCreatorPrompt = e.currentTarget.value;
+											onchange={async () => {
+												if (!checkAutoSaveLimit('Character Creator system prompt', localCreatorPrompt, FIELD_LIMITS.systemPrompt)) return;
 												await saveSetting('characterCreatorPrompt', localCreatorPrompt);
 											}}
-										></textarea>
+										/>
 									</div>
 								</div>
 							</div>
@@ -996,17 +1012,18 @@
 									<!-- System Prompt -->
 									<div class="space-y-1.5">
 										<label for="reformatter-prompt" class="block text-sm font-medium">System Prompt</label>
-										<textarea
+										<LimitedTextarea
 											id="reformatter-prompt"
 											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring resize-y"
 											rows={6}
-											value={localReformatterPrompt}
+											limit={FIELD_LIMITS.systemPrompt}
+											bind:value={localReformatterPrompt}
 											placeholder="Leave blank for default prompt. The default instructs the LLM to reformat narration as plain text, speech in &quot;quotes&quot;, and thoughts in *asterisks*."
-											onchange={async (e) => {
-												localReformatterPrompt = e.currentTarget.value;
+											onchange={async () => {
+												if (!checkAutoSaveLimit('Greeting Reformatter system prompt', localReformatterPrompt, FIELD_LIMITS.systemPrompt)) return;
 												await saveSetting('reformatterPrompt', localReformatterPrompt);
 											}}
-										></textarea>
+										/>
 									</div>
 								</div>
 							</div>
@@ -1135,17 +1152,18 @@
 									<!-- System Prompt -->
 									<div class="space-y-1.5">
 										<label for="compaction-prompt" class="block text-sm font-medium">System Prompt</label>
-										<textarea
+										<LimitedTextarea
 											id="compaction-prompt"
 											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring resize-y"
 											rows={8}
-											value={localCompactionPrompt}
+											limit={FIELD_LIMITS.systemPrompt}
+											bind:value={localCompactionPrompt}
 											placeholder="Leave blank for default prompt. The default tells the LLM to summarize setting, important objects, relationships, plot, and emotional state in terse third-person prose."
-											onchange={async (e) => {
-												localCompactionPrompt = e.currentTarget.value;
+											onchange={async () => {
+												if (!checkAutoSaveLimit('Compaction system prompt', localCompactionPrompt, FIELD_LIMITS.systemPrompt)) return;
 												await saveSetting('compactionPrompt', localCompactionPrompt);
 											}}
-										></textarea>
+										/>
 									</div>
 								</div>
 							</div>
@@ -1367,7 +1385,7 @@
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
 										<label for="regex-name" class="mb-1 block text-xs font-medium text-muted-foreground">Name</label>
-										<input id="regex-name" bind:value={regexName} placeholder="Script name" class="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />
+										<LimitedInput id="regex-name" bind:value={regexName} limit={FIELD_LIMITS.name} placeholder="Script name" class="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />
 									</div>
 									<div class="flex items-end gap-2">
 										<label class="flex items-center gap-2 text-sm">
@@ -1378,11 +1396,11 @@
 								</div>
 								<div>
 									<label for="regex-find" class="mb-1 block text-xs font-medium text-muted-foreground">Find Regex <span class="text-muted-foreground/60">(e.g. /pattern/gi or plain text)</span></label>
-									<input id="regex-find" bind:value={regexFind} placeholder="/pattern/flags or literal text" class="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />
+									<LimitedInput id="regex-find" bind:value={regexFind} limit={FIELD_LIMITS.regexPattern} placeholder="/pattern/flags or literal text" class="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />
 								</div>
 								<div>
 									<label for="regex-replace" class="mb-1 block text-xs font-medium text-muted-foreground">Replace With <span class="text-muted-foreground/60">($1, $2 for capture groups)</span></label>
-									<input id="regex-replace" bind:value={regexReplace} placeholder="Replacement text" class="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />
+									<LimitedInput id="regex-replace" bind:value={regexReplace} limit={FIELD_LIMITS.regexReplacement} placeholder="Replacement text" class="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />
 								</div>
 								<div class="flex flex-wrap gap-4">
 									<label class="flex items-center gap-2 text-sm">
@@ -2065,6 +2083,14 @@
 									description="Serve remote images directly instead of caching them locally."
 									checked={(instanceSettings.disableImageCaching ?? 'false') === 'true'}
 									onchange={toggleImageCaching}
+								/>
+
+								<!-- Character Limits -->
+								<ToggleSwitch
+									label="Enforce character limits"
+									description="Cap text fields at sensible lengths. When on, the UI highlights overflow in red and the server rejects oversized payloads. When off, all length caps are removed."
+									checked={(instanceSettings.characterLimitsEnabled ?? 'true') === 'true'}
+									onchange={() => saveInstanceSetting('characterLimitsEnabled', (instanceSettings.characterLimitsEnabled ?? 'true') === 'true' ? 'false' : 'true')}
 								/>
 							{/if}
 						</div>

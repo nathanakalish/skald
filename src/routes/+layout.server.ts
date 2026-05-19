@@ -6,6 +6,7 @@ import { isOidcEnabled } from '$lib/server/oidc.js';
 import { isDevAuthBypassEnabled } from '$lib/server/devAuth.js';
 import { getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
 import { logger } from '$lib/server/logger.js';
+import { getAdminSettingBool } from '$lib/server/adminSettings.js';
 
 // Phase 1.1 — slim root layout load.
 //
@@ -83,6 +84,7 @@ export const load: LayoutServerLoad = async (event) => {
 			user: null,
 			oidcEnabled: isOidcEnabled(),
 			devAuthEnabled: isDevAuthBypassEnabled(),
+			characterLimitsEnabled: getAdminSettingBool('characterLimitsEnabled'),
 		};
 	}
 
@@ -194,5 +196,6 @@ export const load: LayoutServerLoad = async (event) => {
 		user,
 		oidcEnabled: isOidcEnabled(),
 		devAuthEnabled: isDevAuthBypassEnabled(),
+		characterLimitsEnabled: getAdminSettingBool('characterLimitsEnabled'),
 	};
 };

@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { regexScripts } from '$lib/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -24,6 +25,13 @@ export const POST: RequestHandler = async (event) => {
 	if (!name || !findRegex) {
 		return json({ error: 'Name and find regex are required' }, { status: 400 });
 	}
+
+	const lengthError = validateLengths(body, {
+		name: 'name',
+		findRegex: 'regexPattern',
+		replaceString: 'regexReplacement',
+	});
+	if (lengthError) return lengthError;
 
 	if (typeof findRegex !== 'string' || findRegex.length > 500) {
 		return json({ error: 'Regex too long (max 500 chars)' }, { status: 400 });

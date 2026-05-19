@@ -5,6 +5,9 @@
 	import { themesStore } from '$lib/stores/themes.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	interface Props {
 		open: boolean;
@@ -94,6 +97,17 @@
 			toasts.error('Name is required');
 			return;
 		}
+		const colorChecks = Object.entries(colors).map(([k, v]) => ({
+			label: `Color: ${k}`,
+			value: v ?? '',
+			limit: FIELD_LIMITS.colorValue,
+			trim: (next: string) => { colors = { ...colors, [k]: next }; },
+		}));
+		const ok = await checkFieldLimits([
+			{ label: 'Name', value: name, limit: FIELD_LIMITS.name, trim: (v) => (name = v) },
+			...colorChecks,
+		]);
+		if (!ok) return;
 		saving = true;
 		try {
 			if (mode === 'edit' && theme) {
@@ -158,10 +172,11 @@
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
 						<label for="theme-name" class="mb-1 block text-xs font-medium text-muted-foreground">Name</label>
-						<input
+						<LimitedInput
 							id="theme-name"
 							bind:value={name}
 							disabled={readonly}
+							limit={FIELD_LIMITS.name}
 							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
 							placeholder="My Custom Theme"
 						/>
@@ -208,6 +223,7 @@
 										value={colors[key] ?? ''}
 										oninput={(e) => updateColor(key, (e.target as HTMLInputElement).value)}
 										disabled={readonly}
+										maxlength={64}
 										class="w-full border-0 bg-transparent p-0 text-xs font-mono focus:outline-none focus:ring-0 disabled:opacity-50"
 										placeholder="oklch(0.5 0.1 250)"
 									/>

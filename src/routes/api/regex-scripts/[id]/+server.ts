@@ -4,12 +4,21 @@ import { db } from '$lib/db/index.js';
 import { regexScripts } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
+import { validateLengths } from '$lib/server/fieldLimits.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const { row: existing } = requireOwned(event, regexScripts, event.params.id);
 	const id = existing.id;
 
 	const body = await event.request.json();
+
+	const lengthError = validateLengths(body, {
+		name: 'name',
+		findRegex: 'regexPattern',
+		replaceString: 'regexReplacement',
+	});
+	if (lengthError) return lengthError;
+
 	const updates: Record<string, any> = {};
 
 	if (body.name !== undefined) updates.name = body.name;

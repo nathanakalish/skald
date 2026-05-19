@@ -15,6 +15,10 @@
 	import { parseCharacterTheme } from '$lib/theme/characterTheme.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { confirm as confirmDialog } from '$lib/dialog.svelte.js';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
+	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
 
 	interface Props {
 		open: boolean;
@@ -214,6 +218,27 @@
 
 	async function save() {
 		if (!character || !name.trim()) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Name', value: name, limit: FIELD_LIMITS.name, trim: (v) => (name = v) },
+			{ label: 'Creator', value: creator, limit: FIELD_LIMITS.name, trim: (v) => (creator = v) },
+			{ label: 'Version', value: characterVersion, limit: FIELD_LIMITS.name, trim: (v) => (characterVersion = v) },
+			{ label: 'Description', value: description, limit: FIELD_LIMITS.description, trim: (v) => (description = v) },
+			{ label: 'Personality', value: personality, limit: FIELD_LIMITS.personality, trim: (v) => (personality = v) },
+			{ label: 'Scenario', value: scenario, limit: FIELD_LIMITS.scenario, trim: (v) => (scenario = v) },
+			{ label: 'Tags', value: tags, limit: FIELD_LIMITS.tags, trim: (v) => (tags = v) },
+			{ label: 'First Message', value: firstMessage, limit: FIELD_LIMITS.firstMessage, trim: (v) => (firstMessage = v) },
+			{ label: 'Example Messages', value: mesExample, limit: FIELD_LIMITS.mesExample, trim: (v) => (mesExample = v) },
+			{ label: 'System Prompt', value: systemPrompt, limit: FIELD_LIMITS.systemPrompt, trim: (v) => (systemPrompt = v) },
+			{ label: 'Post-History Instructions', value: postHistoryInstructions, limit: FIELD_LIMITS.postHistoryInstructions, trim: (v) => (postHistoryInstructions = v) },
+			{ label: 'Creator Notes', value: creatorNotes, limit: FIELD_LIMITS.creatorNotes, trim: (v) => (creatorNotes = v) },
+			...alternateGreetings.map((g, i) => ({
+				label: `Alternate Greeting #${i + 1}`,
+				value: g,
+				limit: FIELD_LIMITS.greeting,
+				trim: (v: string) => { alternateGreetings[i] = v; alternateGreetings = [...alternateGreetings]; },
+			})),
+		]);
+		if (!ok) return;
 		saving = true;
 		try {
 			const body = await api<any>(`/api/characters/${character.id}`, {
@@ -587,16 +612,16 @@
 				<div class="flex-1 space-y-4">
 					<div>
 						<label for="edit-name" class={labelClass}>Name <span class="text-destructive">*</span></label>
-						<input id="edit-name" bind:value={name} maxlength={200} class={inputClass} placeholder="Character name" />
+						<LimitedInput id="edit-name" bind:value={name} limit={FIELD_LIMITS.name} class={inputClass} placeholder="Character name" />
 					</div>
 					<div class="grid grid-cols-2 gap-3">
 						<div>
 							<label for="edit-creator" class={labelClass}>Creator</label>
-							<input id="edit-creator" bind:value={creator} maxlength={200} class={inputClass} placeholder="Author name" />
+							<LimitedInput id="edit-creator" bind:value={creator} limit={FIELD_LIMITS.name} class={inputClass} placeholder="Author name" />
 						</div>
 						<div>
 							<label for="edit-version" class={labelClass}>Version</label>
-							<input id="edit-version" bind:value={characterVersion} maxlength={200} class={inputClass} placeholder="1.0" />
+							<LimitedInput id="edit-version" bind:value={characterVersion} limit={FIELD_LIMITS.name} class={inputClass} placeholder="1.0" />
 						</div>
 					</div>
 				</div>
@@ -604,18 +629,18 @@
 
 			<div>
 				<label for="edit-desc" class={labelClass}>Description</label>
-				<textarea id="edit-desc" bind:value={description} rows={6} maxlength={10000} class={textareaClass} placeholder="Character description, background, appearance..."></textarea>
+				<LimitedTextarea id="edit-desc" bind:value={description} rows={6} limit={FIELD_LIMITS.description} class={textareaClass} placeholder="Character description, background, appearance..." />
 				<p class={hintClass}>Supports plain text or markdown-style formatting (e.g. ### headings).</p>
 			</div>
 
 			<div>
 				<label for="edit-personality" class={labelClass}>Personality</label>
-				<textarea id="edit-personality" bind:value={personality} rows={3} maxlength={10000} class={textareaClass} placeholder="Personality traits, behavior patterns..."></textarea>
+				<LimitedTextarea id="edit-personality" bind:value={personality} rows={3} limit={FIELD_LIMITS.personality} class={textareaClass} placeholder="Personality traits, behavior patterns..." />
 			</div>
 
 			<div>
 				<label for="edit-tags" class={labelClass}>Tags</label>
-				<input id="edit-tags" bind:value={tags} maxlength={2000} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
+				<LimitedInput id="edit-tags" bind:value={tags} limit={FIELD_LIMITS.tags} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
 			</div>
 		</div>
 		{:else}
@@ -688,7 +713,7 @@
 			</div>
 			<div>
 				<label for="edit-first" class={labelClass}>First Message</label>
-				<textarea id="edit-first" bind:value={firstMessage} rows={8} maxlength={50000} class={textareaClass} placeholder="The opening message when a new chat starts..."></textarea>
+				<LimitedTextarea id="edit-first" bind:value={firstMessage} rows={8} limit={FIELD_LIMITS.firstMessage} class={textareaClass} placeholder="The opening message when a new chat starts..." />
 				<p class={hintClass}>Use &#123;&#123;char&#125;&#125; for the character's name and &#123;&#123;user&#125;&#125; for the user's name.</p>
 			</div>
 
@@ -710,13 +735,13 @@
 				{/if}
 				{#each alternateGreetings as _, i}
 					<div class="mb-3 flex gap-2">
-						<textarea
+						<LimitedTextarea
 							bind:value={alternateGreetings[i]}
 							rows={3}
-							maxlength={50000}
+							limit={FIELD_LIMITS.greeting}
 							class="{textareaClass} flex-1"
 							placeholder="Alternate greeting #{i + 1}"
-						></textarea>
+						/>
 						<button
 							onclick={() => removeGreeting(i)}
 							class="shrink-0 self-start rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
@@ -729,14 +754,14 @@
 
 			<div>
 				<label for="edit-example" class={labelClass}>Example Messages</label>
-				<textarea
+				<LimitedTextarea
 					id="edit-example"
 					bind:value={mesExample}
 					rows={8}
-					maxlength={50000}
+					limit={FIELD_LIMITS.mesExample}
 					class={textareaClass}
 					placeholder={"<START>\n{{char}}: Example dialogue here...\n{{user}}: Example response...\n{{char}}: Another example..."}
-				></textarea>
+				/>
 				<p class={hintClass}>Example dialogue to teach the AI the character's voice. Use &lt;START&gt; to separate examples.</p>
 			</div>
 		</div>
@@ -790,19 +815,19 @@
 		<div class="space-y-5">
 			<div>
 				<label for="edit-scenario" class={labelClass}>Scenario</label>
-				<textarea id="edit-scenario" bind:value={scenario} rows={4} maxlength={10000} class={textareaClass} placeholder="The setting, situation, or context for the roleplay..."></textarea>
+				<LimitedTextarea id="edit-scenario" bind:value={scenario} rows={4} limit={FIELD_LIMITS.scenario} class={textareaClass} placeholder="The setting, situation, or context for the roleplay..." />
 				<p class={hintClass}>Describes the circumstances and environment for the conversation.</p>
 			</div>
 
 			<div>
 				<label for="edit-system" class={labelClass}>System Prompt</label>
-				<textarea id="edit-system" bind:value={systemPrompt} rows={6} maxlength={50000} class={textareaClass} placeholder="Custom system prompt for this character..."></textarea>
+				<LimitedTextarea id="edit-system" bind:value={systemPrompt} rows={6} limit={FIELD_LIMITS.systemPrompt} class={textareaClass} placeholder="Custom system prompt for this character..." />
 				<p class={hintClass}>Overrides or supplements the global system prompt when chatting with this character.</p>
 			</div>
 
 			<div>
 				<label for="edit-post" class={labelClass}>Post-History Instructions</label>
-				<textarea id="edit-post" bind:value={postHistoryInstructions} rows={3} maxlength={20000} class={textareaClass} placeholder="Instructions injected after the chat history..."></textarea>
+				<LimitedTextarea id="edit-post" bind:value={postHistoryInstructions} rows={3} limit={FIELD_LIMITS.postHistoryInstructions} class={textareaClass} placeholder="Instructions injected after the chat history..." />
 				<p class={hintClass}>Added after all messages, right before the AI responds. Good for reminders and formatting rules.</p>
 			</div>
 		</div>
@@ -821,7 +846,7 @@
 		<div class="flex h-full flex-col">
 			{#if editing || !creatorNotes.trim()}
 				<label for="edit-notes" class="{labelClass} mb-2">Creator Notes</label>
-				<textarea id="edit-notes" bind:value={creatorNotes} maxlength={5000} class="{textareaClass} flex-1" style="min-height: 200px;" placeholder="Notes about the character, usage tips, recommended settings..."></textarea>
+				<LimitedTextarea id="edit-notes" bind:value={creatorNotes} limit={FIELD_LIMITS.creatorNotes} class="{textareaClass} flex-1" style="min-height: 200px;" placeholder="Notes about the character, usage tips, recommended settings..." />
 				<p class="{hintClass} mt-1">Internal notes visible only to you. Not sent to the AI.</p>
 			{:else}
 				<span class="{labelClass} mb-2">Creator Notes</span>
@@ -884,6 +909,7 @@
 								type="text"
 								value={themeColors[key] || ''}
 								oninput={(e) => setThemeColor(key, e.currentTarget.value)}
+								maxlength={64}
 								class="{inputClass} font-mono text-xs"
 								placeholder="Not set"
 							/>

@@ -22,6 +22,9 @@
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
+	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	let { chat, character, initialMessages, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
 		chat: any;
@@ -101,6 +104,10 @@
 
 	async function saveCompactionSummary() {
 		if (savingCompactionSummary) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Compaction summary', value: compactionEditorDraft, limit: FIELD_LIMITS.compactionSummary, trim: (v) => (compactionEditorDraft = v) },
+		]);
+		if (!ok) return;
 		savingCompactionSummary = true;
 		try {
 			const res = await fetch(`/api/chats/${chat.id}`, {
@@ -1814,6 +1821,10 @@
 	async function sendMessage(guidance?: string) {
 		const content = input.trim();
 		if (!content || isStreaming) return;
+		const ok = await checkFieldLimits([
+			{ label: 'Message', value: input, limit: FIELD_LIMITS.messageContent, trim: (v) => (input = v) },
+		]);
+		if (!ok) return;
 
 		const hadFocus = document.activeElement === textareaEl;
 
@@ -2138,6 +2149,10 @@
 	}
 
 	async function submitGuideModal() {
+		const ok = await checkFieldLimits([
+			{ label: 'Reply guidance', value: guideModalText, limit: FIELD_LIMITS.replyGuidance, trim: (v) => (guideModalText = v) },
+		]);
+		if (!ok) return;
 		const text = guideModalText.trim();
 		const target = guideModalTarget;
 		showGuideModal = false;
@@ -2298,6 +2313,10 @@
 			cancelEdit();
 			return;
 		}
+		const ok = await checkFieldLimits([
+			{ label: 'Message', value: editContent, limit: FIELD_LIMITS.messageContent, trim: (v) => (editContent = v) },
+		]);
+		if (!ok) return;
 
 		// Optimistic: apply edit immediately
 		const savedContent = msg.content;
@@ -2938,16 +2957,17 @@
 
 		<div class="mx-auto flex max-w-5xl items-stretch gap-2">
 			<div class="relative flex-1">
-				<textarea
-					bind:this={textareaEl}
+				<LimitedTextarea
+					bind:element={textareaEl}
 					bind:value={input}
 					oninput={() => textareaSizer.measure()}
 					onkeydown={handleKeydown}
 					readonly={isImpersonating && isReasoning}
 					placeholder={isImpersonating ? '' : 'Reply'}
-					rows="1"
+					rows={1}
+					limit={FIELD_LIMITS.messageContent}
 					class="block w-full resize-none rounded-3xl border border-input bg-card px-4 py-2.5 text-sm leading-normal placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-				></textarea>
+				/>
 				{#if isImpersonating && !input}
 					{#if isReasoning}
 						<button
@@ -3070,12 +3090,13 @@
 				</button>
 			</header>
 			<div class="flex-1 overflow-y-auto p-5">
-				<textarea
+				<LimitedTextarea
 					bind:value={compactionEditorDraft}
 					rows={14}
+					limit={FIELD_LIMITS.compactionSummary}
 					class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
 					placeholder="Summary of the story so far..."
-				></textarea>
+				/>
 				<p class="mt-2 text-xs text-muted-foreground">Editing here updates what the AI sees in place of the {(chat.compactedUpToMessageId ?? 0) > 0 ? 'compacted' : 'earlier'} messages. Clearing the text resets the high-water mark so the next compaction starts from the very first message.</p>
 			</div>
 			<div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
@@ -3511,12 +3532,13 @@
 					? 'Out-of-band guidance the character should follow without quoting. Sending will start the reply.'
 					: 'Update the guidance and re-run this reply.'}
 			</p>
-			<textarea
+			<LimitedTextarea
 				bind:value={guideModalText}
 				placeholder={guideModalTarget?.kind === 'impersonateView' ? '(no guidance was set)' : 'e.g. Keep it short and aloof.'}
 				readonly={guideModalTarget?.kind === 'impersonateView'}
+				limit={FIELD_LIMITS.replyGuidance}
 				class="block min-h-[40vh] w-full flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring {guideModalTarget?.kind === 'impersonateView' ? 'cursor-default opacity-90' : ''}"
-			></textarea>
+			/>
 			<div class="mt-4 flex items-center justify-end gap-2">
 				<button
 					type="button"

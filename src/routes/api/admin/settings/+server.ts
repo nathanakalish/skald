@@ -12,6 +12,7 @@ const ALLOWED_KEYS = [
 	'allowCharacterExport',
 	'allowChubBrowse',
 	'disableImageCaching',
+	'characterLimitsEnabled',
 	'chatRateLimit',
 	'characterImportRateLimit',
 	'lorebookImportRateLimit',
@@ -37,7 +38,8 @@ const BOOLEAN_KEYS = new Set([
 	'allowCharacterImport',
 	'allowCharacterExport',
 	'allowChubBrowse',
-	'disableImageCaching'
+	'disableImageCaching',
+	'characterLimitsEnabled'
 ]);
 
 function normalizeBoolean(raw: unknown): 'true' | 'false' {
