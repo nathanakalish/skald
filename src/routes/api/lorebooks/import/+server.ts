@@ -6,6 +6,7 @@ import { parseCharacterBook } from '$lib/services/character.js';
 import { requireUser } from '$lib/server/auth.js';
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
+import { checkLength } from '$lib/server/fieldLimits.js';
 
 const MAX_LOREBOOK_ENTRIES = 5_000;
 
@@ -76,6 +77,32 @@ export const POST: RequestHandler = async (event) => {
 	const bookName = parsed.name !== 'Character Lorebook'
 		? parsed.name
 		: file.name.replace(/\.json$/i, '') || 'Imported Lorebook';
+
+	// Enforce field-length caps before we touch the DB. The whole import is
+	// rejected if anything is over — partial imports here would be worse than
+	// making the user trim the offending entry and re-upload.
+	const nameViolation = checkLength(bookName, 'name', 'name');
+	if (nameViolation) {
+		return json({
+			error: `Lorebook name exceeds maximum length of ${nameViolation.limit} characters (got ${nameViolation.length}).`,
+		}, { status: 400 });
+	}
+	for (let i = 0; i < parsed.entries.length; i++) {
+		const entry = parsed.entries[i];
+		const keywords = entry.keys.join(', ');
+		const kv = checkLength(keywords, 'lorebookEntryKeys', `entries[${i}].keys`);
+		if (kv) {
+			return json({
+				error: `Lorebook entry #${i + 1} keys exceed maximum length of ${kv.limit} characters (got ${kv.length}).`,
+			}, { status: 400 });
+		}
+		const cv = checkLength(entry.content, 'lorebookEntryContent', `entries[${i}].content`);
+		if (cv) {
+			return json({
+				error: `Lorebook entry #${i + 1} content exceeds maximum length of ${cv.limit} characters (got ${cv.length}).`,
+			}, { status: 400 });
+		}
+	}
 
 	const result = db.transaction((tx) => {
 		const book = tx

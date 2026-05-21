@@ -16,9 +16,28 @@ import { characterFingerprint, BUNDLE_VERSION } from '$lib/server/bundle.js';
 import { logger } from '$lib/server/logger.js';
 import { ALLOWED_SETTING_KEYS } from '$lib/server/settingsKeys.js';
 import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
+import { findLengthViolation, checkLength, type LengthViolation } from '$lib/server/fieldLimits.js';
 import JSZip from 'jszip';
 
 const MAX_BUNDLE_BYTES = 256 * 1024 * 1024; // 256 MB
+
+const CHARACTER_CARD_FIELD_LIMITS = {
+	name: 'name',
+	description: 'description',
+	personality: 'personality',
+	scenario: 'scenario',
+	firstMessage: 'firstMessage',
+	mesExample: 'mesExample',
+	systemPrompt: 'systemPrompt',
+	postHistoryInstructions: 'postHistoryInstructions',
+	creatorNotes: 'creatorNotes',
+	creator: 'name',
+	characterVersion: 'name',
+} as const;
+
+function formatViolation(v: LengthViolation): string {
+	return `field "${v.field}" exceeds ${v.limit} chars (got ${v.length})`;
+}
 
 interface UnresolvedChat {
 	zipPath: string;
@@ -152,6 +171,37 @@ export const POST: RequestHandler = async (event) => {
 			try {
 				const bytes = await file.async('nodebuffer');
 				const cardData = parseCharaCardFromPNG(bytes);
+
+				// Enforce field-length caps. Bundle imports skip the bad item
+				// (and surface a warning) rather than aborting the whole zip.
+				const cardViolation = findLengthViolation(
+					cardData as unknown as Record<string, unknown>,
+					CHARACTER_CARD_FIELD_LIMITS,
+				);
+				if (cardViolation) {
+					const msg = `Skipped character "${cardData.name}" (${path}): ${formatViolation(cardViolation)}`;
+					logger.warn('import: character skipped (field too long)', { path, name: cardData.name, ...cardViolation });
+					importWarnings.push(msg);
+					continue;
+				}
+				const tagsJson = JSON.stringify(cardData.tags ?? []);
+				const tagsViolation = checkLength(tagsJson, 'tags', 'tags');
+				if (tagsViolation) {
+					importWarnings.push(`Skipped character "${cardData.name}" (${path}): ${formatViolation(tagsViolation)}`);
+					logger.warn('import: character skipped (tags too long)', { path, name: cardData.name, ...tagsViolation });
+					continue;
+				}
+				let oversizedGreeting: LengthViolation | null = null;
+				for (let i = 0; i < (cardData.alternateGreetings ?? []).length; i++) {
+					const gv = checkLength(cardData.alternateGreetings[i], 'firstMessage', `alternateGreetings[${i}]`);
+					if (gv) { oversizedGreeting = gv; break; }
+				}
+				if (oversizedGreeting) {
+					importWarnings.push(`Skipped character "${cardData.name}" (${path}): ${formatViolation(oversizedGreeting)}`);
+					logger.warn('import: character skipped (greeting too long)', { path, name: cardData.name, ...oversizedGreeting });
+					continue;
+				}
+
 				const fp = characterFingerprint({
 					name: cardData.name,
 					description: cardData.description,
@@ -239,6 +289,34 @@ export const POST: RequestHandler = async (event) => {
 			const lb = JSON.parse(await f.async('string'));
 			const desiredName = lb.name || 'Imported Lorebook';
 
+			// Drop oversized entries individually so a single bloated entry
+			// doesn't lose the rest of the lorebook. Whole lorebook is skipped
+			// only if its name is over cap (rare).
+			const lbNameV = checkLength(desiredName, 'name', 'name');
+			if (lbNameV) {
+				importWarnings.push(`Skipped lorebook "${desiredName}" (${f.name}): ${formatViolation(lbNameV)}`);
+				logger.warn('import: lorebook skipped (name too long)', { path: f.name, ...lbNameV });
+				continue;
+			}
+			const rawEntries: any[] = Array.isArray(lb.entries) ? lb.entries : [];
+			const validEntries: any[] = [];
+			let droppedEntries = 0;
+			for (let i = 0; i < rawEntries.length; i++) {
+				const e = rawEntries[i];
+				const kv = checkLength(e?.keywords ?? '', 'lorebookEntryKeys', `entries[${i}].keywords`);
+				const cv = checkLength(e?.content ?? '', 'lorebookEntryContent', `entries[${i}].content`);
+				if (kv || cv) {
+					droppedEntries++;
+					logger.warn('import: lorebook entry dropped (too long)', { path: f.name, index: i, keys: kv ?? null, content: cv ?? null });
+					continue;
+				}
+				validEntries.push(e);
+			}
+			if (droppedEntries > 0) {
+				importWarnings.push(`Lorebook "${desiredName}": dropped ${droppedEntries} oversized entr${droppedEntries === 1 ? 'y' : 'ies'}.`);
+			}
+			lb.entries = validEntries;
+
 			const charFp = lb.character?.fingerprint as string | undefined;
 			const linkedCharId = charFp ? fingerprintToNewId.get(charFp) ?? null : null;
 
@@ -317,6 +395,28 @@ export const POST: RequestHandler = async (event) => {
 			const fp: string | undefined = chatJson.character?.fingerprint;
 			const charName: string = chatJson.character?.name ?? 'Unknown';
 			const charId = fp ? fingerprintToNewId.get(fp) : undefined;
+
+			// Check message content caps. Dropping an individual message would
+			// orphan its branch children, so we skip the entire chat instead.
+			const rawMessages: any[] = Array.isArray(chatJson.messages) ? chatJson.messages : [];
+			let oversizedMessage: { index: number; v: LengthViolation } | null = null;
+			for (let i = 0; i < rawMessages.length; i++) {
+				const m = rawMessages[i];
+				const mv = checkLength(m?.content ?? '', 'messageContent', `messages[${i}].content`);
+				if (mv) { oversizedMessage = { index: i, v: mv }; break; }
+				if (Array.isArray(m?.swipes)) {
+					for (let s = 0; s < m.swipes.length; s++) {
+						const sv = checkLength(m.swipes[s], 'messageContent', `messages[${i}].swipes[${s}]`);
+						if (sv) { oversizedMessage = { index: i, v: sv }; break; }
+					}
+					if (oversizedMessage) break;
+				}
+			}
+			if (oversizedMessage) {
+				importWarnings.push(`Skipped chat "${chatJson.title ?? '(untitled)'}" (${f.name}): ${formatViolation(oversizedMessage.v)}`);
+				logger.warn('import: chat skipped (message too long)', { path: f.name, ...oversizedMessage.v });
+				continue;
+			}
 
 			if (!charId) {
 				// No character matched — defer. Keep raw bytes for the client-side resolver.

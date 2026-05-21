@@ -7,6 +7,7 @@ import { requireUser } from '$lib/server/auth.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { characterFingerprint } from '$lib/server/bundle.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
+import { checkLength } from '$lib/server/fieldLimits.js';
 
 interface SkaldV1Message { role: string; content: string; createdAt?: string; }
 interface SkaldV1Export { character: string; chatId?: number; exportedAt?: string; messages: SkaldV1Message[]; }
@@ -163,6 +164,36 @@ export const POST: RequestHandler = async (event) => {
 				characterFingerprint: parsed.characterFingerprint,
 				availableCharacters: userChars.map(c => ({ id: c.id, name: c.name }))
 			}, { status: 404 });
+		}
+	}
+
+	// Enforce per-message content cap. Reject up front rather than truncating —
+	// people importing a chat want round-trip fidelity, not silent mangling.
+	const titleSource = parsed.title || `Imported: ${character.name}`;
+	const titleV = checkLength(titleSource, 'name', 'title');
+	if (titleV) {
+		return json({ error: `Chat title exceeds maximum length of ${titleV.limit} characters (got ${titleV.length}).` }, { status: 400 });
+	}
+	const messageList: { content: string; swipes?: string[] }[] = parsed.v2?.messages
+		? parsed.v2.messages.map(m => ({ content: m.content || '', swipes: m.swipes }))
+		: (parsed.linearMessages ?? []).map(m => ({ content: m.content || '', swipes: m.swipes }));
+	for (let i = 0; i < messageList.length; i++) {
+		const m = messageList[i];
+		const mv = checkLength(m.content, 'messageContent', `messages[${i}].content`);
+		if (mv) {
+			return json({
+				error: `Message #${i + 1} exceeds maximum length of ${mv.limit} characters (got ${mv.length}).`,
+			}, { status: 400 });
+		}
+		if (m.swipes) {
+			for (let s = 0; s < m.swipes.length; s++) {
+				const sv = checkLength(m.swipes[s], 'messageContent', `messages[${i}].swipes[${s}]`);
+				if (sv) {
+					return json({
+						error: `Message #${i + 1} swipe #${s + 1} exceeds maximum length of ${sv.limit} characters (got ${sv.length}).`,
+					}, { status: 400 });
+				}
+			}
 		}
 	}
 

@@ -18,6 +18,7 @@ import { getAdminSettingBool, getAdminSettingNumber } from '$lib/server/adminSet
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { logger } from '$lib/server/logger.js';
 import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
+import { findLengthViolation, checkLength, type LengthViolation } from '$lib/server/fieldLimits.js';
 /** PNG character cards: configurable cap (default 8 MiB). JSON cards: 2 MiB cap. */
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 
@@ -26,6 +27,28 @@ function isPng(buf: Buffer): boolean {
 	return buf.length >= 8 &&
 		buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
 		buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a;
+}
+
+const CHARACTER_CARD_FIELD_LIMITS = {
+	name: 'name',
+	description: 'description',
+	personality: 'personality',
+	scenario: 'scenario',
+	firstMessage: 'firstMessage',
+	mesExample: 'mesExample',
+	systemPrompt: 'systemPrompt',
+	postHistoryInstructions: 'postHistoryInstructions',
+	creatorNotes: 'creatorNotes',
+	creator: 'name',
+	characterVersion: 'name',
+} as const;
+
+function violationResponse(v: LengthViolation, prefix = '') {
+	const label = prefix ? `${prefix} field "${v.field}"` : `Field "${v.field}"`;
+	return json(
+		{ error: `${label} exceeds maximum length of ${v.limit} characters (got ${v.length}). Edit the card and try again.` },
+		{ status: 400 },
+	);
 }
 
 export const POST: RequestHandler = async (event) => {
@@ -100,6 +123,40 @@ export const POST: RequestHandler = async (event) => {
 		cardData = parseCharaJSON(body as Record<string, unknown>);
 	} else {
 		return json({ error: 'Unsupported content type' }, { status: 400 });
+	}
+
+	// Enforce character-field length limits. Soft toggle via admin setting —
+	// `findLengthViolation` is a no-op when limits are disabled.
+	const cardViolation = findLengthViolation(
+		cardData as unknown as Record<string, unknown>,
+		CHARACTER_CARD_FIELD_LIMITS,
+	);
+	if (cardViolation) {
+		logger.info('character import: rejected (field too long)', {
+			userId: user.id, field: cardViolation.field, limit: cardViolation.limit, length: cardViolation.length,
+		});
+		return violationResponse(cardViolation, 'Character');
+	}
+	// `tags` and `alternateGreetings` are arrays on the parsed shape but get
+	// stored as JSON strings, so check the serialized length against the same
+	// caps the per-field validator uses elsewhere.
+	const tagsJson = JSON.stringify(cardData.tags ?? []);
+	const tagsViolation = checkLength(tagsJson, 'tags', 'tags');
+	if (tagsViolation) return violationResponse(tagsViolation, 'Character');
+	for (let i = 0; i < (cardData.alternateGreetings ?? []).length; i++) {
+		const v = checkLength(cardData.alternateGreetings[i], 'firstMessage', `alternateGreetings[${i}]`);
+		if (v) return violationResponse(v, 'Character');
+	}
+	// Embedded character_book entries — same rules as a standalone lorebook.
+	if (cardData.characterBook) {
+		for (let i = 0; i < cardData.characterBook.entries.length; i++) {
+			const entry = cardData.characterBook.entries[i];
+			const keywords = entry.keys.join(', ');
+			const kv = checkLength(keywords, 'lorebookEntryKeys', `characterBook.entries[${i}].keys`);
+			if (kv) return violationResponse(kv, 'Character');
+			const cv = checkLength(entry.content, 'lorebookEntryContent', `characterBook.entries[${i}].content`);
+			if (cv) return violationResponse(cv, 'Character');
+		}
 	}
 
 	// Save the avatar if we have one. Skip 1x1 placeholder PNGs (exported from

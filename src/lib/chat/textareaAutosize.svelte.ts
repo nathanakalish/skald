@@ -54,6 +54,14 @@ export class TextareaAutosizer {
 	measure = (): void => {
 		const el = this.el;
 		if (!el) return;
+		// Capture whether the user was anchored at the bottom *before* we mutate the
+		// height (which trashes scrollTop/scrollHeight). During impersonation streaming
+		// we want to keep following the new text, but only if the user hasn't scrolled
+		// up to read something earlier.
+		const prevScrollTop = el.scrollTop;
+		const prevClientHeight = el.clientHeight;
+		const prevScrollHeight = el.scrollHeight;
+		const wasAtBottom = prevScrollHeight - prevScrollTop - prevClientHeight <= 4;
 		el.style.height = 'auto';
 		el.style.overflowY = 'hidden';
 		const style = getComputedStyle(el);
@@ -67,8 +75,12 @@ export class TextareaAutosizer {
 		const newHeight = Math.min(fullHeight, maxHeight);
 		el.style.height = Math.ceil(newHeight) + 'px';
 		el.style.overflowY = el.scrollHeight + borderTop + borderBottom > maxHeight ? 'auto' : 'hidden';
-		// Keep text anchored to the bottom (e.g. during impersonation streaming).
-		el.scrollTop = el.scrollHeight;
+		if (wasAtBottom) {
+			el.scrollTop = el.scrollHeight;
+		} else {
+			// Preserve the user's scroll position so they can read while streaming continues.
+			el.scrollTop = prevScrollTop;
+		}
 		const contentHeight = el.scrollHeight - paddingTop - paddingBottom;
 		this.rows = Math.max(1, Math.min(this.maxRows, Math.ceil((contentHeight + 0.5) / lineHeight)));
 	};
