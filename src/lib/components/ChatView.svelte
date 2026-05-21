@@ -2804,31 +2804,33 @@
 	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6">
 		<div class="mx-auto w-full max-w-5xl space-y-4">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
-			     windowed-render top-sentinel. Keeping a single wrapper avoids the
-			     scrollHeight jump that caused the viewport to snap when the button
-			     was removed and the sentinel was inserted (Option B of the scroll
-			     anchoring fix). -->
-			<div class="flex min-h-[44px] items-center justify-center py-2">
-				{#if hasMore && renderedStart === 0}
-					<button
-						onclick={loadEarlierMessages}
-						disabled={loadingMore}
-						class="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:opacity-50"
-					>
-						{#if loadingMore}
-							<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"></div>
-							Loading…
-						{:else}
-							<ChevronLeft class="h-3.5 w-3.5 rotate-90" />
-							Load earlier messages ({totalMsgCount - messageList.length} remaining)
-						{/if}
-					</button>
-				{:else if renderedStart > 0}
-					<!-- Sentinel for FRONT-C4 windowed render: triggers reveal of older
-					     in-memory messages when scrolled near the top of the window. -->
-					<div bind:this={topSentinel} class="h-px" aria-hidden="true"></div>
-				{/if}
-			</div>
+			     windowed-render top-sentinel. Fixed height (not min-h) so the slot
+			     occupies the EXACT same pixels with the button or the 1px sentinel
+			     inside — any height mismatch shows up as a small viewport jump
+			     after loading because the browser's scroll anchoring tracks it. -->
+			{#if (hasMore && renderedStart === 0) || renderedStart > 0}
+				<div class="flex h-[52px] items-center justify-center">
+					{#if hasMore && renderedStart === 0}
+						<button
+							onclick={loadEarlierMessages}
+							disabled={loadingMore}
+							class="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:opacity-50"
+						>
+							{#if loadingMore}
+								<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"></div>
+								Loading…
+							{:else}
+								<ChevronLeft class="h-3.5 w-3.5 rotate-90" />
+								Load earlier messages ({totalMsgCount - messageList.length} remaining)
+							{/if}
+						</button>
+					{:else}
+						<!-- Sentinel for FRONT-C4 windowed render: triggers reveal of older
+						     in-memory messages when scrolled near the top of the window. -->
+						<div bind:this={topSentinel} class="h-px w-full" aria-hidden="true"></div>
+					{/if}
+				</div>
+			{/if}
 			{#each messageList.slice(renderedStart) as message, localI (message.id)}
 				{@const i = localI + renderedStart}
 				{#if message.role !== 'system'}
