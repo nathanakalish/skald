@@ -291,6 +291,7 @@
 			messageTimestamps: data.messageTimestamps ?? 'relative',
 			showReasoning: data.showReasoning ?? false,
 			chatPageSize: data.chatPageSize ?? 50,
+			autoLoadEarlierMessages: (data as any).autoLoadEarlierMessages ?? false,
 			notificationSound: data.notificationSound ?? false,
 			notificationStyle: data.notificationStyle ?? 'generic',
 			notificationAvatar: data.notificationAvatar ?? true,
@@ -366,6 +367,7 @@
 				messageTimestamps: data.messageTimestamps ?? 'relative',
 				showReasoning: data.showReasoning ?? false,
 				chatPageSize: data.chatPageSize ?? 50,
+				autoLoadEarlierMessages: (data as any).autoLoadEarlierMessages ?? false,
 				notificationSound: data.notificationSound ?? false,
 				notificationStyle: data.notificationStyle ?? 'generic',
 				notificationAvatar: data.notificationAvatar ?? true,
@@ -2849,6 +2851,7 @@
 					quietHoursEnd={settings.quietHoursEnd ?? '07:00'}
 					renderMode={settings.renderMode ?? 'roleplay'}
 					chatPageSize={settings.chatPageSize ?? 50}
+					autoLoadEarlierMessages={(settings as any).autoLoadEarlierMessages ?? false}
 					reformatterProviderId={settings.reformatterProviderId ?? ''}
 					reformatterModel={settings.reformatterModel ?? ''}
 					reformatterPrompt={settings.reformatterPrompt ?? ''}

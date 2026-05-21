@@ -14,7 +14,7 @@ export const ALLOWED_SETTING_KEYS = [
 	'inAppNotifications', 'notificationDuration',
 	'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd',
 	'userTimezone',
-	'chatPageSize', 'renderMode',
+	'chatPageSize', 'autoLoadEarlierMessages', 'renderMode',
 	'promptSlotOrder',
 	'reformatterProviderId', 'reformatterModel', 'reformatterPrompt',
 	'characterCreatorProviderId', 'characterCreatorModel', 'characterCreatorPrompt',

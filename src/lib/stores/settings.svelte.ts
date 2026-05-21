@@ -26,6 +26,7 @@ export interface Settings {
 	messageTimestamps: string;
 	showReasoning: boolean;
 	chatPageSize: number;
+	autoLoadEarlierMessages: boolean;
 	notificationSound: boolean;
 	notificationStyle: string;
 	notificationAvatar: boolean;
@@ -87,6 +88,7 @@ const defaults: Settings = {
 	messageTimestamps: 'relative',
 	showReasoning: false,
 	chatPageSize: 50,
+	autoLoadEarlierMessages: false,
 	notificationSound: false,
 	notificationStyle: 'generic',
 	notificationAvatar: true,

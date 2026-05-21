@@ -299,6 +299,7 @@
 	const RENDER_WINDOW_GROW = 100;
 	let renderedStart = $state(untrack(() => Math.max(0, ((initialMessages ?? []).length) - RENDER_WINDOW_SIZE)));
 	let topSentinel: HTMLDivElement | undefined = $state();
+	let loadEarlierButton: HTMLButtonElement | undefined = $state();
 	let expandingWindow = false;
 
 	// Watch the top sentinel; when it enters view (user scrolled near the top of
@@ -325,6 +326,24 @@
 			}
 		}, { rootMargin: '600px 0px 0px 0px' });
 		observer.observe(sentinel);
+		return () => observer.disconnect();
+	});
+
+	// Auto-fetch the next batch of earlier messages from the server when the
+	// "Load earlier" button scrolls into view, but only if the user opted in
+	// via Settings → Chat. Without this flag set, the button stays a manual
+	// click target so users with large chats can decide when to spend the
+	// network round-trip.
+	$effect(() => {
+		if (!loadEarlierButton) return;
+		if (!settingsStore.settings.autoLoadEarlierMessages) return;
+		const btn = loadEarlierButton;
+		const observer = new IntersectionObserver((entries) => {
+			if (!entries[0]?.isIntersecting) return;
+			if (loadingMore || !hasMore) return;
+			void loadEarlierMessages();
+		}, { rootMargin: '400px 0px 0px 0px' });
+		observer.observe(btn);
 		return () => observer.disconnect();
 	});
 
@@ -2812,6 +2831,7 @@
 				<div class="flex h-[52px] items-center justify-center">
 					{#if hasMore && renderedStart === 0}
 						<button
+							bind:this={loadEarlierButton}
 							onclick={loadEarlierMessages}
 							disabled={loadingMore}
 							class="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:opacity-50"

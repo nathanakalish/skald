@@ -57,6 +57,7 @@
 		quietHoursEnd: string;
 		renderMode: string;
 		chatPageSize: number;
+		autoLoadEarlierMessages: boolean;
 		reformatterProviderId: string;
 		reformatterModel: string;
 		reformatterPrompt: string;
@@ -99,6 +100,7 @@
 		quietHoursEnabled = false, quietHoursStart = '22:00', quietHoursEnd = '07:00',
 		renderMode = 'roleplay',
 		chatPageSize = 50,
+		autoLoadEarlierMessages = false,
 		reformatterProviderId = '', reformatterModel = '', reformatterPrompt = '',
 		characterCreatorProviderId = '', characterCreatorModel = '', characterCreatorPrompt = '',
 		compactionEnabled = false, compactionThreshold = 80, compactionMode = 'window',
@@ -138,6 +140,7 @@
 	let localQuietEnd = $state('07:00');
 	let localRenderMode = $state('roleplay');
 	let localChatPageSize = $state(50);
+	let localAutoLoadEarlier = $state(false);
 	let localReformatterProviderId = $state('');
 	let localReformatterModel = $state('');
 	let localReformatterPrompt = $state('');
@@ -213,6 +216,7 @@
 				}
 				localRenderMode = renderMode;
 				localChatPageSize = chatPageSize;
+				localAutoLoadEarlier = autoLoadEarlierMessages;
 				localReformatterProviderId = reformatterProviderId;
 				localReformatterModel = reformatterModel;
 				localReformatterPrompt = reformatterPrompt;
@@ -1252,6 +1256,14 @@
 								</div>
 								<p class="text-xs text-muted-foreground">How many messages to load initially. Older messages can be loaded on demand by scrolling up.</p>
 							</div>
+
+							<!-- Auto-load earlier messages -->
+							<ToggleSwitch
+								label="Auto-load earlier messages"
+								description="When scrolling near the top of the conversation, automatically fetch the next batch of earlier messages instead of waiting for the button click."
+								checked={localAutoLoadEarlier}
+								onchange={() => toggleBoolSetting('autoLoadEarlierMessages', () => localAutoLoadEarlier, (v) => { localAutoLoadEarlier = v; })}
+							/>
 
 						</div>
 
