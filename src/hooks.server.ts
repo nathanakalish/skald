@@ -1,7 +1,7 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { db } from '$lib/db/index.js';
-import { themes, userSettings } from '$lib/db/schema.js';
+import { themes, userSettings, users } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { validateSession, getSessionCookieName, cleanupExpiredSessions } from '$lib/server/auth.js';
 import { logger } from '$lib/server/logger.js';
@@ -28,6 +28,33 @@ logger.info('skald server starting', {
 // Reap expired sessions on boot, then again every hour. unref() so this doesn't keep the process alive.
 cleanupExpiredSessions();
 setInterval(() => cleanupExpiredSessions(), 60 * 60 * 1000).unref();
+
+// Emergency PIN clear via env. Set CLEAR_PIN=username (or comma-separated list)
+// to wipe the lock for someone who's forgotten theirs. Runs once at boot and
+// logs each affected user — you should unset the var on the next restart so
+// it doesn't keep nuking PINs every time the server comes up.
+{
+	const raw = process.env.CLEAR_PIN;
+	if (raw && raw.trim()) {
+		const names = raw.split(',').map((n) => n.trim()).filter(Boolean);
+		for (const name of names) {
+			try {
+				const res = db
+					.update(users)
+					.set({ pinHash: null, pinPolicy: 'disabled', pinTimeoutMinutes: null })
+					.where(eq(users.username, name))
+					.run();
+				if (res.changes > 0) {
+					logger.warn('CLEAR_PIN: cleared PIN for user', { username: name });
+				} else {
+					logger.warn('CLEAR_PIN: no matching user', { username: name });
+				}
+			} catch (err) {
+				logger.error('CLEAR_PIN failed', { username: name, err: String(err) });
+			}
+		}
+	}
+}
 
 // Graceful shutdown signal logging — the actual DB close lives in src/lib/db/index.ts.
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
