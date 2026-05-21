@@ -33,6 +33,9 @@ function signIn(url: URL, cookies: Cookies, userAgent: string | null): { id: num
 			username: DEV_AUTH_USERNAME,
 			role: 'admin',
 			pictureUrl: null,
+			pinHash: null,
+			pinPolicy: 'disabled',
+			pinTimeoutMinutes: null,
 			createdAt: new Date().toISOString(),
 		};
 	}

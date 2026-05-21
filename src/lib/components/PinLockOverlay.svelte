@@ -18,8 +18,8 @@
 		return () => clearInterval(id);
 	});
 
-	let lockoutRemainingSec = $derived(retryAfterMs > 0 ? Math.max(0, Math.ceil((retryAfterMs - (now - lockoutStart)) / 1000)) : 0);
 	let lockoutStart = $state(0);
+	let lockoutRemainingSec = $derived(retryAfterMs > 0 ? Math.max(0, Math.ceil((retryAfterMs - (now - lockoutStart)) / 1000)) : 0);
 
 	$effect(() => {
 		if (pinLock.locked) {

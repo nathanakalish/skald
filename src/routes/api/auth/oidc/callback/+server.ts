@@ -136,6 +136,9 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 					username: claims.username,
 					role,
 					pictureUrl: claims.picture,
+					pinHash: null,
+					pinPolicy: 'disabled',
+					pinTimeoutMinutes: null,
 					createdAt: new Date().toISOString(),
 				};
 				createdNewUser = true;

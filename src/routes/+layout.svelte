@@ -263,6 +263,7 @@
 	// In-flight requests (notably streaming) keep running because this is a
 	// prying-eyes guard, not real auth.
 	{
+		// svelte-ignore state_referenced_locally
 		const d = data as any;
 		pinLock.init({
 			enabled: !!d.pinEnabled,
