@@ -326,8 +326,10 @@
 				renderedStart = Math.max(0, renderedStart - RENDER_WINDOW_GROW);
 				await tick();
 				if (container) {
+					// Content was prepended (added to the top). scrollTop must
+					// increase by the delta to keep the same visual position.
 					const delta = container.scrollHeight - prevHeight;
-					container.scrollTop = prevScroll - delta;
+					container.scrollTop = prevScroll + delta;
 				}
 			} finally {
 				expandingWindow = false;
