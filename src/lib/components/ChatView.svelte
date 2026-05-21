@@ -267,25 +267,17 @@
 			const data = await res.json();
 			const earlier = (data.messages ?? []).map(parseMessage);
 			if (earlier.length > 0) {
-				// Preserve scroll position when prepending. The button/sentinel slot
-				// uses a constant-height wrapper (Option B), so scrollHeight shouldn't
-				// change — but we still anchor to distance-from-bottom as a belt-and-
-				// suspenders guard (Option A). In a flex-col-reverse container the
-				// bottom is pinned; "distance from bottom" equals scrollHeight minus
-				// scrollTop minus clientHeight, which stays invariant when new messages
-				// are pushed into the un-rendered head and don't affect the DOM at all.
-				const container = messagesContainer;
-				const distFromBottom = container
-					? container.scrollHeight - container.scrollTop - container.clientHeight
-					: 0;
+				// The fetched messages go into the un-rendered head (renderedStart
+				// is bumped by the same amount) so the live DOM doesn't change.
+				// The button/sentinel slot is a constant-height wrapper, so there
+				// is no layout shift. In flex-col-reverse the browser already pins
+				// the bottom, so we don't touch scrollTop — touching it here would
+				// fight the natural anchoring and snap the viewport.
 				messageList = [...earlier, ...messageList];
 				renderedStart += earlier.length;
 				Object.assign(messageSiblings, data.messageSiblings ?? {});
 				if (data.totalMessages) totalMsgCount = data.totalMessages;
 				await tick();
-				if (container) {
-					container.scrollTop = container.scrollHeight - container.clientHeight - distFromBottom;
-				}
 			}
 		} finally {
 			loadingMore = false;
@@ -320,17 +312,14 @@
 			if (expandingWindow || renderedStart === 0) return;
 			expandingWindow = true;
 			try {
-				const container = messagesContainer;
-				const prevHeight = container?.scrollHeight ?? 0;
-				const prevScroll = container?.scrollTop ?? 0;
+				// In flex-col-reverse the bottom is the scroll anchor — prepending
+				// rows to the DOM doesn't shift anything already in the viewport, so
+				// we deliberately do NOT touch scrollTop here. Earlier versions ran
+				// `scrollTop = prev ± delta` which fought the browser's natural
+				// anchoring and snapped the viewport to the top of the newly
+				// revealed window.
 				renderedStart = Math.max(0, renderedStart - RENDER_WINDOW_GROW);
 				await tick();
-				if (container) {
-					// Content was prepended (added to the top). scrollTop must
-					// increase by the delta to keep the same visual position.
-					const delta = container.scrollHeight - prevHeight;
-					container.scrollTop = prevScroll + delta;
-				}
 			} finally {
 				expandingWindow = false;
 			}
