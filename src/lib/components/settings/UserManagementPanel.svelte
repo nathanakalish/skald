@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '$lib/tooltip.js';
 	import { onMount } from 'svelte';
-	import { Pencil, Trash2, Plus, Shield } from 'lucide-svelte';
+	import { Pencil, Trash2, Plus, Shield, KeyRound } from 'lucide-svelte';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
@@ -115,6 +115,27 @@
 	function cancelDeleteUser() {
 		confirmDeleteUserId = null;
 		confirmDeleteUsername = '';
+	}
+
+	let confirmClearPinUserId = $state<number | null>(null);
+	let confirmClearPinUsername = $state('');
+
+	function requestClearPin(id: number, username: string) {
+		confirmClearPinUserId = id;
+		confirmClearPinUsername = username;
+	}
+
+	async function confirmClearPin() {
+		if (confirmClearPinUserId === null) return;
+		await fetch(`/api/admin/users/${confirmClearPinUserId}/pin`, { method: 'DELETE' });
+		confirmClearPinUserId = null;
+		confirmClearPinUsername = '';
+		await loadUsers();
+	}
+
+	function cancelClearPin() {
+		confirmClearPinUserId = null;
+		confirmClearPinUsername = '';
 	}
 </script>
 
@@ -262,6 +283,15 @@
 							>
 								<Pencil class="h-4 w-4" />
 							</button>
+							{#if u.hasPin}
+								<button
+									onclick={() => requestClearPin(u.id, u.username)}
+									class="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+									use:tooltip={'Clear PIN'}
+								>
+									<KeyRound class="h-4 w-4" />
+								</button>
+							{/if}
 							{#if u.id !== currentUserId}
 								<button
 									onclick={() => requestDeleteUser(u.id, u.username)}
@@ -300,6 +330,32 @@
 					onclick={confirmDeleteUser}
 					class="rounded-lg bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
 				>Delete</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Clear PIN confirmation -->
+{#if confirmClearPinUserId !== null}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
+		onkeydown={(e) => e.key === 'Escape' && cancelClearPin()}
+	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div class="absolute inset-0" onclick={cancelClearPin}></div>
+		<div class="relative z-10 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
+			<h3 class="text-base font-semibold">Clear PIN</h3>
+			<p class="mt-2 text-sm text-muted-foreground">Remove the PIN lock for <strong>{confirmClearPinUsername}</strong>? They'll have to set a new one if they want the lock back.</p>
+			<div class="mt-4 flex justify-end gap-2">
+				<button
+					onclick={cancelClearPin}
+					class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
+				>Cancel</button>
+				<button
+					onclick={confirmClearPin}
+					class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+				>Clear PIN</button>
 			</div>
 		</div>
 	</div>

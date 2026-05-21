@@ -6,6 +6,13 @@ export const users = sqliteTable('users', {
 	username: text('username').notNull().unique(),
 	role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
 	pictureUrl: text('picture_url'),
+	// PIN lock (opt-in, per-user). Storing `scrypt(salt + ':' + hash)` so a
+	// leaked DB can't be brute-forced trivially. Policy controls *when* the
+	// lock screen appears: 'disabled' | 'on-focus' | 'on-open' | 'timeout'.
+	// pinTimeoutMinutes is only meaningful when pinPolicy === 'timeout'.
+	pinHash: text('pin_hash'),
+	pinPolicy: text('pin_policy', { enum: ['disabled', 'on-focus', 'on-open', 'timeout'] }).notNull().default('disabled'),
+	pinTimeoutMinutes: integer('pin_timeout_minutes'),
 	createdAt: text('created_at').default(sql`(datetime('now'))`)
 });
 

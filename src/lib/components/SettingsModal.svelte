@@ -19,6 +19,7 @@
 	import ProviderListManager from '$lib/components/settings/ProviderListManager.svelte';
 	import ImportExport from '$lib/components/settings/ImportExport.svelte';
 	import SignedInDevices from '$lib/components/settings/SignedInDevices.svelte';
+	import PinSettingsPanel from '$lib/components/settings/PinSettingsPanel.svelte';
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { themesStore } from '$lib/stores/themes.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
@@ -1704,6 +1705,8 @@
 									</div>
 								</div>
 							</div>
+
+							<PinSettingsPanel />
 
 							<SignedInDevices />
 						</div>

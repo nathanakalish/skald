@@ -654,6 +654,18 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		}
 	}
 
+	// Idempotent ALTER for the per-user PIN lock columns. Stores a scrypt hash
+	// (never the raw PIN), the policy (when to prompt), and an optional
+	// minutes-of-inactivity timeout. Existing rows get NULL pin_hash + default
+	// 'disabled' policy so behavior is unchanged until a user opts in.
+	{
+		const cols = sqlite.prepare("PRAGMA table_info('users')").all() as { name: string }[];
+		const names = new Set(cols.map(c => c.name));
+		if (!names.has('pin_hash')) sqlite.exec("ALTER TABLE users ADD COLUMN pin_hash TEXT");
+		if (!names.has('pin_policy')) sqlite.exec("ALTER TABLE users ADD COLUMN pin_policy TEXT NOT NULL DEFAULT 'disabled'");
+		if (!names.has('pin_timeout_minutes')) sqlite.exec("ALTER TABLE users ADD COLUMN pin_timeout_minutes INTEGER");
+	}
+
 	// Sessions metadata for the `Signed in devices` UI: created_at, last_seen_at,
 	// user_agent, and a notifications-disabled timestamp the client uses to
 	// detect a remote toggle and reset its banner-dismissal flag.

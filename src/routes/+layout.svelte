@@ -61,6 +61,8 @@
 	import { tooltip } from '$lib/tooltip.js';
 	import ChatView from '$lib/components/ChatView.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import PinLockOverlay from '$lib/components/PinLockOverlay.svelte';
+	import { pinLock } from '$lib/stores/pinLock.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import { checkAutoSaveLimit } from '$lib/limitCheck.js';
@@ -251,6 +253,45 @@
 		};
 		document.addEventListener('visibilitychange', handler);
 		return () => document.removeEventListener('visibilitychange', handler);
+	});
+
+	// PIN lock: hydrate synchronously (NOT in $effect) so the locked state
+	// is set before the first render — otherwise SSR/hydration paints the
+	// whole shell for a frame and a snooper with element-blocker tools could
+	// zap the overlay and peek. The `{#if !pinLock.locked}` gate around the
+	// app shell keeps the underlying UI out of the DOM entirely while locked.
+	// In-flight requests (notably streaming) keep running because this is a
+	// prying-eyes guard, not real auth.
+	{
+		const d = data as any;
+		pinLock.init({
+			enabled: !!d.pinEnabled,
+			policy: d.pinPolicy ?? 'disabled',
+			timeoutMinutes: d.pinTimeoutMinutes ?? null
+		});
+	}
+
+	onMount(() => {
+		const onFocus = () => pinLock.onAppForeground();
+		const onVisibility = () => { if (!document.hidden) pinLock.onAppForeground(); };
+		const onActivity = () => pinLock.recordActivity();
+
+		window.addEventListener('focus', onFocus);
+		document.addEventListener('visibilitychange', onVisibility);
+		// Passive listeners — never block scroll/input.
+		window.addEventListener('mousemove', onActivity, { passive: true });
+		window.addEventListener('keydown', onActivity, { passive: true });
+		window.addEventListener('scroll', onActivity, { passive: true, capture: true });
+		window.addEventListener('touchstart', onActivity, { passive: true });
+
+		return () => {
+			window.removeEventListener('focus', onFocus);
+			document.removeEventListener('visibilitychange', onVisibility);
+			window.removeEventListener('mousemove', onActivity);
+			window.removeEventListener('keydown', onActivity);
+			window.removeEventListener('scroll', onActivity, true);
+			window.removeEventListener('touchstart', onActivity);
+		};
 	});
 
 	// Hydrate the chats store from SSR data so the sidebar paints instantly.
@@ -2079,7 +2120,7 @@
 
 {#if !data.user}
 	<LoginForm oidcEnabled={!!data.oidcEnabled} devAuthEnabled={!!data.devAuthEnabled} {oidc} />
-{:else}
+{:else if !pinLock.locked}
 <!-- FRONT-L1: SkipNav target — first focusable element so screen-reader/keyboard users can jump past the rail + sidebar straight into the chat. Visually hidden until focused. -->
 <a
 	href="#main-content"
@@ -3064,6 +3105,12 @@
 </div>
 {/if}
 
+<!-- Everything below is also gated by the PIN lock — modals/toasts can
+     contain sensitive previews (message contents in chat toasts, character
+     names in confirm dialogs, etc.) and would otherwise leak through. The
+     PinLockOverlay itself sits outside this gate so it can always render. -->
+{#if !pinLock.locked}
+
 <!-- Modals (lazy-loaded on demand) -->
 {#if chatMenu.openChatId !== null && chatMenu.position}
 	{@const menuChat = chatsStore.chats.find((c: any) => c.id === chatMenu.openChatId)}
@@ -3144,6 +3191,8 @@
 
 <DialogHost />
 <Toast />
+{/if}
+<PinLockOverlay />
 
 {#if realtime.connectionState !== 'connected'}
 	<div class="fixed inset-0 z-[300] flex items-center justify-center bg-background/80 backdrop-blur-md">

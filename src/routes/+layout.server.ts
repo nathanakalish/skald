@@ -1,6 +1,6 @@
 import type { LayoutServerLoad } from './$types.js';
 import { db } from '$lib/db/index.js';
-import { themes, userSettings, sessions } from '$lib/db/schema.js';
+import { themes, userSettings, sessions, users } from '$lib/db/schema.js';
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { isOidcEnabled } from '$lib/server/oidc.js';
 import { isDevAuthBypassEnabled } from '$lib/server/devAuth.js';
@@ -85,6 +85,9 @@ export const load: LayoutServerLoad = async (event) => {
 			user: null,
 			oidcEnabled: isOidcEnabled(),
 			devAuthEnabled: isDevAuthBypassEnabled(),
+			pinEnabled: false,
+			pinPolicy: 'disabled' as 'disabled' | 'on-focus' | 'on-open' | 'timeout',
+			pinTimeoutMinutes: null as number | null,
 			characterLimitsEnabled: getAdminSettingBool('characterLimitsEnabled'),
 		};
 	}
@@ -110,6 +113,14 @@ export const load: LayoutServerLoad = async (event) => {
 	const allSettings = db.select().from(userSettings).where(eq(userSettings.userId, userId)).all();
 	const settingsMap = new Map(allSettings.map(s => [s.key, s.value]));
 	const getSetting = (key: string) => settingsMap.get(key);
+
+	// Surface the PIN lock status (but never the hash itself). The client uses
+	// this to render the lock overlay and arm the right trigger.
+	const pinRow = db
+		.select({ pinHash: users.pinHash, pinPolicy: users.pinPolicy, pinTimeoutMinutes: users.pinTimeoutMinutes })
+		.from(users)
+		.where(eq(users.id, userId))
+		.get();
 
 	// Theme model: user always picks a preferred dark theme + light theme.
 	// `colorMode` decides which one renders (system follows OS preference,
@@ -198,6 +209,9 @@ export const load: LayoutServerLoad = async (event) => {
 		user,
 		oidcEnabled: isOidcEnabled(),
 		devAuthEnabled: isDevAuthBypassEnabled(),
+		pinEnabled: !!pinRow?.pinHash,
+		pinPolicy: (pinRow?.pinPolicy ?? 'disabled') as 'disabled' | 'on-focus' | 'on-open' | 'timeout',
+		pinTimeoutMinutes: pinRow?.pinTimeoutMinutes ?? null,
 		characterLimitsEnabled: getAdminSettingBool('characterLimitsEnabled'),
 	};
 };

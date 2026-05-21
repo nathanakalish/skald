@@ -13,10 +13,12 @@ export const GET: RequestHandler = async (event) => {
 			id: users.id,
 			username: users.username,
 			role: users.role,
-			createdAt: users.createdAt
+			createdAt: users.createdAt,
+			pinHash: users.pinHash
 		})
 		.from(users)
 		.all();
 
-	return json(userList);
+	// Don't ship the hash to the client; just whether a PIN is set.
+	return json(userList.map(({ pinHash, ...rest }) => ({ ...rest, hasPin: !!pinHash })));
 };
