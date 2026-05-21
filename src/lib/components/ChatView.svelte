@@ -267,29 +267,24 @@
 			const data = await res.json();
 			const earlier = (data.messages ?? []).map(parseMessage);
 			if (earlier.length > 0) {
-				// Preserve scroll position when prepending. We keep the SAME rendered
-				// window (renderedStart += earlier.length pushes the new fetches into
-				// the unrendered head), so the message DOM nodes the user is looking
-				// at don't change. The only height change comes from the "Load earlier"
-				// button vanishing and the topSentinel appearing. Anchoring math on
-				// scrollHeight deltas in flex-col-reverse is fragile across engines,
-				// so we anchor to an actual DOM node instead: capture the viewport
-				// offset of the first visible message row before the mutation, then
-				// after `tick()` nudge scrollTop by the difference. This keeps the
-				// same content under the user's cursor regardless of how the browser
-				// signs scrollTop in a reversed flex container.
+				// Preserve scroll position when prepending. The button/sentinel slot
+				// uses a constant-height wrapper (Option B), so scrollHeight shouldn't
+				// change — but we still anchor to distance-from-bottom as a belt-and-
+				// suspenders guard (Option A). In a flex-col-reverse container the
+				// bottom is pinned; "distance from bottom" equals scrollHeight minus
+				// scrollTop minus clientHeight, which stays invariant when new messages
+				// are pushed into the un-rendered head and don't affect the DOM at all.
 				const container = messagesContainer;
-				const anchor = container?.querySelector<HTMLElement>('.msg-row') ?? null;
-				const prevAnchorTop = anchor?.getBoundingClientRect().top ?? 0;
-				const prevScroll = container?.scrollTop ?? 0;
+				const distFromBottom = container
+					? container.scrollHeight - container.scrollTop - container.clientHeight
+					: 0;
 				messageList = [...earlier, ...messageList];
 				renderedStart += earlier.length;
 				Object.assign(messageSiblings, data.messageSiblings ?? {});
 				if (data.totalMessages) totalMsgCount = data.totalMessages;
 				await tick();
-				if (container && anchor) {
-					const newAnchorTop = anchor.getBoundingClientRect().top;
-					container.scrollTop = prevScroll + (newAnchorTop - prevAnchorTop);
+				if (container) {
+					container.scrollTop = container.scrollHeight - container.clientHeight - distFromBottom;
 				}
 			}
 		} finally {
@@ -2817,8 +2812,13 @@
 	<!-- Messages -->
 	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6">
 		<div class="mx-auto w-full max-w-5xl space-y-4">
-			{#if hasMore && renderedStart === 0}
-				<div class="flex justify-center py-2">
+			<!-- Constant-height slot housing either the "Load earlier" button or the
+			     windowed-render top-sentinel. Keeping a single wrapper avoids the
+			     scrollHeight jump that caused the viewport to snap when the button
+			     was removed and the sentinel was inserted (Option B of the scroll
+			     anchoring fix). -->
+			<div class="flex min-h-[44px] items-center justify-center py-2">
+				{#if hasMore && renderedStart === 0}
 					<button
 						onclick={loadEarlierMessages}
 						disabled={loadingMore}
@@ -2832,15 +2832,12 @@
 							Load earlier messages ({totalMsgCount - messageList.length} remaining)
 						{/if}
 					</button>
-				</div>
-			{/if}
-			{#if renderedStart > 0}
-				<!-- Sentinel for FRONT-C4 windowed render: triggers reveal of older
-				     in-memory messages when scrolled near the top of the window.
-				     Kept tall enough so IntersectionObserver fires comfortably before
-				     the user hits an actual gap. -->
-				<div bind:this={topSentinel} class="h-px" aria-hidden="true"></div>
-			{/if}
+				{:else if renderedStart > 0}
+					<!-- Sentinel for FRONT-C4 windowed render: triggers reveal of older
+					     in-memory messages when scrolled near the top of the window. -->
+					<div bind:this={topSentinel} class="h-px" aria-hidden="true"></div>
+				{/if}
+			</div>
 			{#each messageList.slice(renderedStart) as message, localI (message.id)}
 				{@const i = localI + renderedStart}
 				{#if message.role !== 'system'}
