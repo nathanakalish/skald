@@ -485,7 +485,7 @@
 
 		{#if openEverything}
 			<div class="border-t border-border p-4 space-y-3">
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+				<div class="grid grid-cols-1 @xl:grid-cols-2 gap-2">
 					<label class="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-accent cursor-pointer">
 						<input type="checkbox" bind:checked={includePersonas} class="h-4 w-4 rounded border-border" />
 						<span>Personas</span>

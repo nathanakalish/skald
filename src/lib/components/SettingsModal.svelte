@@ -384,14 +384,14 @@
 {#if mode === 'embedded' && open}
 	<!-- Embedded content-only mode (desktop: parent handles nav in sidebar card) -->
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-2xl md:bg-background">
-		<div class="flex-1 overflow-y-auto p-6">
+		<div class="@container flex-1 overflow-y-auto p-6">
 			{@render settingsTabContent()}
 		</div>
 	</div>
 {:else if mode === 'page' && open}
 	<!-- Page mode: content only (mobile) — tab selection handled by drawer -->
 	<div class="flex h-full flex-col overflow-hidden bg-background">
-		<div class="flex-1 overflow-y-auto p-4">
+		<div class="@container flex-1 overflow-y-auto p-4">
 			{@render settingsTabContent()}
 		</div>
 	</div>
@@ -445,7 +445,7 @@
 				</nav>
 
 				<!-- Tab content -->
-				<div class="flex-1 overflow-y-auto p-4 sm:p-6 {gestures.contentClass}" style={gestures.contentStyle}>
+				<div class="@container flex-1 overflow-y-auto p-4 sm:p-6 {gestures.contentClass}" style={gestures.contentStyle}>
 					{@render settingsTabContent()}
 				</div>
 			</div>

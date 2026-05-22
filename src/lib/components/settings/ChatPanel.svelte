@@ -52,7 +52,7 @@
 
 	<!-- Boolean toggles side-by-side on wider screens — they're all short
 	     descriptions so two columns stays readable. -->
-	<div class="grid gap-4 sm:grid-cols-2">
+	<div class="grid gap-4 @xl:grid-cols-2">
 		<ToggleSwitch
 			label="Send with Enter (Desktop)"
 			description="Press Enter to send on desktop. When off, use Shift+Enter or the send button."
@@ -86,7 +86,7 @@
 	</div>
 
 	<!-- Button-group settings: two-up on wider screens. -->
-	<div class="grid gap-6 sm:grid-cols-2">
+	<div class="grid gap-6 @xl:grid-cols-2">
 		<SettingRow
 			label="Message timestamps"
 			description={s.messageTimestamps === 'relative' ? '"Today", "Yesterday", etc.' : s.messageTimestamps === 'absolute' ? 'Shows exact date and time.' : 'Hides date separators.'}

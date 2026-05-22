@@ -132,7 +132,7 @@
 		</div>
 
 		<!-- Rate Limits + Upload caps side-by-side on wide screens -->
-		<div class="grid gap-4 lg:grid-cols-2">
+		<div class="grid gap-4 @3xl:grid-cols-2">
 			<div class="space-y-3 rounded-xl border border-border p-4">
 				<div>
 					<h4 class="text-sm font-semibold">Rate limits</h4>
@@ -204,7 +204,7 @@
 			] as quota}
 				<div class="space-y-2">
 					<p class="text-sm font-medium">{quota.resource}</p>
-					<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+					<div class="grid grid-cols-1 gap-2 @xl:grid-cols-2">
 						<div class="flex items-center gap-2">
 							<label for="q-{quota.countKey}" class="flex-1 text-xs text-muted-foreground">Max count</label>
 							<input
@@ -238,7 +238,7 @@
 		</div>
 
 		<!-- Import/export toggles pair naturally -->
-		<div class="grid gap-3 sm:grid-cols-2">
+		<div class="grid gap-3 @xl:grid-cols-2">
 			<ToggleSwitch
 				label="Allow character import"
 				description="Users can import character cards (PNG/JSON)."
@@ -278,7 +278,7 @@
 		</div>
 
 		<!-- Disable Image Caching + Enforce character limits -->
-		<div class="grid gap-3 sm:grid-cols-2">
+		<div class="grid gap-3 @xl:grid-cols-2">
 			<ToggleSwitch
 				label="Disable image caching"
 				description="Serve remote images directly instead of caching them locally."

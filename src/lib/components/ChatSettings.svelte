@@ -348,7 +348,7 @@
 				</nav>
 
 				<!-- Tab content -->
-				<div class="flex-1 overflow-y-auto p-4 sm:p-6 {gestures.contentClass}" style={gestures.contentStyle}>
+				<div class="@container flex-1 overflow-y-auto p-4 sm:p-6 {gestures.contentClass}" style={gestures.contentStyle}>
 					{#key activeTab}
 					<div class="slide-up">
 					{#if activeTab === 'display'}
@@ -408,7 +408,7 @@
 								<p class="text-sm text-muted-foreground">Override which AI provider and model to use</p>
 							</div>
 
-							<div class="grid gap-4 sm:grid-cols-2">
+							<div class="grid gap-4 @xl:grid-cols-2">
 								<!-- Provider -->
 								<div class="space-y-1.5">
 									<div class="flex items-center justify-between">
@@ -797,7 +797,7 @@
 								</div>
 							{/if}
 
-							<div class="grid gap-4 sm:grid-cols-2">
+							<div class="grid gap-4 @xl:grid-cols-2">
 								<!-- Provider override -->
 								<div class="space-y-1.5">
 									<div class="flex items-center justify-between">

@@ -140,7 +140,7 @@
 	<!-- Script Form -->
 	<div class="space-y-3 rounded-lg border border-border bg-card/50 p-4">
 		<h4 class="text-sm font-medium">{editing ? 'Edit Script' : 'New Script'}</h4>
-		<div class="grid gap-3 sm:grid-cols-2">
+		<div class="grid gap-3 @xl:grid-cols-2">
 			<div>
 				<label for="regex-name" class="mb-1 block text-xs font-medium text-muted-foreground">Name</label>
 				<LimitedInput id="regex-name" bind:value={name} limit={FIELD_LIMITS.name} placeholder="Script name" class="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring" />

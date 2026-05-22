@@ -209,7 +209,7 @@
 	</div>
 
 	<div class="{!isSecureCtx ? 'pointer-events-none opacity-50 space-y-3' : 'space-y-3'}" aria-disabled={!isSecureCtx}>
-		<div class="grid gap-3 sm:grid-cols-2">
+		<div class="grid gap-3 @xl:grid-cols-2">
 			<ToggleSwitch
 				label="Notification sound"
 				description="Play a sound when a background response completes."

@@ -158,7 +158,7 @@
 			<p class="text-sm text-muted-foreground">LLM used to generate and refine characters via the AI creator (the sparkles button in the new-character form).</p>
 		</div>
 		<div class="space-y-4">
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-4 @xl:grid-cols-2">
 				<SettingRow label="Provider" htmlFor="creator-provider">
 					<Combobox
 						id="creator-provider"
@@ -209,7 +209,7 @@
 			<p class="text-sm text-muted-foreground">LLM used to reformat character greetings on demand. Available per-character in the edit modal.</p>
 		</div>
 		<div class="space-y-4">
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-4 @xl:grid-cols-2">
 				<SettingRow label="Provider" htmlFor="reformatter-provider">
 					<Combobox
 						id="reformatter-provider"
@@ -267,7 +267,7 @@
 				onchange={async () => { await save('compactionEnabled', !s.compactionEnabled); }}
 			/>
 
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-4 @xl:grid-cols-2">
 				<SettingRow htmlFor="compaction-threshold">
 					{#snippet labelChildren()}
 						<label for="compaction-threshold" class="flex items-center justify-between text-sm font-medium">
@@ -328,7 +328,7 @@
 				</SettingRow>
 			{/if}
 
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-4 @xl:grid-cols-2">
 				<SettingRow label="Provider" htmlFor="compaction-provider">
 					<Combobox
 						id="compaction-provider"

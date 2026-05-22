@@ -145,7 +145,7 @@
 	<!-- Character Themes -->
 	<div class="space-y-3">
 		<span class="block text-sm font-medium">Character Themes</span>
-		<div class="grid gap-3 sm:grid-cols-2">
+		<div class="grid gap-3 @xl:grid-cols-2">
 			<ToggleSwitch
 				label="Always apply character themes"
 				description="Skip the prompt when starting a new chat. Can still be overridden per-conversation."
@@ -175,7 +175,7 @@
 	</div>
 
 	<!-- Font Size + Compact/Motion: pair them on wider viewports -->
-	<div class="grid gap-4 sm:grid-cols-2">
+	<div class="grid gap-4 @xl:grid-cols-2">
 		<div class="space-y-2">
 			<span class="block text-sm font-medium">Font size</span>
 			<div class="flex gap-2">
@@ -327,7 +327,7 @@
 			</div>
 		{/snippet}
 
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+		<div class="grid grid-cols-1 gap-4 @xl:grid-cols-2">
 			{@render themeSlot('dark', darkThemes, settingsStore.systemDarkTheme?.id ?? settingsStore.settings.systemDarkThemeId, darkDropdownOpen, (v: boolean) => (darkDropdownOpen = v))}
 			{@render themeSlot('light', lightThemes, settingsStore.systemLightTheme?.id ?? settingsStore.settings.systemLightThemeId, lightDropdownOpen, (v: boolean) => (lightDropdownOpen = v))}
 		</div>
