@@ -436,22 +436,26 @@
 							{/if}
 						</SettingRow>
 
-						<!-- Endpoint & API Key -->
+						<!-- Endpoint & API Key. ComfyUI has no auth and we don't use a chat
+						     "default model" for it, so hide both fields for that preset. -->
 						<div class="grid gap-3 @2xl:grid-cols-2">
 							<SettingRow size="sm" label="Endpoint">
 								<LimitedInput bind:value={endpoint} limit={FIELD_LIMITS.url} class={inputClass} />
 							</SettingRow>
-							<SettingRow size="sm" label="API Key">
-								<input
-									type="password"
-									bind:value={apiKey}
-									class={inputClass}
-									placeholder={getProfile(type)?.keyPlaceholder ?? 'API key'}
-								/>
-							</SettingRow>
+							{#if type !== 'comfyui'}
+								<SettingRow size="sm" label="API Key">
+									<input
+										type="password"
+										bind:value={apiKey}
+										class={inputClass}
+										placeholder={getProfile(type)?.keyPlaceholder ?? 'API key'}
+									/>
+								</SettingRow>
+							{/if}
 						</div>
 
 						<!-- Model -->
+						{#if type !== 'comfyui'}
 						<SettingRow size="sm" label="Default Model">
 							<div class="flex gap-2">
 								<div class="flex-1">
@@ -474,6 +478,7 @@
 								</button>
 							</div>
 						</SettingRow>
+						{/if}
 
 						<!-- Image model selector — only when this provider type supports image gen.
 						     ComfyUI gets a workflow-JSON textarea + file upload + prompt-node id

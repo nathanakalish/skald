@@ -202,7 +202,7 @@
 <div class="space-y-4">
 	<div class="flex items-center justify-between">
 		<div>
-			<h3 class="text-base font-semibold">LLM Providers</h3>
+			<h3 class="text-base font-semibold">Model Providers</h3>
 			<p class="text-sm text-muted-foreground">Configure your AI model providers</p>
 		</div>
 		<Button variant="primary" size="sm" icon={Plus} onclick={openNewProvider}>Add Provider</Button>
