@@ -193,7 +193,7 @@
 				<div class="flex items-center gap-3 rounded-lg border border-border p-3 {s.enabled ? '' : 'opacity-50'}">
 					<button onclick={() => toggleEnabled(s)} class="shrink-0" use:tooltip={s.enabled ? 'Disable' : 'Enable'}>
 						{#if s.enabled}
-							<Check class="h-4 w-4 text-green-500" />
+							<Check class="h-4 w-4 text-success" />
 						{:else}
 							<X class="h-4 w-4 text-muted-foreground" />
 						{/if}

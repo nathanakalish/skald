@@ -345,7 +345,7 @@
 									<span class="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">This device</span>
 								{/if}
 								{#if pushOn}
-									<span class="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+									<span class="flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
 										<Bell class="h-3 w-3" /> Notifications on
 									</span>
 								{:else}

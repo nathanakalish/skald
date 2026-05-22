@@ -479,7 +479,7 @@
 			{#if backupRunning}
 				<span class="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 class="h-3.5 w-3.5 animate-spin" /> Building…</span>
 			{:else if backupReady}
-				<span class="flex items-center gap-1 text-xs text-emerald-500"><CheckCircle2 class="h-3.5 w-3.5" /> Ready</span>
+				<span class="flex items-center gap-1 text-xs text-success"><CheckCircle2 class="h-3.5 w-3.5" /> Ready</span>
 			{/if}
 		</button>
 
@@ -505,7 +505,7 @@
 				</div>
 
 				{#if includeProviders}
-					<div class="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400">
+					<div class="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
 						<AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 						<span>API keys are <strong>never</strong> included. Imported providers will arrive disabled — you'll need to re-enter their keys.</span>
 					</div>
@@ -841,7 +841,7 @@
 	<div class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
 		<div class="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-xl">
 			<div class="flex items-start gap-3">
-				<CheckCircle2 class="mt-0.5 h-6 w-6 shrink-0 text-emerald-500" />
+				<CheckCircle2 class="mt-0.5 h-6 w-6 shrink-0 text-success" />
 				<div class="flex-1">
 					<h3 class="text-base font-semibold">Import complete</h3>
 					<ul class="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -853,14 +853,14 @@
 						{#if importSummary.counts.providers} <li>{importSummary.counts.providers} provider{importSummary.counts.providers === 1 ? '' : 's'} (disabled)</li> {/if}
 					</ul>
 					{#if showProvidersWarning}
-						<div class="mt-3 flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400">
+						<div class="mt-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
 							<AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 							<span>Imported providers are disabled — re-enter API keys in <strong>Settings → Providers</strong> to enable them.</span>
 						</div>
 					{/if}
 					{#if importSummary.warnings && importSummary.warnings.length > 0}
 						{#each importSummary.warnings as warning}
-							<div class="mt-3 flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400">
+							<div class="mt-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
 								<AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 								<span>{warning}</span>
 							</div>

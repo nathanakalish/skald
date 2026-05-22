@@ -2719,7 +2719,7 @@
 							<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
 							<circle cx="21" cy="21" r="20" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
 							<circle cx="21" cy="21" r="20" fill="none" stroke-width="2"
-								class="{ringPct > 90 ? 'text-red-500' : ringPct > 70 ? 'text-yellow-500' : 'text-primary/70'} transition-all duration-500"
+								class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
 								stroke="currentColor"
 								stroke-dasharray={ringCircumference}
 								stroke-dashoffset={ringOffset}
@@ -3182,7 +3182,7 @@
 					</button>
 				</div>
 				{#if deleteMode === 'thread'}
-					<p class="mt-2 text-sm font-medium text-amber-400">
+					<p class="mt-2 text-sm font-medium text-warning">
 						All branches below this point will be deleted.
 					</p>
 				{/if}
@@ -3198,7 +3198,7 @@
 				</button>
 				<button
 					onclick={confirmDelete}
-					class="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-red-700"
+					class="rounded-lg bg-destructive px-3 py-1.5 text-sm text-destructive-foreground transition-colors hover:bg-destructive/90"
 				>
 					{deleteMode === 'thread' ? 'Delete Thread' : 'Delete Message'}
 				</button>

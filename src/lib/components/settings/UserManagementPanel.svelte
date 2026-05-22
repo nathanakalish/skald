@@ -233,7 +233,7 @@
 									>Admin</button>
 								</div>
 								{#if editIsLastAdmin}
-									<p class="mt-1 text-xs text-amber-500">At least one admin account is required</p>
+									<p class="mt-1 text-xs text-warning">At least one admin account is required</p>
 								{/if}
 							</div>
 							{#if editUserError}

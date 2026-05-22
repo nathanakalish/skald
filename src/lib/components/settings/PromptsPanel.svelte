@@ -268,13 +268,8 @@
 			/>
 
 			<div class="grid gap-4 @xl:grid-cols-2">
-				<SettingRow htmlFor="compaction-threshold">
-					{#snippet labelChildren()}
-						<label for="compaction-threshold" class="flex items-center justify-between text-sm font-medium">
-							<span>Trigger threshold</span>
-							<span class="text-muted-foreground">{s.compactionThreshold}% of context</span>
-						</label>
-					{/snippet}
+				<SettingRow label="Trigger threshold" htmlFor="compaction-threshold">
+					{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{s.compactionThreshold}% of context</span>{/snippet}
 					<input
 						id="compaction-threshold"
 						type="range" min="50" max="95" step="5"
@@ -298,13 +293,8 @@
 			</div>
 
 			{#if s.compactionMode === 'window'}
-				<SettingRow description="Each run folds the oldest messages up to this share of the context window into the highlights." htmlFor="compaction-window">
-					{#snippet labelChildren()}
-						<label for="compaction-window" class="flex items-center justify-between text-sm font-medium">
-							<span>Window size per run</span>
-							<span class="text-muted-foreground">{s.compactionWindowPercent}% of context</span>
-						</label>
-					{/snippet}
+				<SettingRow label="Window size per run" description="Each run folds the oldest messages up to this share of the context window into the highlights." htmlFor="compaction-window">
+					{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{s.compactionWindowPercent}% of context</span>{/snippet}
 					<input
 						id="compaction-window"
 						type="range" min="10" max="60" step="5"

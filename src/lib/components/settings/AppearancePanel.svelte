@@ -324,10 +324,12 @@
 			</div>
 		{/snippet}
 
-		<div class="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
-			{@render themeSlot('dark', darkThemes, settingsStore.systemDarkTheme?.id ?? settingsStore.settings.systemDarkThemeId, darkDropdownOpen, (v: boolean) => (darkDropdownOpen = v))}
-			{@render themeSlot('light', lightThemes, settingsStore.systemLightTheme?.id ?? settingsStore.settings.systemLightThemeId, lightDropdownOpen, (v: boolean) => (lightDropdownOpen = v))}
-		</div>
+		<SettingRow label="Themes" description="Choose a theme for each color mode. The active theme follows your system or color-mode preference above.">
+			<div class="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
+				{@render themeSlot('dark', darkThemes, settingsStore.systemDarkTheme?.id ?? settingsStore.settings.systemDarkThemeId, darkDropdownOpen, (v: boolean) => (darkDropdownOpen = v))}
+				{@render themeSlot('light', lightThemes, settingsStore.systemLightTheme?.id ?? settingsStore.settings.systemLightThemeId, lightDropdownOpen, (v: boolean) => (lightDropdownOpen = v))}
+			</div>
+		</SettingRow>
 	</div>
 </div>
 

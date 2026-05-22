@@ -155,8 +155,8 @@
 	</div>
 
 	{#if !isSecureCtx}
-		<div class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-1">
-			<p class="text-sm font-medium text-amber-500">Notifications require HTTPS</p>
+		<div class="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 space-y-1">
+			<p class="text-sm font-medium text-warning">Notifications require HTTPS</p>
 			<p class="text-xs text-muted-foreground">Web Push uses VAPID, which browsers only allow on secure origins (HTTPS or <code>localhost</code>). Reach Skald over HTTPS to enable notifications.</p>
 		</div>
 		<button
@@ -174,7 +174,7 @@
 			<p class="text-sm text-muted-foreground">Notifications are not supported in this browser.</p>
 		</div>
 	{:else if notifPermission === 'granted'}
-		<div class="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm text-green-500">
+		<div class="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-4 py-3 text-sm text-success">
 			<Bell class="h-4 w-4" />
 			<span>Notifications enabled</span>
 		</div>
@@ -189,7 +189,7 @@
 		</button>
 		<p class="text-sm text-muted-foreground">Get alerts when background responses complete.</p>
 		{#if notifStatus}
-			<p class="text-xs text-amber-500">{notifStatus}</p>
+			<p class="text-xs text-warning">{notifStatus}</p>
 		{/if}
 	{/if}
 
@@ -305,7 +305,7 @@
 		<SettingRow label="Background push notifications" description="Receive notifications even when Skald isn't open. Works on mobile and desktop.">
 			{#if pushSubscribed}
 				<div class="flex items-center gap-3">
-					<div class="flex items-center gap-2 text-sm text-green-500">
+					<div class="flex items-center gap-2 text-sm text-success">
 						<Bell class="h-4 w-4" />
 						<span>Push active on this device</span>
 					</div>
@@ -335,7 +335,7 @@
 				</button>
 			{/if}
 			{#if pushStatus}
-				<p class="text-xs text-amber-500">{pushStatus}</p>
+				<p class="text-xs text-warning">{pushStatus}</p>
 			{/if}
 		</SettingRow>
 	{/if}

@@ -292,7 +292,7 @@
 												<div class="border-b border-border/50 px-4 py-3 last:border-b-0 {!entry.enabled ? 'opacity-40' : ''}">
 													<div class="mb-1.5 flex flex-wrap items-center gap-2">
 														{#if entry.constant}
-															<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-500">
+															<span class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">
 																<Pin class="h-3 w-3" /> Always
 															</span>
 														{/if}

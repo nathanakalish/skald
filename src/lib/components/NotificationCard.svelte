@@ -28,13 +28,13 @@
 	// chrome reads as one family and only the bar communicates type.
 	const accentBg = $derived({
 		primary: 'bg-primary',
-		success: 'bg-emerald-500',
+		success: 'bg-success',
 		error: 'bg-destructive',
 		info: 'bg-primary',
 	}[accent]);
 	const accentFg = $derived({
 		primary: 'text-primary',
-		success: 'text-emerald-400',
+		success: 'text-success',
 		error: 'text-destructive',
 		info: 'text-primary',
 	}[accent]);

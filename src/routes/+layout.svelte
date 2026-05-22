@@ -2823,7 +2823,7 @@
 					</button>
 				</div>
 				{#if notif.status}
-					<p class="text-xs text-amber-500">{notif.status}</p>
+					<p class="text-xs text-warning">{notif.status}</p>
 				{/if}
 			</div>
 		{/if}

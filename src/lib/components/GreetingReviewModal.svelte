@@ -150,7 +150,7 @@
 							{#each results as _, i}
 								<button
 									onclick={() => (activeIndex = i)}
-									class="flex h-5 w-5 items-center justify-center rounded-full text-xs transition-colors {i === activeIndex ? 'bg-primary text-primary-foreground' : accepted[i] ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground hover:bg-accent'}"
+									class="flex h-5 w-5 items-center justify-center rounded-full text-xs transition-colors {i === activeIndex ? 'bg-primary text-primary-foreground' : accepted[i] ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground hover:bg-accent'}"
 								>{accepted[i] ? '✓' : i + 1}</button>
 							{/each}
 							<button
@@ -168,7 +168,7 @@
 			<div class="flex items-center gap-2 border-b border-border px-5 py-2 text-sm font-medium text-muted-foreground">
 				<span>{label}</span>
 				{#if accepted[activeIndex]}
-					<span class="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-500">
+					<span class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
 						<Check class="h-3 w-3" /> Accepted
 					</span>
 				{/if}

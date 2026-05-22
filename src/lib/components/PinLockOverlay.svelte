@@ -109,7 +109,7 @@
 				/>
 
 				{#if lockoutRemainingSec > 0}
-					<p class="text-center text-sm text-amber-500">Locked out — try again in {lockoutRemainingSec}s</p>
+					<p class="text-center text-sm text-destructive">Locked out — try again in {lockoutRemainingSec}s</p>
 				{:else if error}
 					<p class="text-center text-sm text-destructive">{error}</p>
 				{/if}

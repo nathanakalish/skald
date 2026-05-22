@@ -180,8 +180,8 @@
 		</div>
 	{/if}
 
-	<div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-		<p class="font-medium text-amber-500">Heads up — this is a light guard, not hardened security.</p>
+	<div class="rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
+		<p class="font-medium text-warning">Heads up — this is a light guard, not hardened security.</p>
 		<p class="mt-1">It keeps the UI out of the way of someone glancing at your screen, but anyone with browser dev tools or technical know-how could bypass it. Don't rely on it to protect truly sensitive data.</p>
 	</div>
 

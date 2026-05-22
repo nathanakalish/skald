@@ -74,7 +74,7 @@
 					<p class="mt-1 text-xs text-muted-foreground">v{versionInfo.current} is the latest version.</p>
 				</div>
 			{:else}
-				<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
+				<div class="rounded-lg border border-warning/30 bg-warning/5 p-4">
 					<p class="text-sm font-medium text-foreground">Unable to check for updates</p>
 					<p class="mt-1 text-xs text-muted-foreground">Could not reach GitHub. If this is a private repo, set the GITHUB_TOKEN environment variable.</p>
 				</div>

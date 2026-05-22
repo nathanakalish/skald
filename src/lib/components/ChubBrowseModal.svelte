@@ -836,7 +836,7 @@
 										{@const d = dupFor(card)!}
 										{@const upd = hasUpdate(card)}
 										<span
-											class="absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase text-white shadow {upd ? 'bg-amber-500/90' : 'bg-emerald-500/90'}"
+											class="absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase text-white shadow {upd ? 'bg-warning/90' : 'bg-success/90'}"
 											use:tooltip={upd ? `Update available on CHUB (last activity ${card.lastActivityAt ? new Date(card.lastActivityAt).toLocaleDateString() : 'newer'})` : d.exact ? `Already imported: ${d.exact.name}` : `You have a ${activeType} named “${d.byName[0].name}”`}
 										>{upd ? 'Update' : d.exact ? 'Owned' : 'Match'}</span>
 									{/if}
@@ -1143,9 +1143,9 @@
 							{#if tagsInclude.length > 0}
 								<div class="mb-1.5 flex flex-wrap gap-1">
 									{#each tagsInclude as t (t)}
-										<span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+										<span class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs text-success">
 											{t}
-											<button onclick={() => removeIncludeTag(t)} class="rounded-full hover:bg-emerald-500/30" aria-label="Remove {t}">
+											<button onclick={() => removeIncludeTag(t)} class="rounded-full hover:bg-success/30" aria-label="Remove {t}">
 												<X class="h-3 w-3" />
 											</button>
 										</span>
@@ -1375,7 +1375,7 @@
 							<button
 								onclick={() => { const c = dc.card; const id = existingId!; dupConfirm = null; void replaceImport(c, id); }}
 								disabled={importingPath !== null}
-								class="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 {upd ? 'bg-amber-500 text-white hover:bg-amber-500/90' : 'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'}"
+								class="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 {upd ? 'bg-warning text-warning-foreground hover:bg-warning/90' : 'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'}"
 							>
 								{upd ? 'Update from CHUB' : 'Replace existing'}
 								{#if activeType === 'character'}
