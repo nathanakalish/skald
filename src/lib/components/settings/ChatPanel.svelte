@@ -42,6 +42,31 @@
 		{ value: '200', label: '200' },
 		{ value: '0', label: 'All' }
 	];
+
+	// Per-message actions that can be promoted from the long-press / right-click
+	// menu to always-visible quick buttons under each bubble. Ids must match
+	// the ones checked in ChatView's `pinnedActions` set.
+	const PINNABLE_ACTIONS: { id: string; label: string; description: string }[] = [
+		{ id: 'regenerate', label: 'Regenerate', description: 'Last assistant message only.' },
+		{ id: 'resend', label: 'Resend', description: 'Last user message only.' },
+		{ id: 'branch', label: 'Branch from here', description: 'Older messages only.' },
+		{ id: 'edit', label: 'Edit', description: 'Any non-compacted message.' },
+		{ id: 'copy', label: 'Copy', description: 'Any message.' },
+		{ id: 'delete', label: 'Delete', description: 'Any message except the first.' },
+		{ id: 'viewReasoning', label: 'View reasoning', description: 'Messages with reasoning attached.' },
+		{ id: 'swipes', label: 'Swipe navigation', description: 'The ‹ 1/2 › selector. Hidden when a message has no alternate swipes.' }
+	];
+
+	const pinnedSet = $derived(
+		new Set(String(s.pinnedMessageActions || '').split(',').map((x) => x.trim()).filter(Boolean))
+	);
+
+	async function togglePinned(id: string) {
+		const next = new Set(pinnedSet);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		await save('pinnedMessageActions', Array.from(next).join(','));
+	}
 </script>
 
 <div class="space-y-6">
@@ -129,6 +154,29 @@
 			{/each}
 		</div>
 	</SettingRow>
+
+	<div class="border-t border-border pt-6">
+		<div class="mb-3">
+			<h4 class="text-sm font-semibold">Message actions</h4>
+			<p class="text-xs text-muted-foreground">Pinned actions show as always-visible buttons under each chat bubble. Unpinned actions stay tucked away in the long-press / right-click menu.</p>
+		</div>
+		<div class="grid gap-2 @xl:grid-cols-2">
+			{#each PINNABLE_ACTIONS as action}
+				<label class="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-accent/50">
+					<input
+						type="checkbox"
+						checked={pinnedSet.has(action.id)}
+						onchange={() => togglePinned(action.id)}
+						class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+					/>
+					<span class="flex flex-col">
+						<span class="text-sm font-medium text-foreground">{action.label}</span>
+						<span class="text-xs text-muted-foreground">{action.description}</span>
+					</span>
+				</label>
+			{/each}
+		</div>
+	</div>
 
 	<div class="border-t border-border pt-6">
 		<RegexScriptsPanel {active} />

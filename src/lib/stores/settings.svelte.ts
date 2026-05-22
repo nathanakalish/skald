@@ -66,6 +66,9 @@ export interface Settings {
 	narrationBold: boolean;
 	narrationItalic: boolean;
 	nestedEmphasisInSpeech: boolean;
+	/** Comma-separated list of message action IDs (regenerate, resend, branch, edit, copy, delete, viewReasoning).
+	 * Pinned actions render as always-visible quick buttons under each bubble and are removed from the long-press / right-click menu. */
+	pinnedMessageActions: string;
 	[k: string]: unknown;
 }
 
@@ -126,7 +129,8 @@ const defaults: Settings = {
 	narrationOpacity: 100,
 	narrationBold: false,
 	narrationItalic: false,
-	nestedEmphasisInSpeech: true
+	nestedEmphasisInSpeech: true,
+	pinnedMessageActions: ''
 };
 
 let _settings = $state<Settings>({ ...defaults });

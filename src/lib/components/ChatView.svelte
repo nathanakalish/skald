@@ -367,6 +367,13 @@
 	let editingId: number | null = $state(null);
 	let editContent = $state('');
 	let isTexting = $derived(chat.mode === 'texting');
+
+	// Which per-message actions the user has pinned as always-visible quick buttons
+	// below each bubble. Pinned ids are also hidden from the long-press / right-click
+	// menu so the same action doesn't appear in two places.
+	const pinnedActions = $derived(
+		new Set((String(settingsStore.settings.pinnedMessageActions || '')).split(',').map((s) => s.trim()).filter(Boolean))
+	);
 	let keyboardVisible = $state(false);
 	let showScrollButton = $state(false);
 	let scrollButtonAttention = $state(false);
@@ -2897,6 +2904,127 @@
 						onimageClick={(src) => (enlargedImage = src)}
 						onenlargeAvatar={(src) => (enlargedImage = src)}
 					/>
+					{@const reasoningPresent = !!message.reasoning?.[message.swipeIndex]}
+					{@const pinShow = {
+						viewReasoning: pinnedActions.has('viewReasoning') && reasoningPresent,
+						regenerate: pinnedActions.has('regenerate') && message.role === 'assistant' && isLast && (i !== 0 || isTexting) && !isCompacted,
+						resend: pinnedActions.has('resend') && message.role === 'user' && isLast && !isCompacted,
+						branch: pinnedActions.has('branch') && !isLast && !isCompacted,
+						edit: pinnedActions.has('edit') && !isCompacted && editingId !== message.id,
+						copy: pinnedActions.has('copy'),
+						del: pinnedActions.has('delete') && i > 0 && !isCompacted,
+						swipes: pinnedActions.has('swipes') && message.swipes.length > 1
+					}}
+					{@const hasPinned = pinShow.viewReasoning || pinShow.regenerate || pinShow.resend || pinShow.branch || pinShow.edit || pinShow.copy || pinShow.del || pinShow.swipes}
+					{#if hasPinned && groupEnd && !(deletingFromIdx !== null && i >= deletingFromIdx) && !(deletingSingleIdx !== null && i === deletingSingleIdx)}
+						<div class="mt-0.5 flex items-center gap-0.5 text-muted-foreground {message.role === 'user' ? 'justify-end' : 'justify-start md:pl-12'}">
+							{#if pinShow.swipes}
+								<button
+									type="button"
+									onclick={() => swipeMessage(i, -1)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Previous swipe'}
+									aria-label="Previous swipe"
+								>
+									<ChevronLeft class="h-3.5 w-3.5" />
+								</button>
+								<span class="px-1 text-xs tabular-nums">{message.swipeIndex + 1}/{message.swipes.length}</span>
+								<button
+									type="button"
+									onclick={() => swipeMessage(i, 1)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Next swipe'}
+									aria-label="Next swipe"
+								>
+									<ChevronRight class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.viewReasoning}
+								<button
+									type="button"
+									onclick={() => { reasoningModalIsImpersonation = message.role === 'user'; reasoningModalIsLive = false; reasoningModalText = message.reasoning[message.swipeIndex]; reasoningModalMessageId = message.id; showReasoningModal = true; }}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+									use:tooltip={'View reasoning'}
+									aria-label="View reasoning"
+								>
+									<Brain class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.regenerate}
+								<button
+									type="button"
+									onclick={() => regenerateMessage()}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Regenerate'}
+									aria-label="Regenerate"
+								>
+									<RefreshCw class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.resend}
+								<button
+									type="button"
+									onclick={() => resendMessage(i)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Resend'}
+									aria-label="Resend"
+								>
+									<CornerRightUp class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.branch}
+								<button
+									type="button"
+									onclick={() => branchFromHere(i)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Branch from here'}
+									aria-label="Branch from here"
+								>
+									<GitBranchPlus class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.edit}
+								<button
+									type="button"
+									onclick={() => startEdit(message)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Edit'}
+									aria-label="Edit"
+								>
+									<Pencil class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.copy}
+								<button
+									type="button"
+									onclick={async () => { try { await navigator.clipboard.writeText(message.content); haptic('success'); toasts.success('Copied'); } catch { toasts.error('Copy failed'); } }}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+									use:tooltip={'Copy'}
+									aria-label="Copy"
+								>
+									<Copy class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.del}
+								<button
+									type="button"
+									onclick={() => requestDelete(i)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Delete'}
+									aria-label="Delete"
+								>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+						</div>
+					{/if}
 				{/if}
 			{/each}
 
@@ -3194,7 +3322,7 @@
 			class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
 			style="--popup-origin: {msgMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {msgMenuPosition.x}px; {msgMenuPosition.flipUp ? 'bottom' : 'top'}: {msgMenuPosition.flipUp ? (msgMenuPosition.viewportH - msgMenuPosition.y) + 'px' : msgMenuPosition.y + 'px'}"
 		>
-			{#if menuMsg.swipes.length > 1}
+			{#if menuMsg.swipes.length > 1 && !pinnedActions.has('swipes')}
 				<div class="flex items-center justify-center gap-1 px-3 py-1.5">
 					<button
 						type="button"
@@ -3243,7 +3371,7 @@
 				</div>
 				<div class="my-0.5 h-px bg-border"></div>
 			{/if}
-			{#if menuMsg.reasoning[menuMsg.swipeIndex]}
+			{#if menuMsg.reasoning[menuMsg.swipeIndex] && !pinnedActions.has('viewReasoning')}
 				<button
 					type="button"
 					onclick={() => { reasoningModalIsImpersonation = menuMsg.role === 'user'; reasoningModalIsLive = false; reasoningModalText = menuMsgObj.reasoning[menuMsgObj.swipeIndex]; reasoningModalMessageId = menuMsgObj.id; showReasoningModal = true; closeMsgMenu(); }}
@@ -3252,7 +3380,7 @@
 					<Brain class="h-4 w-4" />View reasoning
 				</button>
 			{/if}
-			{#if menuShowRegen && !menuIsCompacted}
+			{#if menuShowRegen && !menuIsCompacted && !pinnedActions.has('regenerate')}
 				<button
 					type="button"
 					onclick={() => { regenerateMessage(); closeMsgMenu(); }}
@@ -3263,14 +3391,16 @@
 				</button>
 			{/if}
 			{#if menuIsLastUser && !menuIsCompacted}
-				<button
-					type="button"
-					onclick={() => { resendMessage(menuMsgIdx); closeMsgMenu(); }}
-					disabled={isStreaming}
-					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
-				>
-					<CornerRightUp class="h-4 w-4" />Resend
-				</button>
+				{#if !pinnedActions.has('resend')}
+					<button
+						type="button"
+						onclick={() => { resendMessage(menuMsgIdx); closeMsgMenu(); }}
+						disabled={isStreaming}
+						class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+					>
+						<CornerRightUp class="h-4 w-4" />Resend
+					</button>
+				{/if}
 				<button
 					type="button"
 					onclick={() => {
@@ -3333,7 +3463,7 @@
 					<Wand2 class="h-4 w-4" />{menuAssistantGuidance ? 'Edit reply guidance…' : 'Guide reply…'}
 				</button>
 			{/if}
-			{#if !menuIsLast && !menuIsCompacted}
+			{#if !menuIsLast && !menuIsCompacted && !pinnedActions.has('branch')}
 				<button
 					type="button"
 					onclick={() => { branchFromHere(menuMsgIdx); closeMsgMenu(); }}
@@ -3353,23 +3483,27 @@
 					<Wand2 class="h-4 w-4" />Reformat greeting
 				</button>
 			{/if}
-			<button
-				type="button"
-				onclick={() => { startEdit(menuMsgObj); closeMsgMenu(); }}
-				disabled={isStreaming || menuIsCompacted}
-				class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
-				use:tooltip={menuIsCompacted ? 'Compacted messages cannot be edited' : ''}
-			>
-				<Pencil class="h-4 w-4" />Edit
-			</button>
-			<button
-				type="button"
-				onclick={async () => { try { await navigator.clipboard.writeText(menuMsgObj.content); haptic('success'); toasts.success('Copied'); } catch { toasts.error('Copy failed'); } closeMsgMenu(); }}
-				class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
-			>
-				<Copy class="h-4 w-4" />Copy
-			</button>
-			{#if menuMsgIdx > 0 && !menuIsCompacted}
+			{#if !pinnedActions.has('edit')}
+				<button
+					type="button"
+					onclick={() => { startEdit(menuMsgObj); closeMsgMenu(); }}
+					disabled={isStreaming || menuIsCompacted}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+					use:tooltip={menuIsCompacted ? 'Compacted messages cannot be edited' : ''}
+				>
+					<Pencil class="h-4 w-4" />Edit
+				</button>
+			{/if}
+			{#if !pinnedActions.has('copy')}
+				<button
+					type="button"
+					onclick={async () => { try { await navigator.clipboard.writeText(menuMsgObj.content); haptic('success'); toasts.success('Copied'); } catch { toasts.error('Copy failed'); } closeMsgMenu(); }}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+				>
+					<Copy class="h-4 w-4" />Copy
+				</button>
+			{/if}
+			{#if menuMsgIdx > 0 && !menuIsCompacted && !pinnedActions.has('delete')}
 				<div class="my-1 h-px bg-border"></div>
 				<button
 					type="button"

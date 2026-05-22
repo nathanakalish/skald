@@ -31,4 +31,5 @@ export const ALLOWED_SETTING_KEYS = [
 	'linkOpacity', 'linkBold', 'linkItalic',
 	'narrationOpacity', 'narrationBold', 'narrationItalic',
 	'nestedEmphasisInSpeech',
+	'pinnedMessageActions',
 ];
