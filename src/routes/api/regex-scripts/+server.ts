@@ -5,6 +5,7 @@ import { regexScripts } from '$lib/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -23,7 +24,7 @@ export const POST: RequestHandler = async (event) => {
 	const { name, findRegex, replaceString, affectUserInput, affectAiResponse, characterId, enabled } = body;
 
 	if (!name || !findRegex) {
-		return json({ error: 'Name and find regex are required' }, { status: 400 });
+		return ApiError.badRequest('Name and find regex are required');
 	}
 
 	const lengthError = validateLengths(body, {
@@ -34,13 +35,13 @@ export const POST: RequestHandler = async (event) => {
 	if (lengthError) return lengthError;
 
 	if (typeof findRegex !== 'string' || findRegex.length > 500) {
-		return json({ error: 'Regex too long (max 500 chars)' }, { status: 400 });
+		return ApiError.badRequest('Regex too long (max 500 chars)');
 	}
 	// Cheap heuristic to block obviously catastrophic patterns:
 	// nested groups with unbounded quantifiers, or character classes
 	// followed by quantifiers — the classic ReDoS shapes.
 	if (/(\([^)]*[+*][^)]*\)|\[[^\]]*\])[+*]/.test(findRegex)) {
-		return json({ error: 'Regex pattern looks vulnerable to catastrophic backtracking' }, { status: 400 });
+		return ApiError.badRequest('Regex pattern looks vulnerable to catastrophic backtracking');
 	}
 
 	// Validate regex
@@ -49,7 +50,7 @@ export const POST: RequestHandler = async (event) => {
 		try {
 			new RegExp(regexMatch[1], regexMatch[2]);
 		} catch {
-			return json({ error: 'Invalid regular expression' }, { status: 400 });
+			return ApiError.badRequest('Invalid regular expression');
 		}
 	}
 

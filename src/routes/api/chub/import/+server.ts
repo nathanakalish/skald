@@ -7,6 +7,7 @@ import { logger } from '$lib/server/logger.js';
 import { db } from '$lib/db/index.js';
 import { characters, lorebooks } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Body: { type: 'character' | 'lorebook', fullPath: 'creator/slug' }
@@ -22,14 +23,14 @@ import { and, eq } from 'drizzle-orm';
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	if (!getAdminSettingBool('allowChubBrowse') && user.role !== 'admin') {
-		return json({ error: 'CHUB browsing is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('CHUB browsing is disabled by the administrator');
 	}
 
 	let body: { type?: string; fullPath?: string; lastActivityAt?: unknown; avatarUrl?: unknown };
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return ApiError.badRequest('Invalid JSON body');
 	}
 
 	const type = body.type === 'lorebook' ? 'lorebook' : 'character';
@@ -45,11 +46,11 @@ export const POST: RequestHandler = async (event) => {
 		? body.avatarUrl
 		: null;
 	if (!fullPath || !fullPath.includes('/') || fullPath.length > 200) {
-		return json({ error: 'Invalid fullPath' }, { status: 400 });
+		return ApiError.badRequest('Invalid fullPath');
 	}
 
 	if (type === 'character' && !getAdminSettingBool('allowCharacterImport') && user.role !== 'admin') {
-		return json({ error: 'Character import is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('Character import is disabled by the administrator');
 	}
 
 	let downloaded;

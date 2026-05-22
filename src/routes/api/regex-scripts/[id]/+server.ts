@@ -5,6 +5,7 @@ import { regexScripts } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const { row: existing } = requireOwned(event, regexScripts, event.params.id);
@@ -24,10 +25,10 @@ export const PATCH: RequestHandler = async (event) => {
 	if (body.name !== undefined) updates.name = body.name;
 	if (body.findRegex !== undefined) {
 		if (typeof body.findRegex !== 'string' || body.findRegex.length > 500) {
-			return json({ error: 'Regex too long (max 500 chars)' }, { status: 400 });
+			return ApiError.badRequest('Regex too long (max 500 chars)');
 		}
 		if (/(\([^)]*[+*][^)]*\)|\[[^\]]*\])[+*]/.test(body.findRegex)) {
-			return json({ error: 'Regex pattern looks vulnerable to catastrophic backtracking' }, { status: 400 });
+			return ApiError.badRequest('Regex pattern looks vulnerable to catastrophic backtracking');
 		}
 		// Validate regex
 		const regexMatch = body.findRegex.match(/^\/(.+)\/([gimsuy]*)$/s);
@@ -35,7 +36,7 @@ export const PATCH: RequestHandler = async (event) => {
 			try {
 				new RegExp(regexMatch[1], regexMatch[2]);
 			} catch {
-				return json({ error: 'Invalid regular expression' }, { status: 400 });
+				return ApiError.badRequest('Invalid regular expression');
 			}
 		}
 		updates.findRegex = body.findRegex;

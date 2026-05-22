@@ -5,6 +5,7 @@ import { getAdminSettingBool } from '$lib/server/adminSettings.js';
 import { db } from '$lib/db/index.js';
 import { characters, lorebooks } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * POST /api/chub/link
@@ -19,21 +20,21 @@ import { and, eq } from 'drizzle-orm';
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	if (!getAdminSettingBool('allowChubBrowse') && user.role !== 'admin') {
-		return json({ error: 'CHUB browsing is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('CHUB browsing is disabled by the administrator');
 	}
 
 	let body: { type?: string; fullPath?: unknown; id?: unknown; lastActivityAt?: unknown };
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return ApiError.badRequest('Invalid JSON body');
 	}
 
 	const type = body.type === 'lorebook' ? 'lorebook' : 'character';
 	const id = typeof body.id === 'number' && Number.isInteger(body.id) ? body.id : null;
 	const rawPath = typeof body.fullPath === 'string' ? body.fullPath.trim() : '';
-	if (id == null) return json({ error: 'id required' }, { status: 400 });
-	if (rawPath.length > 200) return json({ error: 'fullPath too long' }, { status: 400 });
+	if (id == null) return ApiError.badRequest('id required');
+	if (rawPath.length > 200) return ApiError.badRequest('fullPath too long');
 	const fullPath = rawPath.length > 0 ? rawPath : null;
 	const lastActivityAt = typeof body.lastActivityAt === 'string' && body.lastActivityAt.length <= 64
 		? body.lastActivityAt
@@ -45,7 +46,7 @@ export const POST: RequestHandler = async (event) => {
 		.from(table)
 		.where(and(eq(table.id, id), eq(table.userId, user.id)))
 		.get();
-	if (!row) return json({ error: 'Not found' }, { status: 404 });
+	if (!row) return ApiError.notFound('Not found');
 
 	db.update(table)
 		.set({ chubFullPath: fullPath, chubLastActivityAt: fullPath ? lastActivityAt : null })

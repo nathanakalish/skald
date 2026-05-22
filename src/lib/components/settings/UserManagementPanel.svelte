@@ -158,7 +158,7 @@
 					<LimitedInput
 						bind:value={newUsername}
 						limit={FIELD_LIMITS.username}
-						class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+						class="field-input"
 						placeholder="username"
 						autocomplete="off"
 					/>
@@ -203,7 +203,7 @@
 								<LimitedInput
 									bind:value={editUsername}
 									limit={FIELD_LIMITS.username}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									autocomplete="off"
 								/>
 							</div>

@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
 import { requireUser } from '$lib/server/auth.js';
 import type { ChatMessage, SamplerSettings } from '$lib/providers/base.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const FIELD_KEYS = ['name', 'description', 'personality', 'scenario', 'firstMessage', 'systemPrompt', 'tags'] as const;
 type FieldKey = typeof FIELD_KEYS[number];
@@ -92,7 +93,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const userMessage = typeof body?.userMessage === 'string' ? body.userMessage.trim() : '';
 	if (!userMessage) {
-		return json({ error: 'userMessage is required' }, { status: 400 });
+		return ApiError.badRequest('userMessage is required');
 	}
 
 	// Resolve provider: characterCreator setting > reformatter setting > enabled default
@@ -112,7 +113,7 @@ export const POST: RequestHandler = async (event) => {
 			.get();
 	}
 	if (!provider) {
-		return json({ error: 'No provider available. Configure one in Settings > Providers.' }, { status: 400 });
+		return ApiError.badRequest('No provider available. Configure one in Settings > Providers.');
 	}
 
 	const activeModel = settingModel || provider.defaultModel || '';
@@ -179,7 +180,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (!parsed) {
-		return json({ error: 'Model did not return valid JSON. Try again or rephrase.' }, { status: 502 });
+		return ApiError.badGateway('Model did not return valid JSON. Try again or rephrase.');
 	}
 
 	// Drop empty-string echoes that don't actually change anything

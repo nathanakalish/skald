@@ -10,6 +10,7 @@ import { chatSidebar } from '$lib/server/projections.js';
 import { logger } from '$lib/server/logger.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { encodeChatListCursor, parseChatListCursor } from '$lib/server/chatListCursor.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // GET /api/chats — paginated chat list for the sidebar.
 //   ?limit=N            (default 50, max 200)
@@ -75,7 +76,7 @@ export const GET: RequestHandler = async (event) => {
 	} else {
 		const parsedCursor = parseChatListCursor(cursor);
 		if (!parsedCursor) {
-			return json({ error: 'Invalid cursor' }, { status: 400 });
+			return ApiError.badRequest('Invalid cursor');
 		}
 		rows = db.select(chatSidebar)
 			.from(chats)
@@ -127,7 +128,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const character = db.select().from(characters).where(and(eq(characters.id, characterId), eq(characters.userId, user.id))).get();
 	if (!character) {
-		return json({ error: 'Character not found' }, { status: 404 });
+		return ApiError.notFound('Character not found');
 	}
 
 	// Default persona drives {{user}} substitution.

@@ -7,6 +7,7 @@ import { requireUser } from '$lib/server/auth.js';
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { checkLength } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const MAX_LOREBOOK_ENTRIES = 5_000;
 
@@ -21,7 +22,7 @@ export const POST: RequestHandler = async (event) => {
 	const file = formData.get('file') as File | null;
 
 	if (!file) {
-		return json({ error: 'No file provided' }, { status: 400 });
+		return ApiError.badRequest('No file provided');
 	}
 	const maxBytes = (getAdminSettingNumber('lorebookImportMaxMiB') || 4) * 1024 * 1024;
 	if (file.size > maxBytes) {
@@ -35,11 +36,11 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		data = JSON.parse(text);
 	} catch {
-		return json({ error: 'Invalid JSON file' }, { status: 400 });
+		return ApiError.badRequest('Invalid JSON file');
 	}
 
 	if (!data || typeof data !== 'object') {
-		return json({ error: 'Invalid lorebook format' }, { status: 400 });
+		return ApiError.badRequest('Invalid lorebook format');
 	}
 
 	const obj = data as Record<string, unknown>;
@@ -60,12 +61,12 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (!bookRaw) {
-		return json({ error: 'Could not find lorebook entries in file' }, { status: 400 });
+		return ApiError.badRequest('Could not find lorebook entries in file');
 	}
 
 	const parsed = parseCharacterBook(bookRaw);
 	if (!parsed || parsed.entries.length === 0) {
-		return json({ error: 'No valid entries found in lorebook' }, { status: 400 });
+		return ApiError.badRequest('No valid entries found in lorebook');
 	}
 	if (parsed.entries.length > MAX_LOREBOOK_ENTRIES) {
 		return json({

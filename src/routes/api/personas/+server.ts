@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const PERSONA_FIELD_LIMITS = {
 	name: 'name',
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async (event) => {
 
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
-	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+	if (!name) return ApiError.badRequest('Name is required');
 
 	const tooLong = validateLengths(body, PERSONA_FIELD_LIMITS);
 	if (tooLong) return tooLong;
@@ -70,7 +71,7 @@ export const POST: RequestHandler = async (event) => {
 			.get();
 	});
 
-	if (conflict) return json({ error: 'A persona with that name already exists' }, { status: 409 });
+	if (conflict) return ApiError.conflict('A persona with that name already exists');
 
 	// Return all personas — setting isDefault may have demoted others
 	const list = db.select().from(personas).where(eq(personas.userId, user.id)).all();

@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
 import { retryOnce } from '$lib/providers/retry.js';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -13,7 +14,7 @@ export const GET: RequestHandler = async (event) => {
 	const provider = db.select().from(providers).where(and(eq(providers.id, id), eq(providers.userId, user.id))).get();
 
 	if (!provider) {
-		return json({ error: 'Provider not found' }, { status: 404 });
+		return ApiError.notFound('Provider not found');
 	}
 
 	try {

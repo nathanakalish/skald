@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { users } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /** Update a user (admin only) */
 export const PUT: RequestHandler = async (event) => {
@@ -12,7 +13,7 @@ export const PUT: RequestHandler = async (event) => {
 	const { username, role } = await event.request.json();
 
 	const user = db.select().from(users).where(eq(users.id, userId)).get();
-	if (!user) return json({ error: 'User not found' }, { status: 404 });
+	if (!user) return ApiError.notFound('User not found');
 
 	const updates: Record<string, unknown> = {};
 
@@ -21,7 +22,7 @@ export const PUT: RequestHandler = async (event) => {
 		const existing = db.select().from(users).where(eq(users.username, username.trim())).get();
 		if (existing && existing.id !== userId) {
 			event.locals.logger.warn('admin: rename rejected, duplicate username', { actorId: admin.id, targetUserId: userId, attemptedUsername: username.trim() });
-			return json({ error: 'Username already taken' }, { status: 409 });
+			return ApiError.conflict('Username already taken');
 		}
 		updates.username = username.trim();
 	}
@@ -36,7 +37,7 @@ export const PUT: RequestHandler = async (event) => {
 				.all().length;
 			if (adminCount <= 1) {
 				event.locals.logger.warn('admin: role change rejected, would remove last admin', { actorId: admin.id, targetUserId: userId });
-				return json({ error: 'Cannot remove the last admin' }, { status: 400 });
+				return ApiError.badRequest('Cannot remove the last admin');
 			}
 		}
 		updates.role = role;
@@ -66,11 +67,11 @@ export const DELETE: RequestHandler = async (event) => {
 
 	if (userId === admin.id) {
 		event.locals.logger.warn('admin: self-deletion rejected', { actorId: admin.id });
-		return json({ error: 'Cannot delete yourself' }, { status: 400 });
+		return ApiError.badRequest('Cannot delete yourself');
 	}
 
 	const user = db.select().from(users).where(eq(users.id, userId)).get();
-	if (!user) return json({ error: 'User not found' }, { status: 404 });
+	if (!user) return ApiError.notFound('User not found');
 
 	// Prevent deleting the last admin
 	if (user.role === 'admin') {
@@ -81,7 +82,7 @@ export const DELETE: RequestHandler = async (event) => {
 			.all().length;
 		if (adminCount <= 1) {
 			event.locals.logger.warn('admin: deletion rejected, would remove last admin', { actorId: admin.id, targetUserId: userId });
-			return json({ error: 'Cannot delete the last admin' }, { status: 400 });
+			return ApiError.badRequest('Cannot delete the last admin');
 		}
 	}
 

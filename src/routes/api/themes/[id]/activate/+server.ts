@@ -6,6 +6,7 @@ import { eq, and, or } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import * as themeCache from '$lib/server/themeCache.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // POST activate a theme (stores in user settings)
 export const POST: RequestHandler = async (event) => {
@@ -17,7 +18,7 @@ export const POST: RequestHandler = async (event) => {
 		and(eq(themes.id, id), or(eq(themes.isBuiltin, true), eq(themes.userId, user.id)))
 	).get();
 	if (!theme) {
-		return json({ error: 'Theme not found' }, { status: 404 });
+		return ApiError.notFound('Theme not found');
 	}
 
 	// Upsert in one statement — the (userId, key) PK guarantees uniqueness,

@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { userSettings } from '$lib/db/schema.js';
 import { requireUser } from '$lib/server/auth.js';
 import * as themeCache from '$lib/server/themeCache.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // PUT update color mode (light/dark/system) — per-user
 export const PUT: RequestHandler = async (event) => {
@@ -12,7 +13,7 @@ export const PUT: RequestHandler = async (event) => {
 	const { colorMode } = body;
 
 	if (!['light', 'dark', 'system'].includes(colorMode)) {
-		return json({ error: 'Invalid color mode' }, { status: 400 });
+		return ApiError.badRequest('Invalid color mode');
 	}
 
 	// Upsert atomically — see CRUD-H1 in /api/themes/[id]/activate for context.

@@ -3,9 +3,11 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { themes, userSettings } from '$lib/db/schema.js';
 import { eq, and, or, isNull } from 'drizzle-orm';
+import { nameAlreadyExists } from '$lib/server/queryHelpers.js';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const THEME_FIELD_LIMITS = { name: 'name' } as const;
 
@@ -31,21 +33,18 @@ export const POST: RequestHandler = async (event) => {
 
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
-	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+	if (!name) return ApiError.badRequest('Name is required');
 	if (!mode || !colors) {
-		return json({ error: 'Missing required fields' }, { status: 400 });
+		return ApiError.badRequest('Missing required fields');
 	}
 
 	const tooLong = validateLengths(body, THEME_FIELD_LIMITS);
 	if (tooLong) return tooLong;
 
 	// CRUD-L2: per-user name uniqueness for themes.
-	const dupe = db
-		.select({ id: themes.id })
-		.from(themes)
-		.where(and(eq(themes.userId, user.id), eq(themes.name, name)))
-		.get();
-	if (dupe) return json({ error: 'A theme with that name already exists' }, { status: 409 });
+	if (nameAlreadyExists(themes, user.id, name)) {
+		return ApiError.conflict('A theme with that name already exists');
+	}
 
 	const parsed = _validateThemeColors(colors);
 	if ('error' in parsed) return json({ error: parsed.error }, { status: 400 });

@@ -5,6 +5,7 @@ import { lorebookEntries, lorebooks } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const ENTRY_FIELD_LIMITS = {
 	keywords: 'lorebookEntryKeys',
@@ -19,7 +20,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	// Verify lorebook ownership
 	const lorebook = db.select().from(lorebooks).where(and(eq(lorebooks.id, lorebookId), eq(lorebooks.userId, user.id))).get();
-	if (!lorebook) return json({ error: 'Not found' }, { status: 404 });
+	if (!lorebook) return ApiError.notFound('Not found');
 
 	const tooLong = validateLengths(body, ENTRY_FIELD_LIMITS);
 	if (tooLong) return tooLong;
@@ -52,7 +53,7 @@ export const DELETE: RequestHandler = async (event) => {
 
 	// Verify lorebook ownership
 	const lorebook = db.select().from(lorebooks).where(and(eq(lorebooks.id, lorebookId), eq(lorebooks.userId, user.id))).get();
-	if (!lorebook) return json({ error: 'Not found' }, { status: 404 });
+	if (!lorebook) return ApiError.notFound('Not found');
 
 	db.delete(lorebookEntries).where(and(eq(lorebookEntries.id, entryId), eq(lorebookEntries.lorebookId, lorebookId))).run();
 	event.locals.logger?.debug('lorebookEntry: deleted', { lorebookId, entryId });

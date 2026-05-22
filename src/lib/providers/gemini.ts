@@ -41,32 +41,14 @@ export class GeminiProvider extends OpenAIProvider {
 	}
 
 	async listModels(): Promise<string[]> {
-		// Without this guard the Gemini-specific override bypasses SSRF
-		// validation that the inherited OpenAI implementation does.
-		await this.guardEndpoint();
-		const response = await fetch(`${this.config.endpoint}/models`, {
-			headers: {
-				Authorization: `Bearer ${this.config.apiKey}`
-			}
+		return this.listModelsViaDataArray({
+			headers: { Authorization: `Bearer ${this.config.apiKey}` },
+			fallback: [
+				'gemini-2.5-flash',
+				'gemini-2.5-pro',
+				'gemini-2.0-flash',
+				'gemini-2.0-flash-lite'
+			],
 		});
-
-		if (!response.ok) return this.fallbackModels();
-
-		try {
-			const data = await response.json();
-			const models = (data.data || []).map((m: { id: string }) => m.id).sort();
-			return models.length > 0 ? models : this.fallbackModels();
-		} catch {
-			return this.fallbackModels();
-		}
-	}
-
-	private fallbackModels(): string[] {
-		return [
-			'gemini-2.5-flash',
-			'gemini-2.5-pro',
-			'gemini-2.0-flash',
-			'gemini-2.0-flash-lite'
-		];
 	}
 }

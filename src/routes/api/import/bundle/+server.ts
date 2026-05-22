@@ -18,6 +18,7 @@ import { ALLOWED_SETTING_KEYS } from '$lib/server/settingsKeys.js';
 import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
 import { findLengthViolation, checkLength, type LengthViolation } from '$lib/server/fieldLimits.js';
 import JSZip from 'jszip';
+import { ApiError } from '$lib/server/apiError.js';
 
 const MAX_BUNDLE_BYTES = 256 * 1024 * 1024; // 256 MB
 
@@ -61,14 +62,14 @@ export const POST: RequestHandler = async (event) => {
 	const startedAt = Date.now();
 	const ctype = event.request.headers.get('content-type') || '';
 	if (!ctype.includes('multipart/form-data')) {
-		return json({ error: 'Expected multipart/form-data' }, { status: 400 });
+		return ApiError.badRequest('Expected multipart/form-data');
 	}
 
 	const form = await event.request.formData();
 	const file = form.get('file') as File | null;
-	if (!file) return json({ error: 'No file uploaded' }, { status: 400 });
+	if (!file) return ApiError.badRequest('No file uploaded');
 	if (file.size > MAX_BUNDLE_BYTES) {
-		return json({ error: `File too large — max ${MAX_BUNDLE_BYTES / 1024 / 1024} MiB` }, { status: 413 });
+		return ApiError.payloadTooLarge(`File too large — max ${MAX_BUNDLE_BYTES / 1024 / 1024} MiB`);
 	}
 
 	const arrayBuf = await file.arrayBuffer();
@@ -77,7 +78,7 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		zip = await JSZip.loadAsync(arrayBuf);
 	} catch {
-		return json({ error: 'Could not read zip file' }, { status: 400 });
+		return ApiError.badRequest('Could not read zip file');
 	}
 
 	// Zip-bomb guard (IMPORT-M3). Sum every entry's UNCOMPRESSED size before
@@ -94,11 +95,11 @@ export const POST: RequestHandler = async (event) => {
 		const sz = data?.uncompressedSize;
 		if (typeof sz !== 'number' || sz < 0) {
 			logger.warn('import: zip entry missing uncompressedSize — refusing', { userId: user.id, path });
-			return json({ error: 'Could not verify uncompressed size for every entry in zip — refusing to extract.' }, { status: 400 });
+			return ApiError.badRequest('Could not verify uncompressed size for every entry in zip — refusing to extract.');
 		}
 		totalUncompressed += sz;
 		if (totalUncompressed > ZIP_UNCOMPRESSED_LIMIT) {
-			return json({ error: 'Zip would expand beyond 256 MiB \u2014 refusing to extract.' }, { status: 413 });
+			return ApiError.payloadTooLarge('Zip would expand beyond 256 MiB \u2014 refusing to extract.');
 		}
 	}
 

@@ -10,6 +10,7 @@ import { broadcast } from '$lib/server/realtime.js';
 import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { ownsProvider, ownsPersona } from '$lib/server/ownership.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // Build the same sidebar-shaped row that GET /api/chats returns, for one id.
 // Mutation handlers return this so the client store can reconcile without
@@ -50,7 +51,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	// Verify ownership.
 	const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Not found');
 
 	const lengthError = validateLengths(body, {
 		title: 'name',
@@ -74,7 +75,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if ('overrideProviderId' in body) {
 		const v = body.overrideProviderId;
 		if (v != null && !ownsProvider(user.id, Number(v))) {
-			return json({ error: 'overrideProviderId does not belong to you' }, { status: 400 });
+			return ApiError.badRequest('overrideProviderId does not belong to you');
 		}
 		updates.overrideProviderId = v ?? null;
 	}
@@ -85,7 +86,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if ('overridePersonaId' in body) {
 		const v = body.overridePersonaId;
 		if (v != null && !ownsPersona(user.id, Number(v))) {
-			return json({ error: 'overridePersonaId does not belong to you' }, { status: 400 });
+			return ApiError.badRequest('overridePersonaId does not belong to you');
 		}
 		updates.overridePersonaId = v ?? null;
 	}
@@ -100,7 +101,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if ('overrideCompactionProviderId' in body) {
 		const v = body.overrideCompactionProviderId;
 		if (v != null && !ownsProvider(user.id, Number(v))) {
-			return json({ error: 'overrideCompactionProviderId does not belong to you' }, { status: 400 });
+			return ApiError.badRequest('overrideCompactionProviderId does not belong to you');
 		}
 		updates.overrideCompactionProviderId = v ?? null;
 	}
@@ -138,7 +139,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const chat = db.select().from(chats)
 		.where(and(eq(chats.id, id), eq(chats.userId, user.id), isNull(chats.deletedAt)))
 		.get();
-	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Not found');
 
 	// CRUD-M8: soft-delete. Wipe cached images right away — those eat real
 	// disk and the user has signalled the chat is gone. The DB row stays so
@@ -161,7 +162,7 @@ export const POST: RequestHandler = async (event) => {
 	if (body.action === 'reset') {
 		// Verify ownership.
 		const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
-		if (!chat) return json({ error: 'Not found' }, { status: 404 });
+		if (!chat) return ApiError.notFound('Not found');
 
 		const allMessages = db.select().from(messages).where(eq(messages.chatId, id)).all();
 
@@ -197,5 +198,5 @@ export const POST: RequestHandler = async (event) => {
 		return json({ ok: true, chat: row });
 	}
 
-	return json({ error: 'Unknown action' }, { status: 400 });
+	return ApiError.badRequest('Unknown action');
 };

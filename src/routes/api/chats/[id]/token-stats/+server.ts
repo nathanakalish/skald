@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { buildChatContext } from '$lib/server/prompt/index.js';
 import { logger } from '$lib/server/logger.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Returns the current token usage for the chat's prompt as it would be sent
@@ -16,7 +17,7 @@ export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
 	const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Not found');
 
 	try {
 		const ctx = buildChatContext(id, { chatId: id });
@@ -29,6 +30,6 @@ export const GET: RequestHandler = async (event) => {
 		});
 	} catch (err) {
 		logger.warn('token-stats: build failed', { chatId: id, err: String(err) });
-		return json({ error: 'Could not compute' }, { status: 500 });
+		return ApiError.server('Could not compute');
 	}
 };

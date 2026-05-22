@@ -8,6 +8,7 @@ import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { characterFingerprint } from '$lib/server/bundle.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { checkLength } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 interface SkaldV1Message { role: string; content: string; createdAt?: string; }
 interface SkaldV1Export { character: string; chatId?: number; exportedAt?: string; messages: SkaldV1Message[]; }
@@ -119,7 +120,7 @@ export const POST: RequestHandler = async (event) => {
 	const { content, characterId, mode: requestedMode } = body as { content: string; characterId?: number; mode?: string };
 
 	if (!content || typeof content !== 'string') {
-		return json({ error: 'No file content provided' }, { status: 400 });
+		return ApiError.badRequest('No file content provided');
 	}
 
 	const limitResponse = enforceCreate('chats', user.id, content.length);
@@ -145,7 +146,7 @@ export const POST: RequestHandler = async (event) => {
 		character = db.select().from(characters)
 			.where(and(eq(characters.id, characterId), eq(characters.userId, user.id)))
 			.get();
-		if (!character) return json({ error: 'Character not found' }, { status: 404 });
+		if (!character) return ApiError.notFound('Character not found');
 	} else {
 		const userChars = db.select().from(characters).where(eq(characters.userId, user.id)).all();
 		if (parsed.characterFingerprint) {
@@ -172,7 +173,7 @@ export const POST: RequestHandler = async (event) => {
 	const titleSource = parsed.title || `Imported: ${character.name}`;
 	const titleV = checkLength(titleSource, 'name', 'title');
 	if (titleV) {
-		return json({ error: `Chat title exceeds maximum length of ${titleV.limit} characters (got ${titleV.length}).` }, { status: 400 });
+		return ApiError.badRequest(`Chat title exceeds maximum length of ${titleV.limit} characters (got ${titleV.length}).`);
 	}
 	const messageList: { content: string; swipes?: string[] }[] = parsed.v2?.messages
 		? parsed.v2.messages.map(m => ({ content: m.content || '', swipes: m.swipes }))
@@ -265,7 +266,7 @@ export const POST: RequestHandler = async (event) => {
 	recomputeChatTail(chatId);
 
 	const fresh = db.select().from(chats).where(eq(chats.id, chatId)).get();
-	if (!fresh) return json({ error: 'Chat vanished after import' }, { status: 500 });
+	if (!fresh) return ApiError.server('Chat vanished after import');
 	event.locals.logger?.info('chats: imported', {
 		chatId, characterId: character.id, format, messageCount, bytes: content.length,
 	});

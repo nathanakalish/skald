@@ -9,12 +9,13 @@ import { join } from 'path';
 import { requireUser } from '$lib/server/auth.js';
 import { getAdminSettingBool } from '$lib/server/adminSettings.js';
 import { getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
 
 	if (!getAdminSettingBool('allowCharacterExport') && user.role !== 'admin') {
-		return json({ error: 'Character export is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('Character export is disabled by the administrator');
 	}
 
 	const id = Number(event.params.id);
@@ -66,7 +67,7 @@ export const GET: RequestHandler = async (event) => {
 		});
 	}
 
-	return json({ error: 'Invalid format. Use json or png' }, { status: 400 });
+	return ApiError.badRequest('Invalid format. Use json or png');
 };
 
 /**

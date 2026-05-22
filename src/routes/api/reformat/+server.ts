@@ -8,6 +8,7 @@ import { requireUser } from '$lib/server/auth.js';
 import type { ChatMessage, SamplerSettings } from '$lib/providers/base.js';
 import { humanizeAnyError } from '$lib/server/chatErrors.js';
 import { logger } from '$lib/server/logger.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a text formatter. Your job is to reformat roleplay character greetings to use consistent formatting conventions.
 
@@ -32,7 +33,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const { text } = await event.request.json();
 	if (!text?.trim()) {
-		return json({ error: 'No text provided' }, { status: 400 });
+		return ApiError.badRequest('No text provided');
 	}
 
 	const settingProviderId = getUserSetting(user.id, 'reformatterProviderId');
@@ -52,7 +53,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (!provider) {
-		return json({ error: 'No provider available. Configure one in Settings > Providers.' }, { status: 400 });
+		return ApiError.badRequest('No provider available. Configure one in Settings > Providers.');
 	}
 
 	const activeModel = settingModel || provider.defaultModel || '';
@@ -97,7 +98,7 @@ export const POST: RequestHandler = async (event) => {
 	} catch (err) {
 		// Log the raw error for ops; only ship a humanised string back to the client.
 		logger.warn('reformat failed', { err: err instanceof Error ? err.message : String(err) });
-		return json({ error: `Failed to reformat: ${humanizeAnyError(err)}` }, { status: 500 });
+		return ApiError.server(`Failed to reformat: ${humanizeAnyError(err)}`);
 	}
 
 	return json({ reformatted: fullResponse.trimEnd() });

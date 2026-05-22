@@ -226,12 +226,12 @@
 			<div>
 				<span class="mb-1 block text-xs font-medium text-muted-foreground">New PIN (4–8 digits)</span>
 				<input type="password" inputmode="numeric" pattern="\d*" maxlength="8" bind:value={newPin}
-					class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+					class="field-input" />
 			</div>
 			<div>
 				<span class="mb-1 block text-xs font-medium text-muted-foreground">Confirm PIN</span>
 				<input type="password" inputmode="numeric" pattern="\d*" maxlength="8" bind:value={confirmPin}
-					class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+					class="field-input" />
 			</div>
 			<div class="space-y-2">
 				<span class="block text-xs font-medium text-muted-foreground">Lock the app…</span>
@@ -267,17 +267,17 @@
 			<div>
 				<span class="mb-1 block text-xs font-medium text-muted-foreground">Current PIN</span>
 				<input type="password" inputmode="numeric" pattern="\d*" maxlength="8" bind:value={currentPin}
-					class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+					class="field-input" />
 			</div>
 			<div>
 				<span class="mb-1 block text-xs font-medium text-muted-foreground">New PIN (4–8 digits)</span>
 				<input type="password" inputmode="numeric" pattern="\d*" maxlength="8" bind:value={newPin}
-					class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+					class="field-input" />
 			</div>
 			<div>
 				<span class="mb-1 block text-xs font-medium text-muted-foreground">Confirm new PIN</span>
 				<input type="password" inputmode="numeric" pattern="\d*" maxlength="8" bind:value={confirmPin}
-					class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+					class="field-input" />
 			</div>
 			{#if formError}<p class="text-sm text-destructive">{formError}</p>{/if}
 			<div class="flex justify-end gap-2">
@@ -291,7 +291,7 @@
 		<div class="space-y-3 rounded-lg border border-border bg-background p-3">
 			<p class="text-sm text-muted-foreground">Enter your current PIN to remove the lock.</p>
 			<input type="password" inputmode="numeric" pattern="\d*" maxlength="8" bind:value={currentPin}
-				class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+				class="field-input" />
 			{#if formError}<p class="text-sm text-destructive">{formError}</p>{/if}
 			<div class="flex justify-end gap-2">
 				<Button size="sm" onclick={cancel}>Cancel</Button>

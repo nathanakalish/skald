@@ -5,15 +5,16 @@ import { chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { abortChat } from '$lib/server/messageQueue.js';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const { chatId } = await event.request.json();
-	if (!chatId) return json({ error: 'chatId required' }, { status: 400 });
+	if (!chatId) return ApiError.badRequest('chatId required');
 
 	// Verify ownership
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	const aborted = abortChat(chatId);
 	event.locals.logger?.info('chat: abort requested', { chatId, aborted });

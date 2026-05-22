@@ -5,6 +5,7 @@ import { users } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { verifyPin, checkPinRateLimit, recordPinFailure, clearPinFailures } from '$lib/server/pin.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /** Verify a PIN attempt for the caller (used to unlock the UI overlay). */
 export const POST: RequestHandler = async (event) => {
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const body = await event.request.json().catch(() => ({}));
 	const { pin } = body ?? {};
-	if (typeof pin !== 'string') return json({ error: 'PIN required' }, { status: 400 });
+	if (typeof pin !== 'string') return ApiError.badRequest('PIN required');
 
 	const row = db
 		.select({ pinHash: users.pinHash })
@@ -36,7 +37,7 @@ export const POST: RequestHandler = async (event) => {
 		if (next.locked) {
 			return json({ error: 'Too many attempts', retryAfterMs: next.retryAfterMs }, { status: 429 });
 		}
-		return json({ error: 'Incorrect PIN' }, { status: 403 });
+		return ApiError.forbidden('Incorrect PIN');
 	}
 
 	clearPinFailures(user.id);

@@ -73,17 +73,10 @@ export class OpenAIProvider extends LLMProvider {
 	}
 
 	async listModels(): Promise<string[]> {
-		await this.guardEndpoint();
-		const response = await fetch(`${this.config.endpoint}/models`, {
-			headers: {
-				Authorization: `Bearer ${this.config.apiKey}`
-			}
+		return this.listModelsViaDataArray({
+			headers: { Authorization: `Bearer ${this.config.apiKey}` },
+			fallback: [],
 		});
-
-		if (!response.ok) return [];
-
-		const data = await response.json();
-		return (data.data || []).map((m: { id: string }) => m.id).sort();
 	}
 
 	async testConnection(): Promise<TestConnectionResult> {

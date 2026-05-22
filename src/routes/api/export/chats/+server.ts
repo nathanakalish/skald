@@ -5,6 +5,7 @@ import { buildChatsBundle } from '$lib/server/bundle.js';
 import { db } from '$lib/db/index.js';
 import { chats, characters } from '$lib/db/schema.js';
 import { eq, desc } from 'drizzle-orm';
+import { ApiError } from '$lib/server/apiError.js';
 
 /** Lightweight list of every chat the user owns — used by the export picker. */
 export const GET: RequestHandler = async (event) => {
@@ -33,13 +34,13 @@ export const POST: RequestHandler = async (event) => {
 	const ids = Array.isArray(body.chatIds)
 		? body.chatIds.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n))
 		: [];
-	if (ids.length === 0) return json({ error: 'No chats selected' }, { status: 400 });
+	if (ids.length === 0) return ApiError.badRequest('No chats selected');
 
 	const includeCharacterCard = body.includeCharacterCard !== false;
 
 	const result = await buildChatsBundle(user.id, ids, { includeCharacterCard });
 	if (result.counts.chats === 0) {
-		return json({ error: 'No matching chats found' }, { status: 404 });
+		return ApiError.notFound('No matching chats found');
 	}
 
 	const stamp = new Date().toISOString().slice(0, 10);

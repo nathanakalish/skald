@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { pushSubscriptions } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Notification devices = the push_subscriptions table, the literal source of
@@ -52,7 +53,7 @@ export const GET: RequestHandler = async (event) => {
 export const DELETE: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const endpoint = event.url.searchParams.get('endpoint');
-	if (!endpoint) return json({ error: 'Missing endpoint' }, { status: 400 });
+	if (!endpoint) return ApiError.badRequest('Missing endpoint');
 
 	db.delete(pushSubscriptions)
 		.where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.endpoint, endpoint)))

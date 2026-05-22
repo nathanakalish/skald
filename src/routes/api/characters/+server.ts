@@ -9,6 +9,7 @@ import { broadcast } from '$lib/server/realtime.js';
 import { characterLight } from '$lib/server/projections.js';
 import { enforceCreate } from '$lib/server/userLimits.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const CHARACTER_FIELD_LIMITS = {
 	name: 'name',
@@ -44,7 +45,7 @@ export const POST: RequestHandler = async (event) => {
 	// already validates, but the API was happy to create '' or '   ' rows
 	// which then display as a blank entry in every list.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
-	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+	if (!name) return ApiError.badRequest('Name is required');
 
 	const tooLong = validateLengths(body, CHARACTER_FIELD_LIMITS);
 	if (tooLong) return tooLong;

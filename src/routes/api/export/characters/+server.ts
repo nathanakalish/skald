@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { requireUser } from '$lib/server/auth.js';
 import { buildCharactersBundle } from '$lib/server/bundle.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -10,13 +11,13 @@ export const POST: RequestHandler = async (event) => {
 	const ids = Array.isArray(body.characterIds)
 		? body.characterIds.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n))
 		: [];
-	if (ids.length === 0) return json({ error: 'No characters selected' }, { status: 400 });
+	if (ids.length === 0) return ApiError.badRequest('No characters selected');
 
 	const includeChats = body.includeChats !== false;
 
 	const result = await buildCharactersBundle(user.id, ids, { includeChats });
 	if (result.counts.characters === 0) {
-		return json({ error: 'No matching characters found' }, { status: 404 });
+		return ApiError.notFound('No matching characters found');
 	}
 
 	const stamp = new Date().toISOString().slice(0, 10);

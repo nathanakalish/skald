@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { chats, lorebookEntries, lorebooks, chatLorebookEntryOverrides, chatLorebooks } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Per-chat per-entry override for `enabled` / `constant`.
@@ -23,7 +24,7 @@ async function loadAndAuthorise(event: Parameters<RequestHandler>[0]):
 	const chatId = Number(event.params.id);
 	const entryId = Number(event.params.entryId);
 	if (!Number.isFinite(chatId) || !Number.isFinite(entryId)) {
-		return { ok: false, response: json({ error: 'Invalid id' }, { status: 400 }) };
+		return { ok: false, response: ApiError.badRequest('Invalid id') };
 	}
 
 	const chat = db
@@ -31,7 +32,7 @@ async function loadAndAuthorise(event: Parameters<RequestHandler>[0]):
 		.from(chats)
 		.where(and(eq(chats.id, chatId), eq(chats.userId, user.id)))
 		.get();
-	if (!chat) return { ok: false, response: json({ error: 'Chat not found' }, { status: 404 }) };
+	if (!chat) return { ok: false, response: ApiError.notFound('Chat not found') };
 
 	const entry = db
 		.select({
@@ -47,7 +48,7 @@ async function loadAndAuthorise(event: Parameters<RequestHandler>[0]):
 		.where(eq(lorebookEntries.id, entryId))
 		.get();
 	if (!entry || entry.bookUserId !== user.id) {
-		return { ok: false, response: json({ error: 'Entry not found' }, { status: 404 }) };
+		return { ok: false, response: ApiError.notFound('Entry not found') };
 	}
 
 	const isCharacterBook = entry.bookCharacterId === chat.characterId;
@@ -58,7 +59,7 @@ async function loadAndAuthorise(event: Parameters<RequestHandler>[0]):
 			.where(and(eq(chatLorebooks.chatId, chatId), eq(chatLorebooks.lorebookId, entry.lorebookId)))
 			.get();
 		if (!link) {
-			return { ok: false, response: json({ error: 'Entry not reachable from this chat' }, { status: 404 }) };
+			return { ok: false, response: ApiError.notFound('Entry not reachable from this chat') };
 		}
 	}
 
@@ -78,7 +79,7 @@ export const PATCH: RequestHandler = async (event) => {
 	const { chatId, entryId } = ctx;
 
 	let body: unknown;
-	try { body = await event.request.json(); } catch { return json({ error: 'Invalid JSON' }, { status: 400 }); }
+	try { body = await event.request.json(); } catch { return ApiError.badRequest('Invalid JSON'); }
 	const obj = (body && typeof body === 'object') ? body as Record<string, unknown> : {};
 	const enabled = asNullableBool(obj.enabled);
 	const constant = asNullableBool(obj.constant);

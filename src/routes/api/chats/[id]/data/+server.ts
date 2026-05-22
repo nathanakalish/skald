@@ -14,6 +14,7 @@ import {
 } from '$lib/server/chatTree.js';
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 import { logger } from '$lib/server/logger.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -24,7 +25,7 @@ export const GET: RequestHandler = async (event) => {
 	const offset = offsetParam ? Math.max(0, Number(offsetParam)) : 0;
 
 	let chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	// Lazy migration: any leaf user message gets unsent into the chat bar.
 	// Re-read the chat row if anything changed so the impersonation snapshot
@@ -39,7 +40,7 @@ export const GET: RequestHandler = async (event) => {
 		.from(characters)
 		.where(eq(characters.id, chat.characterId))
 		.get();
-	if (!character) return json({ error: 'Character not found' }, { status: 404 });
+	if (!character) return ApiError.notFound('Character not found');
 
 	// Lazy-resolve background image from extensions if not yet cached
 	if (!character.backgroundPath) {

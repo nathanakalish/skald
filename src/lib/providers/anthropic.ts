@@ -147,31 +147,17 @@ export class AnthropicProvider extends LLMProvider {
 	}
 
 	async listModels(): Promise<string[]> {
-		await this.guardEndpoint();
-		// Try the official models endpoint first (added 2024+).
-		try {
-			const response = await fetch(`${this.config.endpoint}/models`, {
-				headers: {
-					'x-api-key': this.config.apiKey,
-					'anthropic-version': '2023-06-01'
-				}
-			});
-			if (response.ok) {
-				const data = await response.json();
-				if (data.data?.length) {
-					return data.data.map((m: { id: string }) => m.id).sort();
-				}
-			}
-		} catch {
-			// fall through to hardcoded list
-		}
-
-		return [
-			'claude-sonnet-4-20250514',
-			'claude-3-5-haiku-20241022',
-			'claude-3-5-sonnet-20241022',
-			'claude-3-opus-20240229'
-		];
+		// Anthropic's /models endpoint was added in 2024+ — fall back to a hardcoded
+		// list when the upstream is unavailable or returns an empty payload.
+		return this.listModelsViaDataArray({
+			headers: { 'x-api-key': this.config.apiKey, 'anthropic-version': '2023-06-01' },
+			fallback: [
+				'claude-sonnet-4-20250514',
+				'claude-3-5-haiku-20241022',
+				'claude-3-5-sonnet-20241022',
+				'claude-3-opus-20240229'
+			],
+		});
 	}
 
 	async testConnection(): Promise<TestConnectionResult> {

@@ -5,6 +5,7 @@ import { providers } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 function toLight(p: typeof providers.$inferSelect) {
 	const { apiKey, ...rest } = p;
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async (event) => {
 	const { order } = await event.request.json();
 
 	if (!Array.isArray(order)) {
-		return json({ error: 'order must be an array of provider IDs' }, { status: 400 });
+		return ApiError.badRequest('order must be an array of provider IDs');
 	}
 
 	for (let i = 0; i < order.length; i++) {

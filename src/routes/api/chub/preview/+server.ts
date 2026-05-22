@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { requireUser } from '$lib/server/auth.js';
 import { getAdminSettingBool } from '$lib/server/adminSettings.js';
 import { chubFetchPreview } from '$lib/server/chub.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * GET /api/chub/preview?type=character|lorebook&fullPath=creator/slug
@@ -15,14 +16,14 @@ import { chubFetchPreview } from '$lib/server/chub.js';
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	if (!getAdminSettingBool('allowChubBrowse') && user.role !== 'admin') {
-		return json({ error: 'CHUB browsing is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('CHUB browsing is disabled by the administrator');
 	}
 
 	const typeParam = event.url.searchParams.get('type');
 	const type = typeParam === 'lorebook' ? 'lorebook' : 'character';
 	const fullPath = (event.url.searchParams.get('fullPath') ?? '').trim();
 	if (!fullPath || !fullPath.includes('/') || fullPath.length > 200) {
-		return json({ error: 'Invalid fullPath' }, { status: 400 });
+		return ApiError.badRequest('Invalid fullPath');
 	}
 
 	try {

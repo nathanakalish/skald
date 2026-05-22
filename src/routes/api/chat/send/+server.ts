@@ -10,6 +10,7 @@ import { applyRegexScripts } from '$lib/services/regex.js';
 import { bumpChatTail, recomputeChatTail } from '$lib/db/chatTail.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { lengthError, MAX_MESSAGE_CHARS } from '$lib/utils/validate.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Fire-and-forget: save the user message, enqueue the LLM job, return immediately.
@@ -27,7 +28,7 @@ export const POST: RequestHandler = async (event) => {
 		impersonationSwipeIndex: rawImpersonationIdx,
 	} = await event.request.json();
 
-	if (!chatId) return json({ error: 'chatId required' }, { status: 400 });
+	if (!chatId) return ApiError.badRequest('chatId required');
 
 	// Cap obviously oversized payloads early — these strings are about to hit
 	// SQLite, the regex pipeline, and the LLM context budget calculator.
@@ -47,8 +48,8 @@ export const POST: RequestHandler = async (event) => {
 
 	// Verify ownership.
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
-	if (chat.deletedAt != null) return json({ error: 'Chat has been deleted' }, { status: 410 });
+	if (!chat) return ApiError.notFound('Chat not found');
+	if (chat.deletedAt != null) return ApiError.gone('Chat has been deleted');
 
 	const guidance = typeof rawGuidance === 'string' && rawGuidance.trim() ? rawGuidance : undefined;
 
@@ -83,11 +84,11 @@ export const POST: RequestHandler = async (event) => {
 		let userParentId: number | null = chat.activeLeafId ?? null;
 		if (clientParentId != null) {
 			if (typeof clientParentId !== 'number' || !Number.isFinite(clientParentId)) {
-				return json({ error: 'parentId must be a number' }, { status: 400 });
+				return ApiError.badRequest('parentId must be a number');
 			}
 			const parent = db.select({ id: messages.id }).from(messages)
 				.where(and(eq(messages.id, clientParentId), eq(messages.chatId, chatId))).get();
-			if (!parent) return json({ error: 'parentId does not belong to this chat' }, { status: 400 });
+			if (!parent) return ApiError.badRequest('parentId does not belong to this chat');
 			userParentId = clientParentId;
 		}
 
@@ -201,10 +202,7 @@ export const POST: RequestHandler = async (event) => {
 				} catch { /* best-effort cleanup */ }
 			}
 			event.locals.logger?.warn('chat: send rejected (already processing)', { chatId });
-			return json(
-				{ error: 'Chat is already processing a message — wait for it to finish or abort it first.' },
-				{ status: 409 }
-			);
+			return ApiError.conflict('Chat is already processing a message — wait for it to finish or abort it first.');
 		}
 		event.locals.logger?.info('chat: send accepted', { chatId, jobId, userMsgId, regenerate: !!regenerate, greeting: !!greeting, hasGuidance: !!jobGuidance, impersonationSwipes: impSwipes.length });
 		return json({ ok: true, jobId, userMsgId });

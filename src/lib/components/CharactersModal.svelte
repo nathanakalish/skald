@@ -863,7 +863,7 @@
 									id="mc-name"
 									bind:value={name}
 									limit={FIELD_LIMITS.name}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="Character name"
 								/>
 							</div>
@@ -874,7 +874,7 @@
 									bind:value={description}
 									rows={2}
 									limit={FIELD_LIMITS.description}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="A brief description"
 								/>
 							</div>
@@ -886,7 +886,7 @@
 										bind:value={personality}
 										rows={2}
 										limit={FIELD_LIMITS.personality}
-										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										class="field-input"
 										placeholder="Personality traits"
 									/>
 								</div>
@@ -897,7 +897,7 @@
 										bind:value={firstMessage}
 										rows={2}
 										limit={FIELD_LIMITS.firstMessage}
-										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										class="field-input"
 										placeholder="Opening message"
 									/>
 								</div>
@@ -909,7 +909,7 @@
 									bind:value={scenario}
 									rows={2}
 									limit={FIELD_LIMITS.scenario}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="The setting or scenario"
 								/>
 							</div>
@@ -920,7 +920,7 @@
 									bind:value={systemPrompt}
 									rows={2}
 									limit={FIELD_LIMITS.systemPrompt}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="Custom system prompt"
 								/>
 							</div>
@@ -930,7 +930,7 @@
 									id="mc-tags"
 									bind:value={tags}
 									limit={FIELD_LIMITS.tags}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="fantasy, sci-fi (comma-separated)"
 								/>
 							</div>

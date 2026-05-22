@@ -8,24 +8,25 @@ import { broadcast } from '$lib/server/realtime.js';
 import { storeAvatarFromBuffer, tryDeleteUnreferencedAvatar } from '$lib/services/imageOptimizer.js';
 import { getAdminSettingNumber } from '$lib/server/adminSettings.js';
 import { logger } from '$lib/server/logger.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const ACCEPTED_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
-	if (!Number.isFinite(id)) return json({ error: 'Invalid persona id' }, { status: 400 });
+	if (!Number.isFinite(id)) return ApiError.badRequest('Invalid persona id');
 
 	const existing = db
 		.select()
 		.from(personas)
 		.where(and(eq(personas.id, id), eq(personas.userId, user.id)))
 		.get();
-	if (!existing) return json({ error: 'Persona not found' }, { status: 404 });
+	if (!existing) return ApiError.notFound('Persona not found');
 
 	const formData = await event.request.formData();
 	const file = formData.get('file') as File | null;
-	if (!file) return json({ error: 'No file provided' }, { status: 400 });
+	if (!file) return ApiError.badRequest('No file provided');
 
 	const maxBytes = (getAdminSettingNumber('avatarUploadMaxMiB') || 8) * 1024 * 1024;
 	if (file.size > maxBytes) {
@@ -35,7 +36,7 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 	if (!ACCEPTED_MIME.includes(file.type)) {
-		return json({ error: 'Unsupported image type. Use PNG, JPEG, WebP, or GIF.' }, { status: 400 });
+		return ApiError.badRequest('Unsupported image type. Use PNG, JPEG, WebP, or GIF.');
 	}
 
 	const buffer = Buffer.from(await file.arrayBuffer());
@@ -52,7 +53,7 @@ export const POST: RequestHandler = async (event) => {
 		avatarPath = await storeAvatarFromBuffer(buffer, file.type);
 	} catch (err) {
 		logger.warn('persona avatar: optimize/write failed', { err: err instanceof Error ? err.message : String(err) });
-		return json({ error: 'Failed to process image' }, { status: 500 });
+		return ApiError.server('Failed to process image');
 	}
 
 	db.update(personas)
@@ -72,7 +73,7 @@ export const POST: RequestHandler = async (event) => {
 export const DELETE: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
-	if (!Number.isFinite(id)) return json({ error: 'Invalid persona id' }, { status: 400 });
+	if (!Number.isFinite(id)) return ApiError.badRequest('Invalid persona id');
 
 	const prior = db.select({ avatarPath: personas.avatarPath })
 		.from(personas)

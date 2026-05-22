@@ -3,23 +3,24 @@ import type { RequestHandler } from './$types.js';
 import { createProvider } from '$lib/providers/index.js';
 import { retryOnce } from '$lib/providers/retry.js';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const POST: RequestHandler = async (event) => {
 	requireUser(event);
 	const { type, endpoint, apiKey } = await event.request.json();
 
 	if (!type || !endpoint) {
-		return json({ error: 'Missing type or endpoint' }, { status: 400 });
+		return ApiError.badRequest('Missing type or endpoint');
 	}
 
 	// Validate endpoint URL — only allow http/https protocols
 	try {
 		const url = new URL(endpoint);
 		if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-			return json({ error: 'Endpoint must use http or https protocol' }, { status: 400 });
+			return ApiError.badRequest('Endpoint must use http or https protocol');
 		}
 	} catch {
-		return json({ error: 'Invalid endpoint URL' }, { status: 400 });
+		return ApiError.badRequest('Invalid endpoint URL');
 	}
 
 	try {

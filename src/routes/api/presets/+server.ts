@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { presets } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // CRUD-M6: bound generation params at write time so providers don't reject
 // with confusing errors later. Each entry is [min, max]; omit a bound with
@@ -54,7 +55,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	const preset = db.select().from(presets).where(and(eq(presets.userId, user.id), eq(presets.isDefault, true))).get();
 	if (!preset) {
-		return json({ error: 'No default preset found' }, { status: 404 });
+		return ApiError.notFound('No default preset found');
 	}
 
 	db.update(presets)

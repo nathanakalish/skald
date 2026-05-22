@@ -378,7 +378,7 @@
 							id="pe-display"
 							bind:value={displayName}
 							limit={FIELD_LIMITS.name}
-							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+							class="field-input"
 							placeholder="e.g. My Fantasy Persona"
 						/>
 					</div>
@@ -388,7 +388,7 @@
 							id="pe-name"
 							bind:value={name}
 							limit={FIELD_LIMITS.name}
-							class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+							class="field-input"
 							placeholder={"Name used for {{user}}"}
 						/>
 					</div>
@@ -400,7 +400,7 @@
 						bind:value={description}
 						rows={8}
 						limit={FIELD_LIMITS.description}
-						class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+						class="field-input"
 						placeholder="Describe your persona — this is injected into context for the AI."
 					/>
 				</div>

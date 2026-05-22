@@ -5,6 +5,7 @@ import { chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { runCompaction, runReprocess } from '$lib/server/compactionService.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Manually run a compaction pass on this chat. Bypasses the enabled flag —
@@ -17,7 +18,7 @@ export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const id = Number(event.params.id);
 	const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Not found');
 
 	const body = await event.request.json().catch(() => ({}));
 	const redo = body?.redo === true;

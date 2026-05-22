@@ -12,6 +12,7 @@ import {
 	loadActivePathPage,
 	loadSiblingsScoped,
 } from '$lib/server/chatTree.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // POST: Switch to a sibling branch. Accepts { direction: -1 | 0 | 1, limit?: number }
 // direction -1/1: Find sibling at currentIndex + direction, walk to deepest leaf
@@ -26,21 +27,21 @@ export const POST: RequestHandler = async (event) => {
 	const limit = typeof body.limit === 'number' && body.limit > 0 ? body.limit : 50;
 
 	if (direction !== -1 && direction !== 0 && direction !== 1) {
-		return json({ error: 'direction must be -1, 0, or 1' }, { status: 400 });
+		return ApiError.badRequest('direction must be -1, 0, or 1');
 	}
 
 	const message = db.select().from(messages).where(eq(messages.id, messageId)).get();
-	if (!message) return json({ error: 'Message not found' }, { status: 404 });
+	if (!message) return ApiError.notFound('Message not found');
 
 	// Verify ownership through chat
 	const chat = db.select().from(chats).where(and(eq(chats.id, message.chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Not found');
 
 	// Refuse to switch branches while a generation is in flight on this chat.
 	// Otherwise the worker can finish into the wrong branch and we end up
 	// pointing activeLeafId at a message that's mid-stream on the other branch.
 	if (isChatProcessing(message.chatId)) {
-		return json({ error: 'Chat is generating — cannot switch branches yet' }, { status: 409 });
+		return ApiError.conflict('Chat is generating — cannot switch branches yet');
 	}
 
 	let targetLeafId: number;
@@ -57,7 +58,7 @@ export const POST: RequestHandler = async (event) => {
 		// For direction=0 we want children of messageId, i.e. messages whose parent = messageId.
 		// That's findSiblingIds(messageId, chatId) — pass messageId as the parentId.
 		if (siblingIds.length === 0) {
-			return json({ error: 'No children to return to' }, { status: 400 });
+			return ApiError.badRequest('No children to return to');
 		}
 		// walkToDeepestLeaf starting from the first child
 		targetLeafId = walkToDeepestLeaf(siblingIds[0]);
@@ -68,7 +69,7 @@ export const POST: RequestHandler = async (event) => {
 		const newIndex = currentIndex + direction;
 
 		if (newIndex < 0 || newIndex >= siblingIds.length) {
-			return json({ error: 'No sibling in that direction' }, { status: 400 });
+			return ApiError.badRequest('No sibling in that direction');
 		}
 		targetLeafId = walkToDeepestLeaf(siblingIds[newIndex]);
 	}

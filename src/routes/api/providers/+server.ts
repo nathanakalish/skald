@@ -6,6 +6,7 @@ import { count, sql, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const PROVIDER_FIELD_LIMITS = {
 	name: 'name',
@@ -38,10 +39,10 @@ export const POST: RequestHandler = async (event) => {
 		try {
 			const url = new URL(body.endpoint);
 			if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-				return json({ error: 'Endpoint must use http or https protocol' }, { status: 400 });
+				return ApiError.badRequest('Endpoint must use http or https protocol');
 			}
 		} catch {
-			return json({ error: 'Invalid endpoint URL' }, { status: 400 });
+			return ApiError.badRequest('Invalid endpoint URL');
 		}
 	}
 

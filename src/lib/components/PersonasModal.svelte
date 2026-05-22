@@ -228,7 +228,7 @@
 										id="persona-display"
 										bind:value={displayName}
 										limit={FIELD_LIMITS.name}
-										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										class="field-input"
 										placeholder="e.g. My Fantasy Persona"
 									/>
 								</SettingRow>
@@ -237,7 +237,7 @@
 										id="persona-name"
 										bind:value={name}
 										limit={FIELD_LIMITS.name}
-										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										class="field-input"
 										placeholder={"Name used for {{user}}"}
 									/>
 								</SettingRow>
@@ -248,7 +248,7 @@
 									bind:value={description}
 									rows={3}
 									limit={FIELD_LIMITS.description}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="Describe your persona (injected into context for the AI)"
 								/>
 							</SettingRow>
@@ -289,14 +289,14 @@
 									<div class="min-w-0 flex-1 space-y-3">
 										<div class="grid gap-3 @xl:grid-cols-2">
 											<SettingRow size="sm" label="Label" htmlFor="edit-display">
-												<LimitedInput id="edit-display" bind:value={displayName} limit={FIELD_LIMITS.name} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. My Fantasy Persona" />
+												<LimitedInput id="edit-display" bind:value={displayName} limit={FIELD_LIMITS.name} class="field-input" placeholder="e.g. My Fantasy Persona" />
 											</SettingRow>
 											<SettingRow size="sm" label="In-Chat Name *" htmlFor="edit-name">
-												<LimitedInput id="edit-name" bind:value={name} limit={FIELD_LIMITS.name} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder={"Name used for {{user}}"} />
+												<LimitedInput id="edit-name" bind:value={name} limit={FIELD_LIMITS.name} class="field-input" placeholder={"Name used for {{user}}"} />
 											</SettingRow>
 										</div>
 										<SettingRow size="sm" label="Description" htmlFor="edit-desc">
-											<LimitedTextarea id="edit-desc" bind:value={description} rows={3} limit={FIELD_LIMITS.description} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Describe your persona" />
+											<LimitedTextarea id="edit-desc" bind:value={description} rows={3} limit={FIELD_LIMITS.description} class="field-input" placeholder="Describe your persona" />
 										</SettingRow>
 										<label class="flex items-center gap-2 text-sm">
 											<input type="checkbox" bind:checked={isDefault} class="rounded" />

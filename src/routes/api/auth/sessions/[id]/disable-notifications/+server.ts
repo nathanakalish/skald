@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { sessions, pushSubscriptions } from '$lib/db/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { requireUser, getSessionCookieName, hashSessionToken } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * POST /api/auth/sessions/[id]/disable-notifications
@@ -24,7 +25,7 @@ export const POST: RequestHandler = async (event) => {
 	const currentSessionId = currentTokenRaw ? hashSessionToken(currentTokenRaw) : '';
 
 	const target = resolveSession(idParam, user.id, currentSessionId);
-	if (!target) return json({ error: 'Session not found' }, { status: 404 });
+	if (!target) return ApiError.notFound('Session not found');
 
 	const now = new Date().toISOString();
 	db.transaction(() => {
@@ -49,7 +50,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const currentSessionId = currentTokenRaw ? hashSessionToken(currentTokenRaw) : '';
 
 	const target = resolveSession(idParam, user.id, currentSessionId);
-	if (!target) return json({ error: 'Session not found' }, { status: 404 });
+	if (!target) return ApiError.notFound('Session not found');
 
 	db.update(sessions)
 		.set({ notificationsDisabledAt: null })

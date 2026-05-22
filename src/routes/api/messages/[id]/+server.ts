@@ -9,6 +9,7 @@ import { recomputeChatTail } from '$lib/db/chatTail.js';
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 import { parseSwipes, parseReasoning } from '$lib/messageJson.js';
 import { lengthError, MAX_MESSAGE_CHARS } from '$lib/utils/validate.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -24,11 +25,11 @@ export const PATCH: RequestHandler = async (event) => {
 	if (lenErr) return json(lenErr, { status: 413 });
 
 	const message = db.select().from(messages).where(eq(messages.id, id)).get();
-	if (!message) return json({ error: 'Message not found' }, { status: 404 });
+	if (!message) return ApiError.notFound('Message not found');
 
 	// Verify ownership through chat
 	const chat = db.select().from(chats).where(and(eq(chats.id, message.chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Not found');
 
 	const patchKinds = Object.keys(body).filter((k) => ['swipeIndex', 'content', 'reasoning', 'guidance'].includes(k));
 	event.locals.logger?.debug('messages: patch', { messageId: id, chatId: message.chatId, kinds: patchKinds });
@@ -40,7 +41,7 @@ export const PATCH: RequestHandler = async (event) => {
 		const newIndex = Number(body.swipeIndex);
 
 		if (newIndex < 0 || newIndex >= swipes.length) {
-			return json({ error: 'Invalid swipe index' }, { status: 400 });
+			return ApiError.badRequest('Invalid swipe index');
 		}
 
 		db.update(messages)
@@ -139,7 +140,7 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ id, guidance });
 	}
 
-	return json({ error: 'No valid update fields' }, { status: 400 });
+	return ApiError.badRequest('No valid update fields');
 };
 
 // Helper: collect all descendant message IDs.
@@ -166,11 +167,11 @@ export const DELETE: RequestHandler = async (event) => {
 	const deleteMode: 'single' | 'thread' = modeParam === 'single' ? 'single' : 'thread';
 
 	const message = db.select().from(messages).where(eq(messages.id, id)).get();
-	if (!message) return json({ error: 'Message not found' }, { status: 404 });
+	if (!message) return ApiError.notFound('Message not found');
 
 	// Verify ownership through chat
 	const ownerChat = db.select().from(chats).where(and(eq(chats.id, message.chatId), eq(chats.userId, user.id))).get();
-	if (!ownerChat) return json({ error: 'Not found' }, { status: 404 });
+	if (!ownerChat) return ApiError.notFound('Not found');
 
 	event.locals.logger?.warn('messages: deleted', { messageId: id, chatId: message.chatId, mode: deleteMode });
 

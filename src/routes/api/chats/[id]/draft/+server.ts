@@ -5,6 +5,7 @@ import { chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // Cross-device sync of the unsent textarea + inline edit buffer.
 //
@@ -24,10 +25,10 @@ import { broadcast } from '$lib/server/realtime.js';
 export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const chatId = Number(event.params.id);
-	if (!Number.isFinite(chatId)) return json({ error: 'Bad chat id' }, { status: 400 });
+	if (!Number.isFinite(chatId)) return ApiError.badRequest('Bad chat id');
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	const body = await event.request.json().catch(() => ({})) as {
 		draft?: string | null;

@@ -313,7 +313,7 @@
 							const v = Math.max(2, Math.min(500, Number(e.currentTarget.value) || 20));
 							await save('compactionFixedCount', v);
 						}}
-						class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+						class="field-input"
 					/>
 				</SettingRow>
 			{/if}

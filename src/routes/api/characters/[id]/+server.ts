@@ -13,6 +13,7 @@ import { requireOwned } from '$lib/server/ownership.js';
 import { tryDeleteUnreferencedAvatar } from '$lib/services/imageOptimizer.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const CHARACTER_FIELD_LIMITS = {
 	name: 'name',
@@ -44,7 +45,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
-	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+	if (!name) return ApiError.badRequest('Name is required');
 
 	const tooLong = validateLengths(body, CHARACTER_FIELD_LIMITS);
 	if (tooLong) return tooLong;
@@ -140,7 +141,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const id = Number(event.params.id);
 
 	const character = db.select().from(characters).where(and(eq(characters.id, id), eq(characters.userId, user.id))).get();
-	if (!character) return json({ error: 'Not found' }, { status: 404 });
+	if (!character) return ApiError.notFound('Not found');
 
 	// Collect all message content from this character's chats for image cleanup
 	const charChats = db.select({ id: chats.id }).from(chats).where(eq(chats.characterId, id)).all();

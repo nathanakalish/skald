@@ -1,4 +1,4 @@
-import { json } from '@sveltejs/kit';
+
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { chats, characters, messages } from '$lib/db/schema.js';
@@ -6,6 +6,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { characterFingerprint } from '$lib/server/bundle.js';
 import { loadActivePath, findDeepestLeaf } from '$lib/server/chatTree.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Skald-native chat export. Returns the full message tree (parentId, swipes,
@@ -18,10 +19,10 @@ export const GET: RequestHandler = async (event) => {
 	const format = event.url.searchParams.get('format') || 'json';
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, id), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	const character = db.select().from(characters).where(eq(characters.id, chat.characterId)).get();
-	if (!character) return json({ error: 'Character not found' }, { status: 404 });
+	if (!character) return ApiError.notFound('Character not found');
 
 	const fp = characterFingerprint({
 		name: character.name,

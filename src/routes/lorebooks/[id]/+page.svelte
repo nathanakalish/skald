@@ -108,7 +108,7 @@
 					id="lb-edit-desc"
 					bind:value={lorebookDesc}
 					onblur={saveLorebook}
-					class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+					class="field-input"
 					placeholder="Lorebook description"
 				/>
 			</div>
@@ -193,7 +193,7 @@
 											id="entry-kw-{entry.id}"
 											bind:value={entry.keywords}
 											onblur={() => saveEntry(entry)}
-											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+											class="field-input"
 											placeholder="keyword1, keyword2"
 										/>
 									</div>
@@ -208,7 +208,7 @@
 											type="number"
 											bind:value={entry.insertionOrder}
 											onblur={() => saveEntry(entry)}
-											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+											class="field-input"
 										/>
 									</div>
 								</div>
@@ -223,7 +223,7 @@
 										bind:value={entry.content}
 										onblur={() => saveEntry(entry)}
 										rows={3}
-										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										class="field-input"
 										placeholder="The content to inject when keywords match..."
 									></textarea>
 								</div>

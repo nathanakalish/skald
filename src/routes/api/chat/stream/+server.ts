@@ -5,6 +5,7 @@ import { chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { enqueueJob, isChatProcessing } from '$lib/server/messageQueue.js';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * Kick off a background impersonation generation. Tokens stream out via
@@ -15,15 +16,15 @@ export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const { chatId, impersonate, guidance } = await event.request.json();
 
-	if (!chatId) return json({ error: 'chatId required' }, { status: 400 });
+	if (!chatId) return ApiError.badRequest('chatId required');
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
-	if (chat.deletedAt != null) return json({ error: 'Chat has been deleted' }, { status: 410 });
+	if (!chat) return ApiError.notFound('Chat not found');
+	if (chat.deletedAt != null) return ApiError.gone('Chat has been deleted');
 
 	if (isChatProcessing(chatId)) {
 		event.locals.logger?.warn('chat: stream rejected (already processing)', { chatId });
-		return json({ error: 'Chat already has an in-flight generation' }, { status: 409 });
+		return ApiError.conflict('Chat already has an in-flight generation');
 	}
 
 	try {

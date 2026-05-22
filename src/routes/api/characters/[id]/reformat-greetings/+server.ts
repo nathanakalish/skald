@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
 import { requireUser } from '$lib/server/auth.js';
 import type { ChatMessage, SamplerSettings } from '$lib/providers/base.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a text formatter. Your job is to reformat roleplay character greetings to use consistent formatting conventions.
 
@@ -31,7 +32,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const character = db.select().from(characters).where(and(eq(characters.id, id), eq(characters.userId, user.id))).get();
 	if (!character) {
-		return json({ error: 'Character not found' }, { status: 404 });
+		return ApiError.notFound('Character not found');
 	}
 
 	// Read user's reformatter settings
@@ -53,7 +54,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (!provider) {
-		return json({ error: 'No provider available. Configure one in Settings > Providers.' }, { status: 400 });
+		return ApiError.badRequest('No provider available. Configure one in Settings > Providers.');
 	}
 
 	const activeModel = settingModel || provider.defaultModel || '';
@@ -97,7 +98,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (greetings.length === 0) {
-		return json({ error: 'No greetings to reformat' }, { status: 400 });
+		return ApiError.badRequest('No greetings to reformat');
 	}
 
 	// Reformat each greeting

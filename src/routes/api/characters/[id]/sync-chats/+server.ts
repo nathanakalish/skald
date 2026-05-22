@@ -5,6 +5,7 @@ import { characters, chats } from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 // Propagate a character edit to existing chats. Most character fields
 // (description, personality, system prompt, …) are read live by the
@@ -23,7 +24,7 @@ export const POST: RequestHandler = async (event) => {
 		.from(characters)
 		.where(and(eq(characters.id, id), eq(characters.userId, user.id)))
 		.get();
-	if (!character) return json({ error: 'Not found' }, { status: 404 });
+	if (!character) return ApiError.notFound('Not found');
 
 	const affected = db
 		.select()

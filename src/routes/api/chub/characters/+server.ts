@@ -4,6 +4,7 @@ import { requireUser } from '$lib/server/auth.js';
 import { getAdminSettingBool } from '$lib/server/adminSettings.js';
 import { chubSearch, type ChubSort } from '$lib/server/chub.js';
 import { logger } from '$lib/server/logger.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const ALLOWED_SORTS: readonly ChubSort[] = [
 	'download_count', 'last_activity_at', 'created_at', 'rating', 'n_favorites',
@@ -12,10 +13,10 @@ const ALLOWED_SORTS: readonly ChubSort[] = [
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	if (!getAdminSettingBool('allowChubBrowse') && user.role !== 'admin') {
-		return json({ error: 'CHUB browsing is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('CHUB browsing is disabled by the administrator');
 	}
 	if (!getAdminSettingBool('allowCharacterImport') && user.role !== 'admin') {
-		return json({ error: 'Character import is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('Character import is disabled by the administrator');
 	}
 
 	const q = event.url.searchParams;

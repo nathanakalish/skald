@@ -92,6 +92,30 @@ export abstract class LLMProvider {
 	 * leak whatever the provider chose to return — sometimes including request
 	 * headers).
 	 */
+	/**
+	 * Shared "GET {endpoint}/models, pluck data[].id, sort, fallback on failure" path.
+	 * Used by every provider whose models endpoint conforms to the OpenAI shape
+	 * (openai, anthropic, gemini-via-openai-compat). SSRF guard runs first.
+	 *
+	 * `fallback` is returned on network error, non-200, or an empty/malformed
+	 * payload. Pass [] for providers that should surface emptiness honestly.
+	 */
+	protected async listModelsViaDataArray(opts: {
+		headers: Record<string, string>;
+		fallback: string[];
+	}): Promise<string[]> {
+		await this.guardEndpoint();
+		try {
+			const response = await fetch(`${this.config.endpoint}/models`, { headers: opts.headers });
+			if (!response.ok) return opts.fallback;
+			const data = await response.json();
+			const models = (data?.data ?? []).map((m: { id: string }) => m.id).sort();
+			return models.length > 0 ? models : opts.fallback;
+		} catch {
+			return opts.fallback;
+		}
+	}
+
 	protected async throwGeneric(response: Response, providerName: string): Promise<never> {
 		let body = '';
 		try { body = (await response.text()).slice(0, 2048); } catch { /* ignore */ }

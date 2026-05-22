@@ -3,9 +3,11 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { personas } from '$lib/db/schema.js';
 import { eq, and, ne } from 'drizzle-orm';
+import { nameAlreadyExists } from '$lib/server/queryHelpers.js';
 import { requireOwned } from '$lib/server/ownership.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const PERSONA_FIELD_LIMITS = {
 	name: 'name',
@@ -20,18 +22,15 @@ export const PUT: RequestHandler = async (event) => {
 
 	// CRUD-L1: refuse empty/whitespace-only names at write time.
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
-	if (!name) return json({ error: 'Name is required' }, { status: 400 });
+	if (!name) return ApiError.badRequest('Name is required');
 
 	const tooLong = validateLengths(body, PERSONA_FIELD_LIMITS);
 	if (tooLong) return tooLong;
 
 	// CRUD-L2: per-user name uniqueness (excluding self).
-	const dupe = db
-		.select({ id: personas.id })
-		.from(personas)
-		.where(and(eq(personas.userId, user.id), eq(personas.name, name), ne(personas.id, id)))
-		.get();
-	if (dupe) return json({ error: 'A persona with that name already exists' }, { status: 409 });
+	if (nameAlreadyExists(personas, user.id, name, id)) {
+		return ApiError.conflict('A persona with that name already exists');
+	}
 
 	// Validate avatarPath: must be a safe relative path under /avatars/
 	const avatarPath = body.avatarPath && typeof body.avatarPath === 'string'

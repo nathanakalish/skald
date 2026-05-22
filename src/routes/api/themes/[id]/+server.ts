@@ -3,11 +3,13 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { themes } from '$lib/db/schema.js';
 import { eq, and, ne } from 'drizzle-orm';
+import { nameAlreadyExists } from '$lib/server/queryHelpers.js';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import * as themeCache from '$lib/server/themeCache.js';
 import { _validateThemeColors } from '../+server.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const THEME_FIELD_LIMITS = { name: 'name' } as const;
 
@@ -22,22 +24,19 @@ export const PUT: RequestHandler = async (event) => {
 	if (tooLong) return tooLong;
 
 	const existing = db.select().from(themes).where(eq(themes.id, id)).get();
-	if (!existing) return json({ error: 'Theme not found' }, { status: 404 });
-	if (existing.isBuiltin) return json({ error: 'Cannot edit built-in themes' }, { status: 400 });
-	if (existing.userId !== user.id) return json({ error: 'Not found' }, { status: 404 });
+	if (!existing) return ApiError.notFound('Theme not found');
+	if (existing.isBuiltin) return ApiError.badRequest('Cannot edit built-in themes');
+	if (existing.userId !== user.id) return ApiError.notFound('Not found');
 
 	const updates: Record<string, unknown> = {};
 	if (body?.name !== undefined) {
 		// CRUD-L1: refuse empty/whitespace-only names at write time.
 		const name = typeof body.name === 'string' ? body.name.trim() : '';
-		if (!name) return json({ error: 'Name is required' }, { status: 400 });
+		if (!name) return ApiError.badRequest('Name is required');
 		// CRUD-L2: per-user name uniqueness (excluding self).
-		const dupe = db
-			.select({ id: themes.id })
-			.from(themes)
-			.where(and(eq(themes.userId, user.id), eq(themes.name, name), ne(themes.id, id)))
-			.get();
-		if (dupe) return json({ error: 'A theme with that name already exists' }, { status: 409 });
+		if (nameAlreadyExists(themes, user.id, name, id)) {
+			return ApiError.conflict('A theme with that name already exists');
+		}
 		updates.name = name;
 	}
 	if (mode !== undefined) updates.mode = mode;
@@ -64,9 +63,9 @@ export const DELETE: RequestHandler = async (event) => {
 	const id = Number(event.params.id);
 
 	const existing = db.select().from(themes).where(eq(themes.id, id)).get();
-	if (!existing) return json({ error: 'Theme not found' }, { status: 404 });
-	if (existing.isBuiltin) return json({ error: 'Cannot delete built-in themes' }, { status: 400 });
-	if (existing.userId !== user.id) return json({ error: 'Not found' }, { status: 404 });
+	if (!existing) return ApiError.notFound('Theme not found');
+	if (existing.isBuiltin) return ApiError.badRequest('Cannot delete built-in themes');
+	if (existing.userId !== user.id) return ApiError.notFound('Not found');
 
 	db.delete(themes).where(eq(themes.id, id)).run();
 	themeCache.invalidateForTheme(id);

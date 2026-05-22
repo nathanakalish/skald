@@ -106,6 +106,24 @@ export function alert(opts: AlertOptions): Promise<void> {
 	});
 }
 
+/** Convenience: confirm a destructive delete. Just a preset over confirm(). */
+export function confirmDelete(opts: {
+	/** Used in the message: `Delete "${name}"? This cannot be undone.` */
+	name: string;
+	/** Override the noun. Defaults to "Delete". */
+	confirmLabel?: string;
+	/** Override the full message instead of using the name template. */
+	message?: string;
+	title?: string;
+}): Promise<boolean> {
+	return confirm({
+		title: opts.title ?? 'Delete?',
+		message: opts.message ?? `Delete "${opts.name}"? This cannot be undone.`,
+		confirmLabel: opts.confirmLabel ?? 'Delete',
+		variant: 'danger',
+	});
+}
+
 // Internal handlers used by DialogHost. Not part of the public API.
 export const _dialogInternals = {
 	confirm: () => settle('confirm'),

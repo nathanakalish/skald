@@ -5,6 +5,7 @@ import { users } from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { hashPin, verifyPin, isValidPinFormat, clearPinFailures } from '$lib/server/pin.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 type PinPolicy = 'disabled' | 'on-focus' | 'on-open' | 'timeout';
 const POLICIES: PinPolicy[] = ['disabled', 'on-focus', 'on-open', 'timeout'];
@@ -27,18 +28,18 @@ export const POST: RequestHandler = async (event) => {
 	const { currentPin, newPin, policy, timeoutMinutes } = body ?? {};
 
 	if (typeof newPin !== 'string' || !isValidPinFormat(newPin)) {
-		return json({ error: 'PIN must be 4–8 digits' }, { status: 400 });
+		return ApiError.badRequest('PIN must be 4–8 digits');
 	}
 
 	const row = db.select().from(users).where(eq(users.id, user.id)).get();
-	if (!row) return json({ error: 'User not found' }, { status: 404 });
+	if (!row) return ApiError.notFound('User not found');
 
 	// Require the current PIN to rotate an existing one. This blocks an
 	// attacker who got hold of an unlocked session from silently changing
 	// the PIN and locking the real user out.
 	if (row.pinHash) {
 		if (typeof currentPin !== 'string' || !verifyPin(currentPin, row.pinHash)) {
-			return json({ error: 'Current PIN is incorrect' }, { status: 403 });
+			return ApiError.forbidden('Current PIN is incorrect');
 		}
 	}
 
@@ -67,11 +68,11 @@ export const DELETE: RequestHandler = async (event) => {
 	const { currentPin } = body ?? {};
 
 	const row = db.select().from(users).where(eq(users.id, user.id)).get();
-	if (!row) return json({ error: 'User not found' }, { status: 404 });
+	if (!row) return ApiError.notFound('User not found');
 	if (!row.pinHash) return json({ ok: true }); // nothing to remove
 
 	if (typeof currentPin !== 'string' || !verifyPin(currentPin, row.pinHash)) {
-		return json({ error: 'Current PIN is incorrect' }, { status: 403 });
+		return ApiError.forbidden('Current PIN is incorrect');
 	}
 
 	db.update(users)
@@ -89,24 +90,24 @@ export const PATCH: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	const body = await event.request.json().catch(() => ({}));
 	const policy = normalizePolicy(body?.policy);
-	if (!policy) return json({ error: 'Invalid policy' }, { status: 400 });
+	if (!policy) return ApiError.badRequest('Invalid policy');
 
 	const row = db.select().from(users).where(eq(users.id, user.id)).get();
-	if (!row) return json({ error: 'User not found' }, { status: 404 });
+	if (!row) return ApiError.notFound('User not found');
 
 	// Only allow 'disabled' if no PIN is set, or when explicitly removing —
 	// otherwise "disabled" sneaks past the prying-eyes guard while the hash
 	// still exists. UX-wise we just route the user through DELETE for that.
 	if (policy === 'disabled' && row.pinHash) {
-		return json({ error: 'Remove the PIN to disable the lock' }, { status: 400 });
+		return ApiError.badRequest('Remove the PIN to disable the lock');
 	}
 	if (policy !== 'disabled' && !row.pinHash) {
-		return json({ error: 'Set a PIN before choosing a policy' }, { status: 400 });
+		return ApiError.badRequest('Set a PIN before choosing a policy');
 	}
 
 	const timeoutMinutes = normalizeTimeout(body?.timeoutMinutes, policy);
 	if (policy === 'timeout' && timeoutMinutes === null) {
-		return json({ error: 'timeoutMinutes must be an integer 1–1440' }, { status: 400 });
+		return ApiError.badRequest('timeoutMinutes must be an integer 1–1440');
 	}
 
 	db.update(users)

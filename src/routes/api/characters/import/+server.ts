@@ -19,6 +19,7 @@ import { enforceCreate } from '$lib/server/userLimits.js';
 import { logger } from '$lib/server/logger.js';
 import { lorebookEntryFingerprint } from '$lib/services/lorebook.js';
 import { findLengthViolation, checkLength, type LengthViolation } from '$lib/server/fieldLimits.js';
+import { ApiError } from '$lib/server/apiError.js';
 /** PNG character cards: configurable cap (default 8 MiB). JSON cards: 2 MiB cap. */
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 
@@ -56,7 +57,7 @@ export const POST: RequestHandler = async (event) => {
 	const startedAt = Date.now();
 
 	if (!getAdminSettingBool('allowCharacterImport') && user.role !== 'admin') {
-		return json({ error: 'Character import is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('Character import is disabled by the administrator');
 	}
 
 	const limitResponse = enforceCreate('characters', user.id);
@@ -73,7 +74,7 @@ export const POST: RequestHandler = async (event) => {
 		const file = formData.get('file') as File | null;
 
 		if (!file) {
-			return json({ error: 'No file uploaded' }, { status: 400 });
+			return ApiError.badRequest('No file uploaded');
 		}
 
 		const fileName = file.name.toLowerCase();
@@ -93,7 +94,7 @@ export const POST: RequestHandler = async (event) => {
 		if (fileName.endsWith('.png')) {
 			if (!isPng(buffer)) {
 				logger.warn('character import: PNG magic byte mismatch', { userId: user.id, fileName });
-				return json({ error: 'File is not a valid PNG image.' }, { status: 400 });
+				return ApiError.badRequest('File is not a valid PNG image.');
 			}
 			cardData = parseCharaCardFromPNG(buffer);
 			avatarBuffer = buffer;
@@ -102,27 +103,27 @@ export const POST: RequestHandler = async (event) => {
 			try {
 				cardData = parseCharaJSON(JSON.parse(text));
 			} catch {
-				return json({ error: 'Invalid JSON file.' }, { status: 400 });
+				return ApiError.badRequest('Invalid JSON file.');
 			}
 		} else {
-			return json({ error: 'Unsupported file type. Use .png or .json' }, { status: 400 });
+			return ApiError.badRequest('Unsupported file type. Use .png or .json');
 		}
 	} else if (contentType.includes('application/json')) {
 		// Cap raw JSON bodies (M10) — request.json() will happily parse a 1 GiB
 		// payload otherwise.
 		const text = await request.text();
 		if (text.length > MAX_JSON_BYTES) {
-			return json({ error: `JSON body too large — max ${Math.round(MAX_JSON_BYTES / 1024 / 1024)} MiB.` }, { status: 413 });
+			return ApiError.payloadTooLarge(`JSON body too large — max ${Math.round(MAX_JSON_BYTES / 1024 / 1024)} MiB.`);
 		}
 		let body: unknown;
 		try {
 			body = JSON.parse(text);
 		} catch {
-			return json({ error: 'Invalid JSON body.' }, { status: 400 });
+			return ApiError.badRequest('Invalid JSON body.');
 		}
 		cardData = parseCharaJSON(body as Record<string, unknown>);
 	} else {
-		return json({ error: 'Unsupported content type' }, { status: 400 });
+		return ApiError.badRequest('Unsupported content type');
 	}
 
 	// Enforce character-field length limits. Soft toggle via admin setting —

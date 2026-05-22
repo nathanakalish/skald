@@ -4,6 +4,7 @@ import { db } from '$lib/db/index.js';
 import { chats, characters, lorebooks, lorebookEntries, chatLorebooks, chatLorebookEntryOverrides } from '$lib/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 /** GET: lorebooks for this chat (character lorebooks + user-added). */
 export const GET: RequestHandler = async (event) => {
@@ -11,7 +12,7 @@ export const GET: RequestHandler = async (event) => {
 	const chatId = Number(event.params.id);
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	// Character lorebooks (always included, can't be removed).
 	const characterBooks = db
@@ -104,18 +105,18 @@ export const POST: RequestHandler = async (event) => {
 	const body = await event.request.json();
 	const lorebookId = body.lorebookId;
 
-	if (!lorebookId) return json({ error: 'lorebookId required' }, { status: 400 });
+	if (!lorebookId) return ApiError.badRequest('lorebookId required');
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	// Verify the lorebook exists and belongs to this user.
 	const book = db.select().from(lorebooks).where(and(eq(lorebooks.id, lorebookId), eq(lorebooks.userId, user.id))).get();
-	if (!book) return json({ error: 'Lorebook not found' }, { status: 404 });
+	if (!book) return ApiError.notFound('Lorebook not found');
 
 	// Already a character lorebook? It's already in there.
 	if (book.characterId === chat.characterId) {
-		return json({ error: 'Character lorebooks are always included' }, { status: 400 });
+		return ApiError.badRequest('Character lorebooks are always included');
 	}
 
 	// Insert; ignore the UNIQUE collision if it's already linked.
@@ -136,10 +137,10 @@ export const DELETE: RequestHandler = async (event) => {
 	const body = await event.request.json();
 	const lorebookId = body.lorebookId;
 
-	if (!lorebookId) return json({ error: 'lorebookId required' }, { status: 400 });
+	if (!lorebookId) return ApiError.badRequest('lorebookId required');
 
 	const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, user.id))).get();
-	if (!chat) return json({ error: 'Chat not found' }, { status: 404 });
+	if (!chat) return ApiError.notFound('Chat not found');
 
 	db.delete(chatLorebooks)
 		.where(and(eq(chatLorebooks.chatId, chatId), eq(chatLorebooks.lorebookId, lorebookId)))

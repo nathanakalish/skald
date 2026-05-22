@@ -165,7 +165,7 @@
 								bind:value={lorebookName}
 								onblur={saveLorebook}
 								limit={FIELD_LIMITS.name}
-								class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+								class="field-input"
 								placeholder="Lorebook name"
 							/>
 						</SettingRow>
@@ -175,7 +175,7 @@
 								bind:value={lorebookDesc}
 								onblur={saveLorebook}
 								limit={FIELD_LIMITS.description}
-								class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+								class="field-input"
 								placeholder="Lorebook description"
 							/>
 						</SettingRow>
@@ -206,15 +206,15 @@
 								</div>
 								<div class="grid gap-3 @2xl:grid-cols-2">
 									<SettingRow size="sm" label="Keywords (comma-separated)" htmlFor="emb-entry-kw-{entry.id}">
-										<LimitedInput id="emb-entry-kw-{entry.id}" bind:value={entry.keywords} onblur={() => saveEntry(entry)} limit={FIELD_LIMITS.lorebookEntryKeys} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="keyword1, keyword2" />
+										<LimitedInput id="emb-entry-kw-{entry.id}" bind:value={entry.keywords} onblur={() => saveEntry(entry)} limit={FIELD_LIMITS.lorebookEntryKeys} class="field-input" placeholder="keyword1, keyword2" />
 									</SettingRow>
 									<SettingRow size="sm" label="Insertion Order" htmlFor="emb-entry-order-{entry.id}">
-										<input id="emb-entry-order-{entry.id}" type="number" bind:value={entry.insertionOrder} onblur={() => saveEntry(entry)} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+										<input id="emb-entry-order-{entry.id}" type="number" bind:value={entry.insertionOrder} onblur={() => saveEntry(entry)} class="field-input" />
 									</SettingRow>
 								</div>
 								<div class="mt-3">
 									<SettingRow size="sm" label="Content" htmlFor="emb-entry-content-{entry.id}">
-										<LimitedTextarea id="emb-entry-content-{entry.id}" bind:value={entry.content} onblur={() => saveEntry(entry)} rows={3} limit={FIELD_LIMITS.lorebookEntryContent} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="The content to inject when keywords match..." />
+										<LimitedTextarea id="emb-entry-content-{entry.id}" bind:value={entry.content} onblur={() => saveEntry(entry)} rows={3} limit={FIELD_LIMITS.lorebookEntryContent} class="field-input" placeholder="The content to inject when keywords match..." />
 									</SettingRow>
 								</div>
 							</div>
@@ -269,7 +269,7 @@
 									bind:value={lorebookName}
 									onblur={saveLorebook}
 									limit={FIELD_LIMITS.name}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="Lorebook name"
 								/>
 							</SettingRow>
@@ -279,7 +279,7 @@
 									bind:value={lorebookDesc}
 									onblur={saveLorebook}
 									limit={FIELD_LIMITS.description}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="Lorebook description"
 								/>
 							</SettingRow>
@@ -328,7 +328,7 @@
 												bind:value={entry.keywords}
 												onblur={() => saveEntry(entry)}
 												limit={FIELD_LIMITS.lorebookEntryKeys}
-												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+												class="field-input"
 												placeholder="keyword1, keyword2"
 											/>
 										</SettingRow>
@@ -338,7 +338,7 @@
 												type="number"
 												bind:value={entry.insertionOrder}
 												onblur={() => saveEntry(entry)}
-												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+												class="field-input"
 											/>
 										</SettingRow>
 									</div>
@@ -351,7 +351,7 @@
 												onblur={() => saveEntry(entry)}
 												rows={3}
 												limit={FIELD_LIMITS.lorebookEntryContent}
-												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+												class="field-input"
 												placeholder="The content to inject when keywords match..."
 											/>
 										</SettingRow>

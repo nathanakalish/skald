@@ -5,6 +5,7 @@ import { getAdminSettingBool } from '$lib/server/adminSettings.js';
 import { db } from '$lib/db/index.js';
 import { characters, lorebooks } from '$lib/db/schema.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { ApiError } from '$lib/server/apiError.js';
 
 /**
  * POST /api/chub/check
@@ -27,21 +28,21 @@ type CheckResult = { fullPath: string; exact: CheckMatch | null; byName: CheckMa
 export const POST: RequestHandler = async (event) => {
 	const user = requireUser(event);
 	if (!getAdminSettingBool('allowChubBrowse') && user.role !== 'admin') {
-		return json({ error: 'CHUB browsing is disabled by the administrator' }, { status: 403 });
+		return ApiError.forbidden('CHUB browsing is disabled by the administrator');
 	}
 
 	let body: { type?: string; cards?: { fullPath?: unknown; name?: unknown; creator?: unknown }[] };
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return ApiError.badRequest('Invalid JSON body');
 	}
 
 	const type = body.type === 'lorebook' ? 'lorebook' : 'character';
 	const rawCards = Array.isArray(body.cards) ? body.cards : [];
 	if (rawCards.length === 0) return json({ results: [] satisfies CheckResult[] });
 	if (rawCards.length > 100) {
-		return json({ error: 'Too many cards (max 100)' }, { status: 400 });
+		return ApiError.badRequest('Too many cards (max 100)');
 	}
 
 	const cards = rawCards

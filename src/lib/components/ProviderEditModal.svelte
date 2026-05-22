@@ -294,7 +294,7 @@
 		}
 	}
 
-	const inputClass = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+	const inputClass = 'field-input';
 
 	let isCreate = $derived(!provider);
 

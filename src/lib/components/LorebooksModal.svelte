@@ -392,7 +392,7 @@
 									id="ml-name"
 									bind:value={name}
 									limit={FIELD_LIMITS.name}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="Lorebook name"
 								/>
 							</div>
@@ -403,7 +403,7 @@
 									bind:value={description}
 									rows={3}
 									limit={FIELD_LIMITS.description}
-									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									class="field-input"
 									placeholder="What is this lorebook about?"
 								/>
 							</div>

@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { createProvider, type ProviderType } from '$lib/providers/index.js';
 import { requireUser } from '$lib/server/auth.js';
 import type { ChatMessage, SamplerSettings } from '$lib/providers/base.js';
+import { ApiError } from '$lib/server/apiError.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a text formatter. Your job is to reformat roleplay character greetings to use consistent formatting conventions.
 
@@ -39,11 +40,11 @@ export const POST: RequestHandler = async (event) => {
 		.where(eq(messages.id, id))
 		.get();
 	if (!message || message.chatUserId !== user.id) {
-		return json({ error: 'Message not found' }, { status: 404 });
+		return ApiError.notFound('Message not found');
 	}
 
 	if (!message.content?.trim()) {
-		return json({ error: 'Message has no content to reformat' }, { status: 400 });
+		return ApiError.badRequest('Message has no content to reformat');
 	}
 
 	// Read user's reformatter settings
@@ -64,7 +65,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	if (!provider) {
-		return json({ error: 'No provider available. Configure one in Settings > Providers.' }, { status: 400 });
+		return ApiError.badRequest('No provider available. Configure one in Settings > Providers.');
 	}
 
 	const activeModel = settingModel || provider.defaultModel || '';
@@ -116,8 +117,6 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} catch (err) {
 		event.locals.logger?.warn('messages: reformat failed', { messageId: id, durationMs: Date.now() - t0, err: String(err) });
-		return json({
-			error: `Failed to reformat: ${err instanceof Error ? err.message : 'Unknown error'}`
-		}, { status: 500 });
+		return ApiError.server(`Failed to reformat: ${err instanceof Error ? err.message : 'Unknown error'}`);
 	}
 };
