@@ -273,11 +273,14 @@
 	}
 
 	onMount(() => {
-		const onFocus = () => pinLock.onAppForeground();
+		// `visibilitychange` is the only reliable "user came back to this tab"
+		// signal. window.focus fires for all sorts of in-page reasons —
+		// password-manager popovers closing, devtools opening, programmatic
+		// .focus() after a data refresh — which would otherwise re-lock the
+		// UI constantly on the on-focus policy.
 		const onVisibility = () => { if (!document.hidden) pinLock.onAppForeground(); };
 		const onActivity = () => pinLock.recordActivity();
 
-		window.addEventListener('focus', onFocus);
 		document.addEventListener('visibilitychange', onVisibility);
 		// Passive listeners — never block scroll/input.
 		window.addEventListener('mousemove', onActivity, { passive: true });
@@ -286,7 +289,6 @@
 		window.addEventListener('touchstart', onActivity, { passive: true });
 
 		return () => {
-			window.removeEventListener('focus', onFocus);
 			document.removeEventListener('visibilitychange', onVisibility);
 			window.removeEventListener('mousemove', onActivity);
 			window.removeEventListener('keydown', onActivity);
