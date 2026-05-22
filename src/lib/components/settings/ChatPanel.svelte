@@ -54,7 +54,11 @@
 		{ id: 'copy', label: 'Copy', description: 'Any message.' },
 		{ id: 'delete', label: 'Delete', description: 'Any message except the first.' },
 		{ id: 'viewReasoning', label: 'View reasoning', description: 'Messages with reasoning attached.' },
-		{ id: 'swipes', label: 'Swipe navigation', description: 'The ‹ 1/2 › selector. Hidden when a message has no alternate swipes.' }
+		{ id: 'swipes', label: 'Swipe navigation', description: 'The ‹ 1/2 › selector. Hidden when a message has no alternate swipes.' },
+		{ id: 'guideReply', label: 'Guide reply', description: 'Last user message and last assistant message.' },
+		{ id: 'guideImpersonation', label: 'Guide impersonation', description: 'Last user message only.' },
+		{ id: 'reimpersonate', label: 'Re-impersonate', description: 'Last user message only.' },
+		{ id: 'reformatGreeting', label: 'Reformat greeting', description: 'First assistant message only.' }
 	];
 
 	const pinnedSet = $derived(

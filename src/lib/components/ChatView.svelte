@@ -2905,6 +2905,8 @@
 						onenlargeAvatar={(src) => (enlargedImage = src)}
 					/>
 					{@const reasoningPresent = !!message.reasoning?.[message.swipeIndex]}
+					{@const parentMsgForPin = message.parentId != null ? messageList.find((mm) => mm.id === message.parentId) : null}
+					{@const assistantGuidanceForPin = message.role === 'assistant' ? (message.guidance ?? null) : null}
 					{@const pinShow = {
 						viewReasoning: pinnedActions.has('viewReasoning') && reasoningPresent,
 						regenerate: pinnedActions.has('regenerate') && message.role === 'assistant' && isLast && (i !== 0 || isTexting) && !isCompacted,
@@ -2913,9 +2915,14 @@
 						edit: pinnedActions.has('edit') && !isCompacted && editingId !== message.id,
 						copy: pinnedActions.has('copy'),
 						del: pinnedActions.has('delete') && i > 0 && !isCompacted,
-						swipes: pinnedActions.has('swipes') && message.swipes.length > 1
+						swipes: pinnedActions.has('swipes') && message.swipes.length > 1,
+						guideReplyUser: pinnedActions.has('guideReply') && message.role === 'user' && isLast && !isCompacted,
+						guideReplyAssistant: pinnedActions.has('guideReply') && message.role === 'assistant' && isLast && !isCompacted && parentMsgForPin?.role === 'user',
+						guideImpersonation: pinnedActions.has('guideImpersonation') && message.role === 'user' && isLast && !isCompacted,
+						reimpersonate: pinnedActions.has('reimpersonate') && message.role === 'user' && isLast && !isCompacted,
+						reformatGreeting: pinnedActions.has('reformatGreeting') && i === 0 && message.role === 'assistant' && !isCompacted
 					}}
-					{@const hasPinned = pinShow.viewReasoning || pinShow.regenerate || pinShow.resend || pinShow.branch || pinShow.edit || pinShow.copy || pinShow.del || pinShow.swipes}
+					{@const hasPinned = pinShow.viewReasoning || pinShow.regenerate || pinShow.resend || pinShow.branch || pinShow.edit || pinShow.copy || pinShow.del || pinShow.swipes || pinShow.guideReplyUser || pinShow.guideReplyAssistant || pinShow.guideImpersonation || pinShow.reimpersonate || pinShow.reformatGreeting}
 					{#if hasPinned && groupEnd && !(deletingFromIdx !== null && i >= deletingFromIdx) && !(deletingSingleIdx !== null && i === deletingSingleIdx)}
 						<div class="mt-0.5 flex items-center gap-0.5 text-muted-foreground {message.role === 'user' ? 'justify-end' : 'justify-start md:pl-12'}">
 							{#if pinShow.swipes}
@@ -2998,6 +3005,66 @@
 									aria-label="Edit"
 								>
 									<Pencil class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.guideReplyUser}
+								<button
+									type="button"
+									onclick={() => openGuideModal({ kind: 'guideReply', userMessageId: message.id }, message.guidance ?? '')}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={message.guidance ? 'Edit reply guidance' : 'Guide reply'}
+									aria-label="Guide reply"
+								>
+									<Wand2 class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.guideReplyAssistant}
+								<button
+									type="button"
+									onclick={() => openGuideModal({ kind: 'editAssistantGuidance', assistantMessageId: message.id }, assistantGuidanceForPin ?? '')}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={assistantGuidanceForPin ? 'Edit reply guidance' : 'Guide reply'}
+									aria-label="Guide reply"
+								>
+									<Wand2 class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.guideImpersonation}
+								<button
+									type="button"
+									onclick={() => openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? '')}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={activeImpersonationSwipe?.guidance ? 'Edit impersonation guidance' : 'Guide impersonation'}
+									aria-label="Guide impersonation"
+								>
+									<Wand2 class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.reimpersonate}
+								<button
+									type="button"
+									onclick={() => reImpersonateMessage(i)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Re-impersonate'}
+									aria-label="Re-impersonate"
+								>
+									<UserPen class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.reformatGreeting}
+								<button
+									type="button"
+									onclick={() => reformatMessage(i)}
+									disabled={isStreaming}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Reformat greeting'}
+									aria-label="Reformat greeting"
+								>
+									<Wand2 class="h-3.5 w-3.5" />
 								</button>
 							{/if}
 							{#if pinShow.copy}
@@ -3317,6 +3384,22 @@
 		{@const menuIsCompacted = isMessageCompacted(menuMsg.id)}
 		{@const menuParentMsg = menuMsgObj.parentId != null ? messageList.find((mm) => mm.id === menuMsgObj.parentId) : null}
 		{@const menuAssistantGuidance = menuMsg.role === 'assistant' ? (menuMsgObj.guidance ?? null) : null}
+		{@const menuVisibleCount =
+			((menuMsg.swipes.length > 1 && !pinnedActions.has('swipes')) ? 1 : 0)
+			+ (menuHasBranches ? 1 : 0)
+			+ ((menuMsg.reasoning[menuMsg.swipeIndex] && !pinnedActions.has('viewReasoning')) ? 1 : 0)
+			+ ((menuShowRegen && !menuIsCompacted && !pinnedActions.has('regenerate')) ? 1 : 0)
+			+ ((menuIsLastUser && !menuIsCompacted && !pinnedActions.has('resend')) ? 1 : 0)
+			+ ((menuIsLastUser && !menuIsCompacted && !pinnedActions.has('guideReply')) ? 1 : 0)
+			+ ((menuIsLastUser && !menuIsCompacted && !pinnedActions.has('reimpersonate')) ? 1 : 0)
+			+ ((menuMsg.role === 'user' && menuIsLast && !menuIsCompacted && !pinnedActions.has('guideImpersonation')) ? 1 : 0)
+			+ ((menuMsg.role === 'user' && !menuIsLast && !menuIsCompacted && menuMsgObj.impersonationGuidance) ? 1 : 0)
+			+ ((menuIsLastAssistant && menuParentMsg && menuParentMsg.role === 'user' && !menuIsCompacted && !pinnedActions.has('guideReply')) ? 1 : 0)
+			+ ((!menuIsLast && !menuIsCompacted && !pinnedActions.has('branch')) ? 1 : 0)
+			+ ((menuIsFirst && menuMsg.role === 'assistant' && !menuIsCompacted && !pinnedActions.has('reformatGreeting')) ? 1 : 0)
+			+ (!pinnedActions.has('edit') ? 1 : 0)
+			+ (!pinnedActions.has('copy') ? 1 : 0)
+			+ ((menuMsgIdx > 0 && !menuIsCompacted && !pinnedActions.has('delete')) ? 1 : 0)}
 		<div
 			data-msg-menu
 			class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
@@ -3401,29 +3484,33 @@
 						<CornerRightUp class="h-4 w-4" />Resend
 					</button>
 				{/if}
-				<button
-					type="button"
-					onclick={() => {
-						const id = menuMsgObj.id;
-						const g = menuMsgObj.guidance ?? '';
-						closeMsgMenu();
-						openGuideModal({ kind: 'guideReply', userMessageId: id }, g);
-					}}
-					disabled={isStreaming}
-					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
-				>
-					<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit reply guidance…' : 'Guide reply…'}
-				</button>
-				<button
-					type="button"
-					onclick={() => { reImpersonateMessage(menuMsgIdx); closeMsgMenu(); }}
-					disabled={isStreaming}
-					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
-				>
-					<UserPen class="h-4 w-4" />Re-impersonate
-				</button>
+				{#if !pinnedActions.has('guideReply')}
+					<button
+						type="button"
+						onclick={() => {
+							const id = menuMsgObj.id;
+							const g = menuMsgObj.guidance ?? '';
+							closeMsgMenu();
+							openGuideModal({ kind: 'guideReply', userMessageId: id }, g);
+						}}
+						disabled={isStreaming}
+						class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+					>
+						<Wand2 class="h-4 w-4" />{menuMsgObj.guidance ? 'Edit reply guidance…' : 'Guide reply…'}
+					</button>
+				{/if}
+				{#if !pinnedActions.has('reimpersonate')}
+					<button
+						type="button"
+						onclick={() => { reImpersonateMessage(menuMsgIdx); closeMsgMenu(); }}
+						disabled={isStreaming}
+						class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+					>
+						<UserPen class="h-4 w-4" />Re-impersonate
+					</button>
+				{/if}
 			{/if}
-			{#if menuMsg.role === 'user' && menuIsLast && !menuIsCompacted}
+			{#if menuMsg.role === 'user' && menuIsLast && !menuIsCompacted && !pinnedActions.has('guideImpersonation')}
 				<button
 					type="button"
 					onclick={() => { closeMsgMenu(); openGuideModal({ kind: 'impersonate' }, activeImpersonationSwipe?.guidance ?? ''); }}
@@ -3432,7 +3519,8 @@
 				>
 					<Wand2 class="h-4 w-4" />{activeImpersonationSwipe?.guidance ? 'Edit impersonation guidance…' : 'Guide impersonation…'}
 				</button>
-			{:else if menuMsg.role === 'user' && !menuIsCompacted && menuMsgObj.impersonationGuidance}
+			{/if}
+			{#if menuMsg.role === 'user' && !menuIsLast && !menuIsCompacted && menuMsgObj.impersonationGuidance}
 				<!-- 2nd-latest user message: show the impersonation guidance
 				     read-only so the user can see what they used, but can't edit
 				     it now that the impersonation round has already produced a reply. -->
@@ -3448,7 +3536,7 @@
 					<Wand2 class="h-4 w-4" />View impersonation guidance
 				</button>
 			{/if}
-			{#if menuIsLastAssistant && menuParentMsg && menuParentMsg.role === 'user' && !menuIsCompacted}
+			{#if menuIsLastAssistant && menuParentMsg && menuParentMsg.role === 'user' && !menuIsCompacted && !pinnedActions.has('guideReply')}
 				<button
 					type="button"
 					onclick={() => {
@@ -3473,7 +3561,7 @@
 					<GitBranchPlus class="h-4 w-4" />Branch from here
 				</button>
 			{/if}
-			{#if menuIsFirst && menuMsg.role === 'assistant' && !menuIsCompacted}
+			{#if menuIsFirst && menuMsg.role === 'assistant' && !menuIsCompacted && !pinnedActions.has('reformatGreeting')}
 				<button
 					type="button"
 					onclick={() => { reformatMessage(menuMsgIdx); closeMsgMenu(); }}
@@ -3513,6 +3601,9 @@
 				>
 					<Trash2 class="h-4 w-4" />Delete
 				</button>
+			{/if}
+			{#if menuVisibleCount === 0}
+				<div class="px-3 py-2 text-center text-sm italic text-muted-foreground/60">Empty</div>
 			{/if}
 		</div>
 	{/if}

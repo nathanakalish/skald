@@ -375,6 +375,7 @@
 			narrationBold: (data as any).narrationBold ?? false,
 			narrationItalic: (data as any).narrationItalic ?? false,
 			nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
+			pinnedMessageActions: (data as any).pinnedMessageActions ?? '',
 			systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 			systemLightThemeId: (data as any).systemLightThemeId ?? null
 		})),
@@ -451,6 +452,7 @@
 				narrationBold: (data as any).narrationBold ?? false,
 				narrationItalic: (data as any).narrationItalic ?? false,
 				nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
+				pinnedMessageActions: (data as any).pinnedMessageActions ?? '',
 				systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 				systemLightThemeId: (data as any).systemLightThemeId ?? null
 			},
