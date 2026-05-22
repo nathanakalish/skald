@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { personas } from '$lib/db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
@@ -31,10 +31,9 @@ export const POST: RequestHandler = async (event) => {
 	const tooLong = validateLengths(body, PERSONA_FIELD_LIMITS);
 	if (tooLong) return tooLong;
 
-	// CRUD-L2: per-user name uniqueness. Enforced at the app layer rather
-	// than a schema-level UNIQUE because old accounts may already have dupes
-	// and we don't want a migration to fail loudly. The pre-check runs in
-	// the same tx as the insert below.
+	// Personas intentionally allow duplicate in-chat names — the Label field
+	// is what disambiguates them in the UI, while the in-chat name is just
+	// the literal {{user}} substitution and can collide freely.
 
 	// Validate avatarPath: must be a safe relative path under /avatars/
 	const avatarPath = body.avatarPath && typeof body.avatarPath === 'string'
@@ -43,17 +42,7 @@ export const POST: RequestHandler = async (event) => {
 
 	// Demote-then-promote in one tx so we can't end up with zero defaults if
 	// the insert fails after the demote.
-	let conflict = false;
 	const result = db.transaction(() => {
-		const existing = db
-			.select({ id: personas.id })
-			.from(personas)
-			.where(and(eq(personas.userId, user.id), eq(personas.name, name)))
-			.get();
-		if (existing) {
-			conflict = true;
-			return null;
-		}
 		if (body.isDefault) {
 			db.update(personas).set({ isDefault: false }).where(eq(personas.userId, user.id)).run();
 		}
@@ -70,8 +59,6 @@ export const POST: RequestHandler = async (event) => {
 			.returning()
 			.get();
 	});
-
-	if (conflict) return ApiError.conflict('A persona with that name already exists');
 
 	// Return all personas — setting isDefault may have demoted others
 	const list = db.select().from(personas).where(eq(personas.userId, user.id)).all();

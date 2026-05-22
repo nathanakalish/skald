@@ -2,8 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
 import { personas } from '$lib/db/schema.js';
-import { eq, and, ne } from 'drizzle-orm';
-import { nameAlreadyExists } from '$lib/server/queryHelpers.js';
+import { eq, and } from 'drizzle-orm';
 import { requireOwned } from '$lib/server/ownership.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { validateLengths } from '$lib/server/fieldLimits.js';
@@ -27,10 +26,8 @@ export const PUT: RequestHandler = async (event) => {
 	const tooLong = validateLengths(body, PERSONA_FIELD_LIMITS);
 	if (tooLong) return tooLong;
 
-	// CRUD-L2: per-user name uniqueness (excluding self).
-	if (nameAlreadyExists(personas, user.id, name, id)) {
-		return ApiError.conflict('A persona with that name already exists');
-	}
+	// Personas intentionally allow duplicate in-chat names — the Label is
+	// what disambiguates personas in the UI.
 
 	// Validate avatarPath: must be a safe relative path under /avatars/
 	const avatarPath = body.avatarPath && typeof body.avatarPath === 'string'
