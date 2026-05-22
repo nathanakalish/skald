@@ -4,6 +4,7 @@ import { AnthropicProvider } from './anthropic.js';
 import { OllamaProvider } from './ollama.js';
 import { ZaiProvider } from './zai.js';
 import { GeminiProvider } from './gemini.js';
+import { ComfyUIProvider } from './comfyui.js';
 import { providerProfiles, type ProviderType } from './profiles.js';
 
 export type { ProviderType } from './profiles.js';
@@ -41,6 +42,7 @@ const constructors: Record<string, new (config: ProviderConfig) => LLMProvider> 
 	ollama: OllamaProvider,
 	zai: ZaiProvider,
 	gemini: GeminiProvider,
+	comfyui: ComfyUIProvider,
 	...Object.fromEntries(
 		Object.entries(openAICompatible).map(([id, name]) => [id, makeOpenAICompatible(id, name)])
 	)

@@ -70,6 +70,9 @@ export const PUT: RequestHandler = async (event) => {
 	if ('textingTypingSpeed' in body) updates.textingTypingSpeed = body.textingTypingSpeed;
 	if ('textingTypingMax' in body) updates.textingTypingMax = body.textingTypingMax;
 	if ('textingInitialDelay' in body) updates.textingInitialDelay = body.textingInitialDelay;
+	if ('imageModel' in body) updates.imageModel = body.imageModel ?? '';
+	if ('imageComfyWorkflow' in body) updates.imageComfyWorkflow = body.imageComfyWorkflow ?? '';
+	if ('imageComfyPromptNodeId' in body) updates.imageComfyPromptNodeId = body.imageComfyPromptNodeId ?? '';
 
 	if (Object.keys(updates).length > 0) {
 		db.update(providers).set(updates).where(and(eq(providers.id, id), eq(providers.userId, user.id))).run();

@@ -88,6 +88,14 @@
 	let textingTypingMax = $state(4000);
 	let textingInitialDelay = $state(1500);
 
+	// Image-gen state. `imageCapability` is derived from the picked type.
+	let imageModel = $state('');
+	let imageComfyWorkflow = $state('');
+	let imageComfyPromptNodeId = $state('');
+	let imageModelList = $state<string[]>([]);
+	let imageModelLoading = $state(false);
+	let imageCapability = $derived(getProfile(type)?.imageGeneration ?? 'none');
+
 	// Test & model state
 	let testResult = $state<'testing' | 'success' | 'fail' | null>(null);
 	let testDetails = $state<{ latencyMs?: number; modelCount?: number; error?: string } | null>(null);
@@ -137,6 +145,9 @@
 				textingTypingSpeed = provider.textingTypingSpeed ?? 35;
 				textingTypingMax = provider.textingTypingMax ?? 4000;
 				textingInitialDelay = provider.textingInitialDelay ?? 1500;
+				imageModel = provider.imageModel ?? '';
+				imageComfyWorkflow = provider.imageComfyWorkflow ?? '';
+				imageComfyPromptNodeId = provider.imageComfyPromptNodeId ?? '';
 				// Fetch the API key on demand (not included in layout data)
 				fetch(`/api/providers/${provider.id}`).then(r => r.json()).then(data => {
 					if (data?.apiKey != null) apiKey = data.apiKey;
@@ -167,6 +178,10 @@
 				textingTypingSpeed = 35;
 				textingTypingMax = 4000;
 				textingInitialDelay = 1500;
+				imageModel = '';
+				imageComfyWorkflow = '';
+				imageComfyPromptNodeId = '';
+				imageModelList = [];
 			}
 		});
 	});
@@ -210,7 +225,8 @@
 						contextSize, repetitionPenalty, frequencyPenalty, presencePenalty,
 						customPrompt,
 						lorebookDepth, streamingEnabled, includeReasoning, reasoningEffort,
-						textingTypingSpeed, textingTypingMax, textingInitialDelay
+						textingTypingSpeed, textingTypingMax, textingInitialDelay,
+						imageModel, imageComfyWorkflow, imageComfyPromptNodeId
 					}),
 				});
 				if (!res.ok) throw new Error(String(res.status));
@@ -292,6 +308,42 @@
 		} finally {
 			modelLoading = false;
 		}
+	}
+
+	// Image-model list comes from a separate endpoint that filters / scores
+	// models heuristically (known image families first). Requires the provider
+	// to already exist on the server — for create mode, the user has to save
+	// first and re-open the modal.
+	async function fetchImageModels() {
+		if (!provider?.id) return;
+		imageModelLoading = true;
+		try {
+			const res = await fetch(`/api/providers/${provider.id}/image-models`);
+			if (res.ok) {
+				const data = await res.json();
+				imageModelList = data.models ?? [];
+			}
+		} catch {
+			// ignore
+		} finally {
+			imageModelLoading = false;
+		}
+	}
+
+	// Read a JSON file the user picked and push it into the workflow textarea.
+	// We don't validate JSON here — the dispatcher will surface a friendly
+	// error at gen-time if it's malformed.
+	function onComfyWorkflowFile(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			const text = typeof reader.result === 'string' ? reader.result : '';
+			imageComfyWorkflow = text;
+		};
+		reader.readAsText(file);
+		input.value = '';
 	}
 
 	const inputClass = 'field-input';
@@ -422,6 +474,52 @@
 								</button>
 							</div>
 						</SettingRow>
+
+						<!-- Image model selector — only when this provider type supports image gen.
+						     ComfyUI gets a workflow-JSON textarea + file upload + prompt-node id
+						     instead of a model dropdown. -->
+						{#if imageCapability !== 'none' && !isCreate}
+							{#if imageCapability === 'comfyui'}
+								<div class="border-t border-border pt-4 space-y-3">
+									<h4 class="text-sm font-semibold text-muted-foreground">Image Generation</h4>
+									<SettingRow size="sm" label="Workflow JSON" description="Exported from ComfyUI via the API-format option in the workflow menu.">
+										<textarea
+											bind:value={imageComfyWorkflow}
+											rows={6}
+											class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring"
+											placeholder={'{"3": {"inputs": {"text": "...", ...}, "class_type": "CLIPTextEncode"}, ...}'}
+										></textarea>
+										<input type="file" accept="application/json" onchange={onComfyWorkflowFile} class="mt-2 text-xs text-muted-foreground" />
+									</SettingRow>
+									<SettingRow size="sm" label="Prompt Node ID" description="Id of the node whose inputs.text should be replaced with the generated prompt. Look in the JSON for your CLIPTextEncode prompt node.">
+										<input type="text" bind:value={imageComfyPromptNodeId} class={inputClass} placeholder="e.g. 6" />
+									</SettingRow>
+								</div>
+							{:else}
+								<SettingRow size="sm" label="Image Model" description="Used when this provider is selected for image generation. Leave blank to disable image gen for this provider.">
+									<div class="flex gap-2">
+										<div class="flex-1">
+											<Combobox
+												bind:value={imageModel}
+												items={modelsToItems(imageModelList, type)}
+												loading={imageModelLoading}
+												placeholder={imageModelList.length ? 'Select an image model…' : (imageModel ? imageModel : 'Click refresh to load image models')}
+												searchPlaceholder="Filter image models…"
+												emptyText="No Image Generation Models Available"
+											/>
+										</div>
+										<button
+											onclick={fetchImageModels}
+											disabled={imageModelLoading}
+											class="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs transition-colors hover:bg-accent disabled:opacity-50"
+											use:tooltip={'Fetch available image models'}
+										>
+											<RefreshCw class="h-3.5 w-3.5 {imageModelLoading ? 'animate-spin' : ''}" />
+										</button>
+									</div>
+								</SettingRow>
+							{/if}
+						{/if}
 
 						<!-- Max Concurrent + Test Connection: pair compact controls -->
 						<div class="grid gap-3 @xl:grid-cols-2 @xl:items-end">

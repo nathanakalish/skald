@@ -36,6 +36,9 @@
 			overrideCompactionFixedCount?: number | null;
 			overrideCompactionProviderId?: number | null;
 			overrideCompactionModel?: string | null;
+			overrideImageProviderId?: number | null;
+			overrideImageModel?: string | null;
+			overrideImagePromptTemplate?: string | null;
 			compactionSummary?: string | null;
 			compactedUpToMessageId?: number | null;
 			previousCompactedUpToMessageId?: number | null;
@@ -72,6 +75,11 @@
 	let compactionSummaryDraft = $state<string>('');
 	let compactionModelList = $state<string[]>([]);
 	let compactionModelLoading = $state(false);
+	let imageProviderIdOverride = $state<number | null>(null);
+	let imageModelOverride = $state<string | null>(null);
+	let imagePromptTemplateOverride = $state<string>('');
+	let imageModelList = $state<string[]>([]);
+	let imageModelLoading = $state(false);
 	let compactingNow = $state(false);
 	let reprocessingNow = $state(false);
 	let showSummaryMenu = $state(false);
@@ -120,6 +128,9 @@
 				compactionFixedCountOverride = chat.overrideCompactionFixedCount ?? null;
 				compactionProviderIdOverride = chat.overrideCompactionProviderId ?? null;
 				compactionModelOverride = chat.overrideCompactionModel ?? null;
+				imageProviderIdOverride = chat.overrideImageProviderId ?? null;
+				imageModelOverride = chat.overrideImageModel ?? null;
+				imagePromptTemplateOverride = chat.overrideImagePromptTemplate ?? '';
 				compactionSummaryDraft = chat.compactionSummary ?? '';
 			});
 		}
@@ -165,6 +176,24 @@
 			}
 		} catch { /* ignore */ }
 		compactionModelLoading = false;
+	}
+
+	$effect(() => {
+		const pid = imageProviderIdOverride;
+		if (pid) fetchImageModels(pid);
+		else imageModelList = [];
+	});
+
+	async function fetchImageModels(pid: number) {
+		imageModelLoading = true;
+		try {
+			const res = await fetch(`/api/providers/${pid}/image-models`);
+			if (res.ok) {
+				const data = await res.json();
+				imageModelList = data.models ?? [];
+			}
+		} catch { /* ignore */ }
+		imageModelLoading = false;
 	}
 
 	async function runCompactionNow() {
@@ -244,6 +273,9 @@
 			overrideCompactionFixedCount: compactionFixedCountOverride,
 			overrideCompactionProviderId: compactionProviderIdOverride,
 			overrideCompactionModel: compactionModelOverride,
+			overrideImageProviderId: imageProviderIdOverride,
+			overrideImageModel: imageModelOverride || null,
+			overrideImagePromptTemplate: imagePromptTemplateOverride.trim() ? imagePromptTemplateOverride : null,
 			compactionSummary: compactionSummaryDraft.trim() ? compactionSummaryDraft : null,
 		};
 		onclose();
@@ -278,6 +310,9 @@
 		if (field === 'renderMode') renderModeOverride = null;
 		if (field === 'customPrompt') customPrompt = '';
 		if (field === 'replyGuidance') replyGuidance = '';
+		if (field === 'imageProvider') { imageProviderIdOverride = null; imageModelOverride = null; imageModelList = []; }
+		if (field === 'imageModel') imageModelOverride = null;
+		if (field === 'imagePromptTemplate') imagePromptTemplateOverride = '';
 	}
 
 	const modal = createModalState(() => open);
@@ -438,6 +473,60 @@
 									{#if !providerId && model}
 										<p class="text-xs text-muted-foreground">Applies to whatever provider is active globally</p>
 									{/if}
+								</SettingRow>
+							</div>
+
+							<!-- Image generation overrides. Default fallback walks: image override
+							     > chat's text provider override > user's first enabled provider.
+							     Setting these here lets a story use one provider for text and
+							     another for art without changing the global preset. -->
+							<div class="border-t border-border pt-4 space-y-4">
+								<div>
+									<h3 class="text-base font-semibold">Image Generation</h3>
+									<p class="text-sm text-muted-foreground">Override which provider generates images and how the prompt is built.</p>
+								</div>
+								<div class="grid gap-4 @xl:grid-cols-2">
+									<SettingRow label="Image Provider">
+										{#snippet action()}
+											{#if imageProviderIdOverride}{@render resetLink(() => resetField('imageProvider'), 'Use default')}{/if}
+										{/snippet}
+										<Combobox
+											value={imageProviderIdOverride == null ? '' : String(imageProviderIdOverride)}
+											onchange={(v) => { imageProviderIdOverride = v ? parseInt(v) : null; }}
+											items={providerItems}
+											placeholder="Default"
+											searchPlaceholder="Filter providers…"
+										/>
+									</SettingRow>
+
+									<SettingRow label="Image Model">
+										{#snippet action()}
+											{#if imageModelOverride}{@render resetLink(() => resetField('imageModel'), 'Use default')}{/if}
+										{/snippet}
+										<Combobox
+											value={imageModelOverride ?? ''}
+											onchange={(v) => { imageModelOverride = v || null; }}
+											items={modelsToItems(imageModelList, null)}
+											loading={imageModelLoading}
+											disabled={!imageProviderIdOverride}
+											placeholder={imageProviderIdOverride ? 'Default (from provider)' : 'Override image provider first'}
+											searchPlaceholder="Filter image models…"
+											emptyText="No Image Generation Models Available"
+										/>
+									</SettingRow>
+								</div>
+
+								<SettingRow label="Prompt Template" description={`Used to build the image prompt from the source assistant message. Use {{message}} as the placeholder. Leave blank to use the global default.`}>
+									{#snippet action()}
+										{#if imagePromptTemplateOverride}{@render resetLink(() => resetField('imagePromptTemplate'), 'Use default')}{/if}
+									{/snippet}
+									<LimitedTextarea
+										bind:value={imagePromptTemplateOverride}
+										rows={3}
+										limit={FIELD_LIMITS.prompt}
+										class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										placeholder={`Generate an illustration that depicts: {{message}}`}
+									/>
 								</SettingRow>
 							</div>
 						</div>

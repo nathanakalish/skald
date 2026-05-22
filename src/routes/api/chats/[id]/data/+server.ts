@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/db/index.js';
-import { chats, characters, messages } from '$lib/db/schema.js';
-import { eq, and, asc } from 'drizzle-orm';
+import { chats, characters, messages, messageImages } from '$lib/db/schema.js';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { cacheImage } from '$lib/services/imageCache.js';
 import { requireUser } from '$lib/server/auth.js';
 import {
@@ -118,11 +118,37 @@ export const GET: RequestHandler = async (event) => {
 	const lastMsg = messageList[messageList.length - 1];
 	const hiddenBranchCount = lastMsg ? (siblingsByParent.get(lastMsg.id)?.length ?? 0) : 0;
 
+	// Pull any generated images attached to the visible messages. Returned as
+	// `messageImages[messageId] = [...]` so ChatView can render the active one
+	// in the bubble and load the others into the lightbox swipe set lazily.
+	const messageIds = messageList.map((m) => m.id);
+	const imageRows = messageIds.length
+		? db.select().from(messageImages).where(inArray(messageImages.messageId, messageIds)).orderBy(asc(messageImages.createdAt)).all()
+		: [];
+	const imagesByMessage: Record<number, Array<{
+		id: number; messageId: number; filePath: string; prompt: string;
+		model: string; providerId: number | null; isActive: boolean; createdAt: string | null;
+	}>> = {};
+	for (const row of imageRows) {
+		if (!imagesByMessage[row.messageId]) imagesByMessage[row.messageId] = [];
+		imagesByMessage[row.messageId].push({
+			id: row.id,
+			messageId: row.messageId,
+			filePath: row.filePath,
+			prompt: row.prompt,
+			model: row.model ?? '',
+			providerId: row.providerId,
+			isActive: !!row.isActive,
+			createdAt: row.createdAt ?? null
+		});
+	}
+
 	return json({
 		chat,
 		character,
 		messages: messageList,
 		messageSiblings,
+		messageImages: imagesByMessage,
 		hiddenBranchCount,
 		totalMessages,
 	});

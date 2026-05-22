@@ -105,6 +105,9 @@
 	$effect(() => { creatorPrompt = s.characterCreatorPrompt; });
 	$effect(() => { reformatterPrompt = s.reformatterPrompt; });
 	$effect(() => { compactionPrompt = s.compactionPrompt; });
+	// svelte-ignore state_referenced_locally
+	let imagePrompt = $state(s.imagePromptTemplate);
+	$effect(() => { imagePrompt = s.imagePromptTemplate; });
 </script>
 
 <div class="space-y-6">
@@ -361,5 +364,27 @@
 				/>
 			</SettingRow>
 		</div>
+	</div>
+
+	<!-- Image Generation prompt -->
+	<div class="border-t border-border pt-6">
+		<div class="mb-4">
+			<h3 class="text-base font-semibold">Image Generation</h3>
+			<p class="text-sm text-muted-foreground">Prompt template sent to the image model when generating an illustration for an assistant message. Use <code class="rounded bg-muted px-1 py-0.5 text-xs">{'{{message}}'}</code> as the placeholder for the message text. Per-chat overrides are available in chat settings.</p>
+		</div>
+		<SettingRow label="Prompt Template" htmlFor="image-prompt">
+			<LimitedTextarea
+				id="image-prompt"
+				class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+				rows={6}
+				limit={FIELD_LIMITS.prompt}
+				bind:value={imagePrompt}
+				placeholder="Leave blank to fall back to the built-in default."
+				onchange={async () => {
+					if (!checkAutoSaveLimit('Image generation prompt', imagePrompt, FIELD_LIMITS.prompt)) return;
+					await save('imagePromptTemplate', imagePrompt);
+				}}
+			/>
+		</SettingRow>
 	</div>
 </div>

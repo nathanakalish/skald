@@ -99,6 +99,13 @@ export const chats = sqliteTable('chats', {
 	overrideCompactionWindowPercent: integer('override_compaction_window_percent'),
 	overrideCompactionProviderId: integer('override_compaction_provider_id').references((): AnySQLiteColumn => providers.id, { onDelete: 'set null' }),
 	overrideCompactionModel: text('override_compaction_model'),
+	// Per-chat image generation overrides. Null falls back to the chat's
+	// active LLM provider (which carries its own imageModel + comfy config).
+	// `overrideImagePromptTemplate` overrides the global `imagePromptTemplate`
+	// user setting; `{{message}}` is the placeholder for the source message.
+	overrideImageProviderId: integer('override_image_provider_id').references((): AnySQLiteColumn => providers.id, { onDelete: 'set null' }),
+	overrideImageModel: text('override_image_model'),
+	overrideImagePromptTemplate: text('override_image_prompt_template'),
 	unread: integer('unread').default(0),
 	muted: integer('muted', { mode: 'boolean' }).default(false),
 	useCharacterTheme: integer('use_character_theme', { mode: 'boolean' }).default(true),
@@ -165,6 +172,26 @@ export const messages = sqliteTable('messages', {
 	// impersonationGuidance is just for inspection / re-impersonation.
 	impersonationGuidance: text('impersonation_guidance'),
 	parentId: integer('parent_id').references((): any => messages.id, { onDelete: 'set null' }),
+	createdAt: text('created_at').default(sql`(datetime('now'))`)
+});
+
+// Generated images attached to a message. Multiple rows per message form
+// a swipe set; exactly one row should have `isActive = 1` at a time —
+// that's the version shown in the chat bubble. Re-generating creates a new
+// row and flips `isActive`; deleting the active swipe activates the most
+// recent remaining one (or removes the attachment entirely if none left).
+// `filePath` is just the filename inside data/image-cache/ — the full path
+// is rebuilt server-side.
+export const messageImages = sqliteTable('message_images', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	messageId: integer('message_id')
+		.notNull()
+		.references(() => messages.id, { onDelete: 'cascade' }),
+	filePath: text('file_path').notNull(),
+	prompt: text('prompt').notNull(),
+	model: text('model').default(''),
+	providerId: integer('provider_id').references((): AnySQLiteColumn => providers.id, { onDelete: 'set null' }),
+	isActive: integer('is_active', { mode: 'boolean' }).default(true),
 	createdAt: text('created_at').default(sql`(datetime('now'))`)
 });
 
@@ -267,6 +294,14 @@ export const providers = sqliteTable('providers', {
 	textingTypingMax: integer('texting_typing_max').default(4000),
 	textingInitialDelay: integer('texting_initial_delay').default(1500),
 	sortOrder: integer('sort_order').default(0),
+	// Image-generation config. `imageModel` is the chosen model id for
+	// /v1/images/generations style providers. ComfyUI uses the two
+	// `imageComfy*` columns instead (workflow JSON + prompt node id) and
+	// ignores `imageModel`. Providers that don't support image gen leave
+	// all three blank.
+	imageModel: text('image_model').default(''),
+	imageComfyWorkflow: text('image_comfy_workflow').default(''),
+	imageComfyPromptNodeId: text('image_comfy_prompt_node_id').default(''),
 	createdAt: text('created_at').default(sql`(datetime('now'))`)
 });
 

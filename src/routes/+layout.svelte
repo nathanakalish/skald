@@ -384,6 +384,7 @@
 			narrationItalic: (data as any).narrationItalic ?? false,
 			nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
 			pinnedMessageActions: (data as any).pinnedMessageActions ?? '',
+			imagePromptTemplate: (data as any).imagePromptTemplate ?? '',
 			systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 			systemLightThemeId: (data as any).systemLightThemeId ?? null
 		})),
@@ -461,6 +462,7 @@
 				narrationItalic: (data as any).narrationItalic ?? false,
 				nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
 				pinnedMessageActions: (data as any).pinnedMessageActions ?? '',
+				imagePromptTemplate: (data as any).imagePromptTemplate ?? '',
 				systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 				systemLightThemeId: (data as any).systemLightThemeId ?? null
 			},
@@ -489,7 +491,7 @@
 	// Chat data is fetched client-side via /api/chats/:id/data after mount.
 	// Keeping it out of SSR makes the layout load much faster for users with
 	// long active chats (no message tree walk on the server's critical path).
-	let chatData: { chat: any; character: any; messages: any[]; messageSiblings: Record<number, { index: number; total: number }>; hiddenBranchCount: number; totalMessages?: number } | null = $state(null);
+	let chatData: { chat: any; character: any; messages: any[]; messageSiblings: Record<number, { index: number; total: number }>; hiddenBranchCount: number; totalMessages?: number; messageImages?: Record<number, any[]> } | null = $state(null);
 	let chatLoading = $state(!!initialChatId);
 	// Gated visibility for the loading spinner — see loadChat() for the
 	// short delay that keeps quick fetches from flashing it on screen.
@@ -2928,6 +2930,7 @@
 					chat={chatData.chat}
 					character={chatData.character}
 					initialMessages={chatData.messages}
+					initialMessageImages={chatData.messageImages ?? {}}
 					messageSiblingsData={chatData.messageSiblings}
 					hiddenBranchData={chatData.hiddenBranchCount}
 					totalMessageCount={chatData.totalMessages ?? chatData.messages.length}

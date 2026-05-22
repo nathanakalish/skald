@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Send, Square, Bot, ChevronLeft, ChevronRight, RefreshCw, Pencil, Trash2, Check, X, CornerRightUp, UserPen, GitBranch, GitBranchPlus, Undo2, ArrowDown, SlidersHorizontal, Brain, Smartphone, BookOpen, Info, Wand2, BookMarked, Search, MoreHorizontal, Copy, Loader2, Archive } from 'lucide-svelte';
+	import { Send, Square, Bot, ChevronLeft, ChevronRight, RefreshCw, Pencil, Trash2, Check, X, CornerRightUp, UserPen, GitBranch, GitBranchPlus, Undo2, ArrowDown, SlidersHorizontal, Brain, Smartphone, BookOpen, Info, Wand2, BookMarked, Search, MoreHorizontal, Copy, Loader2, Archive, ImagePlus, Download } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { tick, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
 	import ImageModal from '$lib/components/ImageModal.svelte';
+	import MessageImageLightbox from '$lib/components/MessageImageLightbox.svelte';
 	import MessageBubble from '$lib/components/MessageBubble.svelte';
 	import ChatSettings from '$lib/components/ChatSettings.svelte';
 	import ReasoningModal from '$lib/components/ReasoningModal.svelte';
@@ -28,10 +29,11 @@
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
-	let { chat, character, initialMessages, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
+	let { chat, character, initialMessages, initialMessageImages = {}, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
 		chat: any;
 		character: any;
 		initialMessages: any[];
+		initialMessageImages?: Record<number, MessageImageRow[]>;
 		messageSiblingsData: Record<number, { index: number; total: number }>;
 		hiddenBranchData: number;
 		totalMessageCount?: number;
@@ -62,6 +64,24 @@
 			return providers.find((p: any) => p.id === chat.overrideProviderId) ?? providers.find((p: any) => p.enabled) ?? null;
 		}
 		return providers.find((p: any) => p.enabled) ?? null;
+	});
+
+	// Image-gen availability for this chat. Mirrors the server's resolution:
+	// chat image override > chat text override > first-enabled provider.
+	// We check whether the resolved provider actually has an image model OR a
+	// ComfyUI workflow configured — otherwise the pinned button / context menu
+	// item should stay hidden and the API call would error anyway.
+	let imageProvider = $derived.by(() => {
+		const id = chat.overrideImageProviderId ?? chat.overrideProviderId ?? null;
+		if (id) return providers.find((p: any) => p.id === id) ?? null;
+		return providers.find((p: any) => p.enabled) ?? null;
+	});
+	let imageGenAvailable = $derived.by(() => {
+		const p = imageProvider;
+		if (!p) return false;
+		if (chat.overrideImageModel) return true;
+		if (p.type === 'comfyui') return !!p.imageComfyWorkflow && !!p.imageComfyPromptNodeId;
+		return !!p.imageModel;
 	});
 
 	let showChatSettings = $state(false);
@@ -194,6 +214,17 @@
 		impersonationGuidance: string | null;
 	}
 
+	interface MessageImageRow {
+		id: number;
+		messageId: number;
+		filePath: string;
+		prompt: string;
+		model: string;
+		providerId: number | null;
+		isActive: boolean;
+		createdAt: string | null;
+	}
+
 	// Monotonic negative IDs for client-side message placeholders. Real DB IDs are positive,
 	// so negatives never collide with persisted messages and decrement guarantees uniqueness
 	// even within the same millisecond (replaces unsafe Date.now() / Date.now()+1 pattern).
@@ -288,6 +319,12 @@
 
 	let messageList: Message[] = $state(untrack(() => (initialMessages ?? []).map(parseMessage)));
 	let messageSiblings: Record<number, { index: number; total: number }> = $state(untrack(() => messageSiblingsData ?? {}));
+	let messageImages: Record<number, MessageImageRow[]> = $state(untrack(() => initialMessageImages ?? {}));
+	// Messages currently waiting on an in-flight gen request from this tab.
+	// Cleared by the SSE messageImage:created handler.
+	let imageGenInFlight = $state(new Set<number>());
+	// Lightbox state — null hides; otherwise contains all gen rows for that message
+	let lightboxMessageId = $state<number | null>(null);
 	let hiddenBranchCount = $derived(hiddenBranchData ?? 0);
 	let totalMsgCount = $state(untrack(() => totalMessageCount || (initialMessages ?? []).length));
 	let loadingMore = $state(false);
@@ -794,6 +831,34 @@
 			}
 			if (streamingAssistantIdx < 0 && !isStreaming) {
 				onrefresh?.();
+			}
+		} else if (type === 'messageImage:created' && eventData?.image) {
+			const img = eventData.image as MessageImageRow;
+			const list = (messageImages[img.messageId] ?? []).map((it) => ({ ...it, isActive: false }));
+			list.push(img);
+			messageImages = { ...messageImages, [img.messageId]: list };
+			imageGenInFlight.delete(img.messageId);
+			imageGenInFlight = new Set(imageGenInFlight);
+		} else if (type === 'messageImage:activated' && eventData) {
+			const { messageId, imageId } = eventData as { messageId: number; imageId: number };
+			const list = messageImages[messageId];
+			if (list) {
+				messageImages = {
+					...messageImages,
+					[messageId]: list.map((it) => ({ ...it, isActive: it.id === imageId }))
+				};
+			}
+		} else if (type === 'messageImage:deleted' && eventData) {
+			const { messageId, imageId } = eventData as { messageId: number; imageId: number };
+			const list = messageImages[messageId];
+			if (list) {
+				const next = list.filter((it) => it.id !== imageId);
+				// If we just removed the active one and there's anything left,
+				// flag the most-recent as active (mirrors the server's policy).
+				if (next.length && !next.some((it) => it.isActive)) {
+					next[next.length - 1] = { ...next[next.length - 1], isActive: true };
+				}
+				messageImages = { ...messageImages, [messageId]: next };
 			}
 		}
 	});
@@ -2617,6 +2682,41 @@
 		}
 	}
 
+	// Trigger an image gen for an assistant message. The server resolves the
+	// effective provider / model / prompt template and broadcasts the resulting
+	// row via SSE — we just kick the request and surface failures.
+	async function generateImageForMessage(messageId: number) {
+		if (imageGenInFlight.has(messageId)) return;
+		imageGenInFlight = new Set(imageGenInFlight).add(messageId);
+		try {
+			const res = await fetch(`/api/messages/${messageId}/images`, { method: 'POST' });
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				const msg = body?.error || body?.message
+					|| 'No image provider configured. Set an image model in the provider profile or in this chat\u2019s settings.';
+				toasts.error(msg);
+				imageGenInFlight.delete(messageId);
+				imageGenInFlight = new Set(imageGenInFlight);
+			}
+		} catch {
+			toasts.error('Failed to start image generation');
+			imageGenInFlight.delete(messageId);
+			imageGenInFlight = new Set(imageGenInFlight);
+		}
+	}
+
+	async function activateMessageImage(messageId: number, imageId: number) {
+		try {
+			await fetch(`/api/messages/${messageId}/images/${imageId}`, { method: 'PATCH' });
+		} catch { /* SSE will reconcile */ }
+	}
+
+	async function deleteMessageImage(messageId: number, imageId: number) {
+		try {
+			await fetch(`/api/messages/${messageId}/images/${imageId}`, { method: 'DELETE' });
+		} catch { /* SSE will reconcile */ }
+	}
+
 	async function regenerateMessage() {
 		if (isStreaming) return;
 
@@ -2869,8 +2969,13 @@
 					{@const groupEnd = !nextMsg || nextMsg.role === 'system' || nextMsg.role !== message.role}
 					{@const isCompacted = isMessageCompacted(message.id)}
 					{@const isLast = i === messageList.length - 1}
+					{@const activeMsgImage = (messageImages[message.id] ?? []).find((im) => im.isActive) ?? null}
+					{@const activeMsgImageUrl = activeMsgImage ? `/api/images/cache/${activeMsgImage.filePath}` : null}
 					<MessageBubble
 						{message}
+						generatedImageUrl={activeMsgImageUrl}
+						generatedImageLoading={imageGenInFlight.has(message.id)}
+						ongeneratedImageClick={() => (lightboxMessageId = message.id)}
 						{consecutive}
 						{groupEnd}
 						{msgNumber}
@@ -2910,6 +3015,7 @@
 					{@const pinShow = {
 						viewReasoning: pinnedActions.has('viewReasoning') && reasoningPresent,
 						regenerate: pinnedActions.has('regenerate') && message.role === 'assistant' && isLast && (i !== 0 || isTexting) && !isCompacted,
+						generateImage: pinnedActions.has('generateImage') && message.role === 'assistant' && imageGenAvailable && !isCompacted,
 						resend: pinnedActions.has('resend') && message.role === 'user' && isLast && !isCompacted,
 						branch: pinnedActions.has('branch') && !isLast && !isCompacted,
 						edit: pinnedActions.has('edit') && !isCompacted && editingId !== message.id,
@@ -2922,7 +3028,7 @@
 						reimpersonate: pinnedActions.has('reimpersonate') && message.role === 'user' && isLast && !isCompacted,
 						reformatGreeting: pinnedActions.has('reformatGreeting') && i === 0 && message.role === 'assistant' && !isCompacted
 					}}
-					{@const hasPinned = pinShow.viewReasoning || pinShow.regenerate || pinShow.resend || pinShow.branch || pinShow.edit || pinShow.copy || pinShow.del || pinShow.swipes || pinShow.guideReplyUser || pinShow.guideReplyAssistant || pinShow.guideImpersonation || pinShow.reimpersonate || pinShow.reformatGreeting}
+					{@const hasPinned = pinShow.viewReasoning || pinShow.regenerate || pinShow.generateImage || pinShow.resend || pinShow.branch || pinShow.edit || pinShow.copy || pinShow.del || pinShow.swipes || pinShow.guideReplyUser || pinShow.guideReplyAssistant || pinShow.guideImpersonation || pinShow.reimpersonate || pinShow.reformatGreeting}
 					{#if hasPinned && groupEnd && !(deletingFromIdx !== null && i >= deletingFromIdx) && !(deletingSingleIdx !== null && i === deletingSingleIdx)}
 						<div class="mt-0.5 flex items-center gap-0.5 text-muted-foreground {message.role === 'user' ? 'justify-end' : 'justify-start md:pl-12'}">
 							{#if pinShow.swipes}
@@ -2969,6 +3075,22 @@
 									aria-label="Regenerate"
 								>
 									<RefreshCw class="h-3.5 w-3.5" />
+								</button>
+							{/if}
+							{#if pinShow.generateImage}
+								<button
+									type="button"
+									onclick={() => generateImageForMessage(message.id)}
+									disabled={imageGenInFlight.has(message.id)}
+									class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+									use:tooltip={'Generate image'}
+									aria-label="Generate image"
+								>
+									{#if imageGenInFlight.has(message.id)}
+										<Loader2 class="h-3.5 w-3.5 animate-spin" />
+									{:else}
+										<ImagePlus class="h-3.5 w-3.5" />
+									{/if}
 								</button>
 							{/if}
 							{#if pinShow.resend}
@@ -3235,6 +3357,16 @@
 
 <ImageModal src={enlargedImage} onclose={() => (enlargedImage = null)} />
 
+<MessageImageLightbox
+	messageId={lightboxMessageId}
+	images={lightboxMessageId !== null ? (messageImages[lightboxMessageId] ?? []) : []}
+	regenerating={lightboxMessageId !== null && imageGenInFlight.has(lightboxMessageId)}
+	onclose={() => (lightboxMessageId = null)}
+	onactivate={(imageId) => lightboxMessageId !== null && activateMessageImage(lightboxMessageId, imageId)}
+	ondelete={(imageId) => lightboxMessageId !== null && deleteMessageImage(lightboxMessageId, imageId)}
+	onregenerate={() => lightboxMessageId !== null && generateImageForMessage(lightboxMessageId)}
+/>
+
 <ChatSettings
 	open={showChatSettings}
 	chatId={chat.id}
@@ -3389,6 +3521,7 @@
 			+ (menuHasBranches ? 1 : 0)
 			+ ((menuMsg.reasoning[menuMsg.swipeIndex] && !pinnedActions.has('viewReasoning')) ? 1 : 0)
 			+ ((menuShowRegen && !menuIsCompacted && !pinnedActions.has('regenerate')) ? 1 : 0)
+			+ ((menuMsg.role === 'assistant' && !menuIsCompacted && imageGenAvailable && !pinnedActions.has('generateImage')) ? 1 : 0)
 			+ ((menuIsLastUser && !menuIsCompacted && !pinnedActions.has('resend')) ? 1 : 0)
 			+ ((menuIsLastUser && !menuIsCompacted && !pinnedActions.has('guideReply')) ? 1 : 0)
 			+ ((menuIsLastUser && !menuIsCompacted && !pinnedActions.has('reimpersonate')) ? 1 : 0)
@@ -3471,6 +3604,16 @@
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
 				>
 					<RefreshCw class="h-4 w-4" />Regenerate
+				</button>
+			{/if}
+			{#if menuMsg.role === 'assistant' && !menuIsCompacted && imageGenAvailable && !pinnedActions.has('generateImage')}
+				<button
+					type="button"
+					onclick={() => { generateImageForMessage(menuMsgObj.id); closeMsgMenu(); }}
+					disabled={imageGenInFlight.has(menuMsgObj.id)}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+				>
+					<ImagePlus class="h-4 w-4" />Generate image
 				</button>
 			{/if}
 			{#if menuIsLastUser && !menuIsCompacted}

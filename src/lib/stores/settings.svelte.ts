@@ -69,6 +69,10 @@ export interface Settings {
 	/** Comma-separated list of message action IDs (regenerate, resend, branch, edit, copy, delete, viewReasoning).
 	 * Pinned actions render as always-visible quick buttons under each bubble and are removed from the long-press / right-click menu. */
 	pinnedMessageActions: string;
+	/** Default prompt template for image generation. `{{message}}` is replaced
+	 * with the source message's content. Per-chat override lives on
+	 * chats.overrideImagePromptTemplate. */
+	imagePromptTemplate: string;
 	[k: string]: unknown;
 }
 
@@ -130,7 +134,8 @@ const defaults: Settings = {
 	narrationBold: false,
 	narrationItalic: false,
 	nestedEmphasisInSpeech: true,
-	pinnedMessageActions: ''
+	pinnedMessageActions: '',
+	imagePromptTemplate: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}'
 };
 
 let _settings = $state<Settings>({ ...defaults });

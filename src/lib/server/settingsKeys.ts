@@ -32,4 +32,5 @@ export const ALLOWED_SETTING_KEYS = [
 	'narrationOpacity', 'narrationBold', 'narrationItalic',
 	'nestedEmphasisInSpeech',
 	'pinnedMessageActions',
+	'imagePromptTemplate',
 ];

@@ -994,4 +994,43 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 			}
 		}
 	}
+
+	// --- Image generation: providers + chats columns + message_images table ---
+	const provColsImg = sqlite.prepare("PRAGMA table_info(providers)").all() as { name: string }[];
+	const provColNamesImg = new Set(provColsImg.map(c => c.name));
+	if (!provColNamesImg.has('image_model')) {
+		sqlite.exec("ALTER TABLE providers ADD COLUMN image_model TEXT DEFAULT ''");
+	}
+	if (!provColNamesImg.has('image_comfy_workflow')) {
+		sqlite.exec("ALTER TABLE providers ADD COLUMN image_comfy_workflow TEXT DEFAULT ''");
+	}
+	if (!provColNamesImg.has('image_comfy_prompt_node_id')) {
+		sqlite.exec("ALTER TABLE providers ADD COLUMN image_comfy_prompt_node_id TEXT DEFAULT ''");
+	}
+
+	const chatColsImg = sqlite.prepare("PRAGMA table_info(chats)").all() as { name: string }[];
+	const chatColNamesImg = new Set(chatColsImg.map(c => c.name));
+	if (!chatColNamesImg.has('override_image_provider_id')) {
+		sqlite.exec('ALTER TABLE chats ADD COLUMN override_image_provider_id INTEGER REFERENCES providers(id) ON DELETE SET NULL');
+	}
+	if (!chatColNamesImg.has('override_image_model')) {
+		sqlite.exec('ALTER TABLE chats ADD COLUMN override_image_model TEXT');
+	}
+	if (!chatColNamesImg.has('override_image_prompt_template')) {
+		sqlite.exec('ALTER TABLE chats ADD COLUMN override_image_prompt_template TEXT');
+	}
+
+	sqlite.exec(`
+		CREATE TABLE IF NOT EXISTS message_images (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+			file_path TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			model TEXT DEFAULT '',
+			provider_id INTEGER REFERENCES providers(id) ON DELETE SET NULL,
+			is_active INTEGER DEFAULT 1,
+			created_at TEXT DEFAULT (datetime('now'))
+		);
+		CREATE INDEX IF NOT EXISTS idx_message_images_message_id ON message_images(message_id);
+	`);
 }

@@ -58,7 +58,8 @@
 		{ id: 'guideReply', label: 'Guide reply', description: 'Last user message and last assistant message.' },
 		{ id: 'guideImpersonation', label: 'Guide impersonation', description: 'Last user message only.' },
 		{ id: 'reimpersonate', label: 'Re-impersonate', description: 'Last user message only.' },
-		{ id: 'reformatGreeting', label: 'Reformat greeting', description: 'First assistant message only.' }
+		{ id: 'reformatGreeting', label: 'Reformat greeting', description: 'First assistant message only.' },
+		{ id: 'generateImage', label: 'Generate image', description: 'Any assistant message. Disabled unless an image provider/model is configured.' }
 	];
 
 	const pinnedSet = $derived(

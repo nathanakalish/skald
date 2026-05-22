@@ -57,6 +57,7 @@ export const PATCH: RequestHandler = async (event) => {
 		title: 'name',
 		overrideCustomPrompt: 'prompt',
 		overrideCompactionModel: 'name',
+		overrideImagePromptTemplate: 'prompt',
 		compactionSummary: 'compactionSummary',
 		replyGuidance: 'replyGuidance',
 	});
@@ -106,6 +107,15 @@ export const PATCH: RequestHandler = async (event) => {
 		updates.overrideCompactionProviderId = v ?? null;
 	}
 	if ('overrideCompactionModel' in body) updates.overrideCompactionModel = body.overrideCompactionModel ?? null;
+	if ('overrideImageProviderId' in body) {
+		const v = body.overrideImageProviderId;
+		if (v != null && !ownsProvider(user.id, Number(v))) {
+			return ApiError.badRequest('overrideImageProviderId does not belong to you');
+		}
+		updates.overrideImageProviderId = v ?? null;
+	}
+	if ('overrideImageModel' in body) updates.overrideImageModel = body.overrideImageModel ?? null;
+	if ('overrideImagePromptTemplate' in body) updates.overrideImagePromptTemplate = body.overrideImagePromptTemplate ?? null;
 	// Let the user edit / clear the stored compaction summary directly.
 	if ('compactionSummary' in body) {
 		const v = body.compactionSummary;

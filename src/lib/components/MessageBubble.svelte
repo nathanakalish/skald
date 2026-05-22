@@ -46,7 +46,10 @@
 		onendLongPress,
 		onopenReasoning,
 		onimageClick,
-		onenlargeAvatar
+		onenlargeAvatar,
+		generatedImageUrl = null,
+		generatedImageLoading = false,
+		ongeneratedImageClick = () => {}
 	}: {
 		message: Message;
 		groupEnd: boolean;
@@ -81,6 +84,9 @@
 		onopenReasoning: (isLive: boolean) => void;
 		onimageClick: (src: string) => void;
 		onenlargeAvatar: (src: string) => void;
+		generatedImageUrl?: string | null;
+		generatedImageLoading?: boolean;
+		ongeneratedImageClick?: () => void;
 	} = $props();
 
 	// Streaming-tail check used to decide whether to show the typing/reasoning
@@ -210,6 +216,24 @@
 			>
 				{@html renderContent(message.content)}
 			</div>
+			{#if generatedImageUrl || generatedImageLoading}
+				<!-- Image gen output: clicking opens the lightbox where the user
+				     can swipe between regens, download, delete, etc. -->
+				<button
+					type="button"
+					onclick={ongeneratedImageClick}
+					class="mt-2 block overflow-hidden rounded-lg border border-border/50 bg-muted/40 transition-opacity hover:opacity-90"
+					aria-label="View generated image"
+				>
+					{#if generatedImageUrl}
+						<img src={generatedImageUrl} alt="Generated illustration" class="max-h-80 w-auto object-contain" />
+					{:else}
+						<div class="flex h-40 w-64 items-center justify-center text-xs text-muted-foreground">
+							Generating image…
+						</div>
+					{/if}
+				</button>
+			{/if}
 			{#if message.content.startsWith('Error:') && isLast && !isStreaming}
 				<button
 					onclick={onregenerate}

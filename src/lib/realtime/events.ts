@@ -54,6 +54,9 @@ export type RealtimeEvent =
 	| { type: 'message:created'; chatId: number; message: Record<string, unknown> }
 	| { type: 'message:patched'; chatId: number; id: number; patch: Record<string, unknown> }
 	| { type: 'message:deleted'; chatId: number; ids: number[] }
+	| { type: 'messageImage:created'; chatId: number; messageId: number; image: MessageImage }
+	| { type: 'messageImage:activated'; chatId: number; messageId: number; imageId: number }
+	| { type: 'messageImage:deleted'; chatId: number; messageId: number; imageId: number }
 	| {
 			type: 'chat:impersonation';
 			chatId: number;
@@ -68,3 +71,16 @@ export type RealtimeEvent =
 	  }
 	| { type: 'export:ready' }
 	| { type: 'export:failed' };
+
+// Shape of an image attached to a message. Matches the messageImages row,
+// minus user-internal columns the client doesn't need.
+export interface MessageImage {
+	id: number;
+	messageId: number;
+	filePath: string;
+	prompt: string;
+	model: string;
+	providerId: number | null;
+	isActive: boolean;
+	createdAt: string | null;
+}
