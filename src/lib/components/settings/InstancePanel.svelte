@@ -2,6 +2,7 @@
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { limitsState } from '$lib/limits.svelte.js';
 	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface Props {
@@ -118,8 +119,7 @@
 		</div>
 	{:else}
 		<!-- Session Duration -->
-		<div class="space-y-2">
-			<span class="block text-sm font-medium">Session duration</span>
+		<SettingRow label="Session duration" description="How long until users need to log in again. Applies to new sessions only.">
 			<div class="flex gap-2">
 				{#each [{ value: '7', label: '7 days' }, { value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: '365', label: '1 year' }] as opt}
 					<button
@@ -128,8 +128,7 @@
 					>{opt.label}</button>
 				{/each}
 			</div>
-			<p class="text-xs text-muted-foreground">How long until users need to log in again. Applies to new sessions only.</p>
-		</div>
+		</SettingRow>
 
 		<!-- Rate Limits + Upload caps side-by-side on wide screens -->
 		<div class="grid gap-4 @3xl:grid-cols-2">
@@ -254,28 +253,25 @@
 		</div>
 
 		<!-- Image Cache -->
-		<div class="rounded-lg border border-border px-4 py-3 space-y-3">
-			<div>
-				<span class="block text-sm font-medium">Image cache</span>
-				<span class="block text-xs text-muted-foreground">
-					{#if cacheStatsLoading && !cacheStats}
-						Loading…
-					{:else if cacheStats}
-						{cacheStats.fileCount} file{cacheStats.fileCount === 1 ? '' : 's'} · {formatBytes(cacheStats.totalBytes)}
-					{:else}
-						—
-					{/if}
-				</span>
-			</div>
-			<button
-				type="button"
-				onclick={() => (showClearCacheConfirm = true)}
-				disabled={clearingCache || !cacheStats || cacheStats.fileCount === 0}
-				class="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-			>
-				{clearingCache ? 'Clearing…' : 'Clear cache'}
-			</button>
-		</div>
+		<SettingRow
+			label="Image cache"
+			description={cacheStatsLoading && !cacheStats
+				? 'Loading…'
+				: cacheStats
+					? `${cacheStats.fileCount} file${cacheStats.fileCount === 1 ? '' : 's'} · ${formatBytes(cacheStats.totalBytes)}`
+					: '—'}
+		>
+			{#snippet action()}
+				<button
+					type="button"
+					onclick={() => (showClearCacheConfirm = true)}
+					disabled={clearingCache || !cacheStats || cacheStats.fileCount === 0}
+					class="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					{clearingCache ? 'Clearing…' : 'Clear cache'}
+				</button>
+			{/snippet}
+		</SettingRow>
 
 		<!-- Disable Image Caching + Enforce character limits -->
 		<div class="grid gap-3 @xl:grid-cols-2">

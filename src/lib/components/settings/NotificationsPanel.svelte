@@ -7,6 +7,7 @@
 	import { urlBase64ToUint8Array } from '$lib/utils.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
 
 	interface Props {
 		active: boolean;
@@ -193,19 +194,19 @@
 	{/if}
 
 	<!-- Notification content -->
-	<div class="space-y-2 {!isSecureCtx ? 'pointer-events-none opacity-50' : ''}" aria-disabled={!isSecureCtx}>
-		<span class="block text-sm font-medium">Notification content</span>
-		<span class="block text-xs text-muted-foreground">What to show in the notification body.</span>
-		<div class="flex gap-2 flex-wrap">
-			{#each [{ value: 'generic', label: 'Generic' }, { value: 'preview', label: 'Message preview' }] as opt}
-				<button
-					class="rounded-lg border px-3 py-1.5 text-sm transition-colors {s.notificationStyle === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-					onclick={() => save('notificationStyle', opt.value)}
-				>
-					{opt.label}
-				</button>
-			{/each}
-		</div>
+	<div class={!isSecureCtx ? 'pointer-events-none opacity-50' : ''} aria-disabled={!isSecureCtx}>
+		<SettingRow label="Notification content" description="What to show in the notification body.">
+			<div class="flex gap-2 flex-wrap">
+				{#each [{ value: 'generic', label: 'Generic' }, { value: 'preview', label: 'Message preview' }] as opt}
+					<button
+						class="rounded-lg border px-3 py-1.5 text-sm transition-colors {s.notificationStyle === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
+						onclick={() => save('notificationStyle', opt.value)}
+					>
+						{opt.label}
+					</button>
+				{/each}
+			</div>
+		</SettingRow>
 	</div>
 
 	<div class="{!isSecureCtx ? 'pointer-events-none opacity-50 space-y-3' : 'space-y-3'}" aria-disabled={!isSecureCtx}>
@@ -232,42 +233,36 @@
 		/>
 
 		<!-- Toast duration: 1-30 seconds, plus a 31st position that means "stay until dismissed". -->
-		<div class="rounded-lg border border-border px-4 py-3 space-y-2 {!s.inAppNotifications ? 'opacity-50 pointer-events-none' : ''}">
-			<div class="flex items-center justify-between gap-4">
-				<div>
-					<span class="block text-sm font-medium">Toast duration</span>
-					<span class="block text-xs text-muted-foreground">How long in-app notifications stay on screen.</span>
-				</div>
-				<span class="shrink-0 text-sm font-medium tabular-nums text-foreground">
-					{s.notificationDuration >= 31 ? 'Until dismissed' : `${s.notificationDuration}s`}
-				</span>
-			</div>
-			<input
-				type="range"
-				min="1"
-				max="31"
-				step="1"
-				value={s.notificationDuration}
-				onchange={(e) => save('notificationDuration', String((e.target as HTMLInputElement).value))}
-				class="w-full"
-				aria-label="In-app notification duration"
-			/>
+		<div class={!s.inAppNotifications ? 'opacity-50 pointer-events-none' : ''}>
+			<SettingRow
+				label="Toast duration"
+				description="How long in-app notifications stay on screen."
+			>
+				{#snippet action()}
+					<span class="shrink-0 text-sm font-medium tabular-nums text-foreground">
+						{s.notificationDuration >= 31 ? 'Until dismissed' : `${s.notificationDuration}s`}
+					</span>
+				{/snippet}
+				<input
+					type="range"
+					min="1"
+					max="31"
+					step="1"
+					value={s.notificationDuration}
+					onchange={(e) => save('notificationDuration', String((e.target as HTMLInputElement).value))}
+					class="w-full"
+					aria-label="In-app notification duration"
+				/>
+			</SettingRow>
 		</div>
 
 		<!-- Silence this device (per-device, local-only) -->
-		<button
-			type="button"
-			onclick={toggleDeviceSilent}
-			class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50"
-		>
-			<div>
-				<span class="block text-sm font-medium">Silence this device</span>
-				<span class="block text-xs text-muted-foreground">Mute toast, sound, and OS notifications on <em>this</em> device only. Other devices unaffected.</span>
-			</div>
-			<div class="ml-3 h-5 w-9 shrink-0 rounded-full transition-colors {localDeviceSilent ? 'bg-primary' : 'bg-muted'}">
-				<div class="h-5 w-5 rounded-full border-2 bg-white transition-transform {localDeviceSilent ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted'}"></div>
-			</div>
-		</button>
+		<ToggleSwitch
+			label="Silence this device"
+			description="Mute toast, sound, and OS notifications on this device only. Other devices unaffected."
+			checked={localDeviceSilent}
+			onchange={toggleDeviceSilent}
+		/>
 
 		<!-- Quiet hours -->
 		<div class="rounded-lg border border-border">
@@ -307,9 +302,7 @@
 
 	<!-- Web Push Notifications -->
 	{#if notifPermission === 'granted' && 'PushManager' in globalThis}
-		<div class="space-y-2">
-			<span class="block text-sm font-medium">Background push notifications</span>
-			<span class="block text-xs text-muted-foreground">Receive notifications even when Skald isn't open. Works on mobile and desktop.</span>
+		<SettingRow label="Background push notifications" description="Receive notifications even when Skald isn't open. Works on mobile and desktop.">
 			{#if pushSubscribed}
 				<div class="flex items-center gap-3">
 					<div class="flex items-center gap-2 text-sm text-green-500">
@@ -344,6 +337,6 @@
 			{#if pushStatus}
 				<p class="text-xs text-amber-500">{pushStatus}</p>
 			{/if}
-		</div>
+		</SettingRow>
 	{/if}
 </div>

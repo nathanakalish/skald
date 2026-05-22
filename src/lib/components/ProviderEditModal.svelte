@@ -11,6 +11,8 @@
 	import { providerProfiles, defaultEndpoints, getProfile, type ProviderType } from '$lib/providers/profiles.js';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
+	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
@@ -291,7 +293,6 @@
 	}
 
 	const inputClass = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
-	const labelClass = 'mb-1 block text-xs font-medium text-muted-foreground';
 
 	let isCreate = $derived(!provider);
 
@@ -366,18 +367,16 @@
 			{/if}
 
 			<!-- Body -->
-			<div class="flex-1 overflow-y-auto p-5 {gestures.contentClass}" style={gestures.contentStyle}>
+			<div class="@container flex-1 overflow-y-auto p-5 {gestures.contentClass}" style={gestures.contentStyle}>
 				{#if activeTab === 'connection' || isCreate}
 					<div class="space-y-4">
 						<!-- Name -->
-						<div>
-							<span class={labelClass}>Name</span>
+						<SettingRow size="sm" label="Name">
 							<LimitedInput bind:value={name} limit={FIELD_LIMITS.name} class={inputClass} placeholder="My OpenAI Provider" />
-						</div>
+						</SettingRow>
 
 						<!-- Type -->
-						<div>
-							<span class={labelClass}>Type</span>
+						<SettingRow size="sm" label="Type">
 							<div class="flex flex-wrap gap-2">
 								{#each providerProfiles as profile}
 									<button
@@ -393,28 +392,25 @@
 							{#if getProfile(type)?.description}
 								<p class="mt-1 text-xs text-muted-foreground">{getProfile(type)?.description}</p>
 							{/if}
-						</div>
+						</SettingRow>
 
 						<!-- Endpoint & API Key -->
-						<div class="grid gap-3 sm:grid-cols-2">
-							<div>
-								<span class={labelClass}>Endpoint</span>
+						<div class="grid gap-3 @2xl:grid-cols-2">
+							<SettingRow size="sm" label="Endpoint">
 								<LimitedInput bind:value={endpoint} limit={FIELD_LIMITS.url} class={inputClass} />
-							</div>
-							<div>
-								<span class={labelClass}>API Key</span>
+							</SettingRow>
+							<SettingRow size="sm" label="API Key">
 								<input
 									type="password"
 									bind:value={apiKey}
 									class={inputClass}
 									placeholder={getProfile(type)?.keyPlaceholder ?? 'API key'}
 								/>
-							</div>
+							</SettingRow>
 						</div>
 
 						<!-- Model -->
-						<div>
-							<span class={labelClass}>Default Model</span>
+						<SettingRow size="sm" label="Default Model">
 							<div class="flex gap-2">
 								<div class="flex-1">
 									<Combobox
@@ -435,129 +431,105 @@
 									<RefreshCw class="h-3.5 w-3.5 {modelLoading ? 'animate-spin' : ''}" />
 								</button>
 							</div>
-						</div>
+						</SettingRow>
 
-						<!-- Max Concurrent -->
-						<div>
-							<span class={labelClass}>Max Concurrent Requests</span>
-							<input type="number" min="1" max="20" bind:value={maxConcurrent} class="w-24 rounded-lg border border-input bg-background px-3 py-2 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-ring" />
-						</div>
+						<!-- Max Concurrent + Test Connection: pair compact controls -->
+						<div class="grid gap-3 @xl:grid-cols-2 @xl:items-end">
+							<SettingRow size="sm" label="Max Concurrent Requests">
+								<input type="number" min="1" max="20" bind:value={maxConcurrent} class="w-24 rounded-lg border border-input bg-background px-3 py-2 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-ring" />
+							</SettingRow>
 
-						<!-- Test button (edit mode only) -->
-						{#if !isCreate}
-							<div class="flex flex-col gap-1">
-								<button
-									onclick={testConnection}
-									disabled={testResult === 'testing'}
-									class="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-accent"
-								>
-									{#if testResult === 'testing'}
-										<Loader2 class="h-4 w-4 animate-spin" />
-										Testing...
-									{:else if testResult === 'success'}
-										<Check class="h-4 w-4 text-green-500" />
-										Connected
-									{:else if testResult === 'fail'}
-										<X class="h-4 w-4 text-destructive" />
-										Failed
-									{:else}
-										<TestTube class="h-4 w-4" />
-										Test Connection
+							<!-- Test button (edit mode only) -->
+							{#if !isCreate}
+								<div class="flex flex-col gap-1">
+									<button
+										onclick={testConnection}
+										disabled={testResult === 'testing'}
+										class="flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-accent"
+									>
+										{#if testResult === 'testing'}
+											<Loader2 class="h-4 w-4 animate-spin" />
+											Testing...
+										{:else if testResult === 'success'}
+											<Check class="h-4 w-4 text-green-500" />
+											Connected
+										{:else if testResult === 'fail'}
+											<X class="h-4 w-4 text-destructive" />
+											Failed
+										{:else}
+											<TestTube class="h-4 w-4" />
+											Test Connection
+										{/if}
+									</button>
+									{#if testDetails && (testDetails.latencyMs != null || testDetails.modelCount != null || testDetails.error)}
+										<div class="px-1 text-xs text-muted-foreground">
+											{#if testDetails.latencyMs != null}
+												<span>{testDetails.latencyMs}ms</span>
+											{/if}
+											{#if testDetails.modelCount != null}
+												<span class="ml-2">{testDetails.modelCount} model{testDetails.modelCount === 1 ? '' : 's'}</span>
+											{/if}
+											{#if testDetails.error}
+												<div class="mt-0.5 text-destructive">{testDetails.error}</div>
+											{/if}
+										</div>
 									{/if}
-								</button>
-								{#if testDetails && (testDetails.latencyMs != null || testDetails.modelCount != null || testDetails.error)}
-									<div class="px-1 text-xs text-muted-foreground">
-										{#if testDetails.latencyMs != null}
-											<span>{testDetails.latencyMs}ms</span>
-										{/if}
-										{#if testDetails.modelCount != null}
-											<span class="ml-2">{testDetails.modelCount} model{testDetails.modelCount === 1 ? '' : 's'}</span>
-										{/if}
-										{#if testDetails.error}
-											<div class="mt-0.5 text-destructive">{testDetails.error}</div>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/if}
+								</div>
+							{/if}
+						</div>
 					</div>
 				{:else if activeTab === 'generation'}
 					<div class="space-y-5">
-						<!-- Sampler Settings -->
-						<div>
-							<div class="mb-1.5 flex items-center justify-between">
-								<span class="text-sm font-medium">Temperature</span>
-								<span class="text-sm tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>
-							</div>
+						<SettingRow label="Temperature">
+							{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>{/snippet}
 							<input type="range" min="0" max="2" step="0.05" bind:value={temperature} class="w-full accent-primary" />
-							<div class="mt-1 flex justify-between text-xs text-muted-foreground/60">
+							<div class="flex justify-between text-xs text-muted-foreground/60">
 								<span>Precise</span>
 								<span>Creative</span>
 							</div>
+						</SettingRow>
+						<div class="grid gap-4 @xl:grid-cols-2">
+							<SettingRow label="Top P">
+								{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{topP.toFixed(2)}</span>{/snippet}
+								<input type="range" min="0" max="1" step="0.05" bind:value={topP} class="w-full accent-primary" />
+							</SettingRow>
+							<SettingRow label="Repetition Penalty">
+								{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{repetitionPenalty.toFixed(2)}</span>{/snippet}
+								<input type="range" min="1" max="2" step="0.05" bind:value={repetitionPenalty} class="w-full accent-primary" />
+							</SettingRow>
 						</div>
-						<div>
-							<div class="mb-1.5 flex items-center justify-between">
-								<span class="text-sm font-medium">Top P</span>
-								<span class="text-sm tabular-nums text-muted-foreground">{topP.toFixed(2)}</span>
-							</div>
-							<input type="range" min="0" max="1" step="0.05" bind:value={topP} class="w-full accent-primary" />
-						</div>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<div>
-								<span class="mb-1 block text-sm font-medium">Top K</span>
+						<div class="grid gap-4 @xl:grid-cols-2">
+							<SettingRow label="Top K">
 								<input type="number" bind:value={topK} min={0} max={500} class={inputClass + ' tabular-nums'} />
-								<p class="mt-1 text-xs text-muted-foreground/60">0 = disabled</p>
-							</div>
-							<div>
-								<span class="mb-1 block text-sm font-medium">Max Response Tokens</span>
+								<p class="text-xs text-muted-foreground/60">0 = disabled</p>
+							</SettingRow>
+							<SettingRow label="Max Response Tokens">
 								<input type="number" bind:value={maxTokens} min={64} max={65536} step={64} class={inputClass + ' tabular-nums'} />
-							</div>
+							</SettingRow>
 						</div>
-						<div>
-							<div class="mb-1.5 flex items-center justify-between">
-								<span class="text-sm font-medium">Repetition Penalty</span>
-								<span class="text-sm tabular-nums text-muted-foreground">{repetitionPenalty.toFixed(2)}</span>
-							</div>
-							<input type="range" min="1" max="2" step="0.05" bind:value={repetitionPenalty} class="w-full accent-primary" />
-						</div>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<div>
-								<div class="mb-1.5 flex items-center justify-between">
-									<span class="text-sm font-medium">Frequency Penalty</span>
-									<span class="text-sm tabular-nums text-muted-foreground">{frequencyPenalty.toFixed(2)}</span>
-								</div>
+						<div class="grid gap-4 @xl:grid-cols-2">
+							<SettingRow label="Frequency Penalty">
+								{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{frequencyPenalty.toFixed(2)}</span>{/snippet}
 								<input type="range" min="0" max="2" step="0.05" bind:value={frequencyPenalty} class="w-full accent-primary" />
-							</div>
-							<div>
-								<div class="mb-1.5 flex items-center justify-between">
-									<span class="text-sm font-medium">Presence Penalty</span>
-									<span class="text-sm tabular-nums text-muted-foreground">{presencePenalty.toFixed(2)}</span>
-								</div>
+							</SettingRow>
+							<SettingRow label="Presence Penalty">
+								{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{presencePenalty.toFixed(2)}</span>{/snippet}
 								<input type="range" min="0" max="2" step="0.05" bind:value={presencePenalty} class="w-full accent-primary" />
-							</div>
+							</SettingRow>
 						</div>
 
-						<!-- Context Settings -->
 						<div class="border-t border-border pt-4">
 							<h4 class="mb-4 text-sm font-semibold text-muted-foreground">Context</h4>
-							<div class="space-y-4">
-								<div>
-									<span class="mb-1 block text-sm font-medium">Context Size (tokens)</span>
-									<input type="number" bind:value={contextSize} min={1024} max={2000000} step={1024} class={inputClass + ' tabular-nums'} />
-									<p class="mt-1 text-xs text-muted-foreground/60">Total context window for the model. History is automatically trimmed by token count to fit.</p>
-								</div>
-							</div>
+							<SettingRow label="Context Size (tokens)">
+								<input type="number" bind:value={contextSize} min={1024} max={2000000} step={1024} class={inputClass + ' tabular-nums'} />
+								<p class="text-xs text-muted-foreground/60">Total context window for the model. History is automatically trimmed by token count to fit.</p>
+							</SettingRow>
 						</div>
 
-						<!-- Prompt & Behavior -->
 						<div class="border-t border-border pt-4">
 							<h4 class="mb-4 text-sm font-semibold text-muted-foreground">Prompt & Behavior</h4>
 							<div class="space-y-4">
-								<div>
-									<span class="mb-1 block text-sm font-medium">Custom Instructions</span>
-									<p class="mb-2 text-xs text-muted-foreground/60">
-										Additional instructions injected into the system prompt. Supports &#123;&#123;char&#125;&#125; and &#123;&#123;user&#125;&#125; macros.
-									</p>
+								<SettingRow label="Custom Instructions" description="Additional instructions injected into the system prompt. Supports &#123;&#123;char&#125;&#125; and &#123;&#123;user&#125;&#125; macros.">
 									<LimitedTextarea
 										bind:value={customPrompt}
 										rows={4}
@@ -565,36 +537,22 @@
 										class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
 										placeholder="e.g. Always respond in first person. Keep responses under 3 paragraphs..."
 									/>
+								</SettingRow>
+								<div class="grid gap-4 @xl:grid-cols-2">
+									<ToggleSwitch
+										label="Stream responses"
+										description="Show tokens as they arrive"
+										checked={streamingEnabled}
+										onchange={(next) => { streamingEnabled = next; }}
+									/>
+									<ToggleSwitch
+										label="Include reasoning in context"
+										description="Send model reasoning back as conversation history"
+										checked={includeReasoning}
+										onchange={(next) => { includeReasoning = next; }}
+									/>
 								</div>
-								<div class="flex items-center justify-between rounded-lg border border-border bg-background p-3">
-									<div>
-										<p class="text-sm font-medium">Stream responses</p>
-										<p class="text-xs text-muted-foreground/60">Show tokens as they arrive</p>
-									</div>
-									<button
-										aria-label="Toggle streaming"
-										onclick={() => { streamingEnabled = !streamingEnabled; }}
-										class="relative h-6 w-11 shrink-0 rounded-full transition-colors {streamingEnabled ? 'bg-primary' : 'bg-secondary'}"
-									>
-										<span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform {streamingEnabled ? 'translate-x-5' : 'translate-x-0'}"></span>
-									</button>
-								</div>
-								<div class="flex items-center justify-between rounded-lg border border-border bg-background p-3">
-									<div>
-										<p class="text-sm font-medium">Include reasoning in context</p>
-										<p class="text-xs text-muted-foreground/60">Send model reasoning back as conversation history</p>
-									</div>
-									<button
-										aria-label="Toggle include reasoning"
-										onclick={() => { includeReasoning = !includeReasoning; }}
-										class="relative h-6 w-11 shrink-0 rounded-full transition-colors {includeReasoning ? 'bg-primary' : 'bg-secondary'}"
-									>
-										<span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform {includeReasoning ? 'translate-x-5' : 'translate-x-0'}"></span>
-									</button>
-								</div>
-								<div>
-									<span class="mb-1 block text-sm font-medium">Reasoning Effort</span>
-									<p class="mb-2 text-xs text-muted-foreground/60">Request the model to think before responding</p>
+								<SettingRow label="Reasoning Effort" description="Request the model to think before responding">
 									<div class="flex gap-2">
 										{#each ['off', 'low', 'medium', 'high'] as level}
 											<button
@@ -605,44 +563,33 @@
 											</button>
 										{/each}
 									</div>
-									<p class="mt-1.5 text-[11px] text-muted-foreground/50">Z.AI only supports on/off — any non-off level enables thinking mode.</p>
-								</div>
-								<div>
-									<span class="mb-1 block text-sm font-medium">Lorebook Injection Depth</span>
+									<p class="text-[11px] text-muted-foreground/50">Z.AI only supports on/off — any non-off level enables thinking mode.</p>
+								</SettingRow>
+								<SettingRow label="Lorebook Injection Depth">
 									<input type="number" bind:value={lorebookDepth} min={0} max={50} class={inputClass + ' tabular-nums'} />
-									<p class="mt-1 text-xs text-muted-foreground/60">Messages from the end of history to inject world info (0 = top)</p>
-								</div>
+									<p class="text-xs text-muted-foreground/60">Messages from the end of history to inject world info (0 = top)</p>
+								</SettingRow>
 							</div>
 						</div>
 
-						<!-- Texting Mode Delays -->
 						<div class="border-t border-border pt-4">
 							<h4 class="mb-4 text-sm font-semibold text-muted-foreground">Texting Mode Delays</h4>
-							<div class="space-y-4">
-								<div>
-									<div class="mb-1.5 flex items-center justify-between">
-										<span class="text-sm font-medium">Initial Delay</span>
-										<span class="text-sm tabular-nums text-muted-foreground">{(textingInitialDelay / 1000).toFixed(1)}s</span>
-									</div>
+							<div class="grid gap-4 @2xl:grid-cols-3">
+								<SettingRow label="Initial Delay">
+									{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{(textingInitialDelay / 1000).toFixed(1)}s</span>{/snippet}
 									<input type="range" min="0" max="5000" step="100" bind:value={textingInitialDelay} class="w-full accent-primary" />
-									<p class="mt-1 text-xs text-muted-foreground/60">Delay before the typing indicator appears</p>
-								</div>
-								<div>
-									<div class="mb-1.5 flex items-center justify-between">
-										<span class="text-sm font-medium">Typing Speed</span>
-										<span class="text-sm tabular-nums text-muted-foreground">{textingTypingSpeed} ms/char</span>
-									</div>
+									<p class="text-xs text-muted-foreground/60">Before typing indicator appears</p>
+								</SettingRow>
+								<SettingRow label="Typing Speed">
+									{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{textingTypingSpeed} ms/char</span>{/snippet}
 									<input type="range" min="0" max="100" step="5" bind:value={textingTypingSpeed} class="w-full accent-primary" />
-									<p class="mt-1 text-xs text-muted-foreground/60">How long to simulate typing per character</p>
-								</div>
-								<div>
-									<div class="mb-1.5 flex items-center justify-between">
-										<span class="text-sm font-medium">Max Typing Delay</span>
-										<span class="text-sm tabular-nums text-muted-foreground">{(textingTypingMax / 1000).toFixed(1)}s</span>
-									</div>
+									<p class="text-xs text-muted-foreground/60">Simulated time per character</p>
+								</SettingRow>
+								<SettingRow label="Max Typing Delay">
+									{#snippet action()}<span class="text-sm tabular-nums text-muted-foreground">{(textingTypingMax / 1000).toFixed(1)}s</span>{/snippet}
 									<input type="range" min="0" max="15000" step="500" bind:value={textingTypingMax} class="w-full accent-primary" />
-									<p class="mt-1 text-xs text-muted-foreground/60">Maximum typing delay regardless of message length</p>
-								</div>
+									<p class="text-xs text-muted-foreground/60">Cap regardless of length</p>
+								</SettingRow>
 							</div>
 						</div>
 					</div>

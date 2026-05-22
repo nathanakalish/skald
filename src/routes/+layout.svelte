@@ -312,7 +312,6 @@
 	const sidebarProviders = $derived(providersStore.providers);
 	const sidebarLorebooks = $derived(lorebooksStore.lorebooks);
 	const sidebarPersonas = $derived(personasStore.personas);
-	const sidebarThemes = $derived(themesStore.themes);
 
 	// Hydrate the global settings store (keys + active theme). This stays
 	// in SSR so html attributes (data-font-size etc.) and root CSS variables
@@ -2872,58 +2871,6 @@
 					mode={isMobile ? 'page' : 'embedded'}
 					activeTab={settingsActiveTab}
 					providers={sidebarProviders}
-					themes={sidebarThemes}
-					alwaysUseCharacterThemes={settings.alwaysUseCharacterThemes}
-					allowExternalCreatorNotes={settings.allowExternalCreatorNotes}
-					colorCharacterCards={settings.colorCharacterCards ?? false}
-					fontSize={settings.fontSize ?? 'medium'}
-					compactMode={settings.compactMode ?? false}
-					reduceMotion={settings.reduceMotion ?? false}
-					sendWithEnterDesktop={settings.sendWithEnterDesktop ?? true}
-					sendWithEnterMobile={settings.sendWithEnterMobile ?? true}
-					autoScrollThreshold={settings.autoScrollThreshold ?? 'normal'}
-					confirmDeletions={settings.confirmDeletions ?? true}
-					messageTimestamps={settings.messageTimestamps ?? 'relative'}
-					showReasoning={settings.showReasoning ?? false}
-					notificationSound={settings.notificationSound ?? false}
-					notificationStyle={settings.notificationStyle ?? 'generic'}
-					notificationAvatar={settings.notificationAvatar ?? true}
-					inAppNotifications={settings.inAppNotifications ?? true}
-					notificationDuration={(settings as any).notificationDuration ?? 5}
-					quietHoursEnabled={settings.quietHoursEnabled ?? false}
-					quietHoursStart={settings.quietHoursStart ?? '22:00'}
-					quietHoursEnd={settings.quietHoursEnd ?? '07:00'}
-					renderMode={settings.renderMode ?? 'roleplay'}
-					chatPageSize={settings.chatPageSize ?? 50}
-					autoLoadEarlierMessages={(settings as any).autoLoadEarlierMessages ?? false}
-					reformatterProviderId={settings.reformatterProviderId ?? ''}
-					reformatterModel={settings.reformatterModel ?? ''}
-					reformatterPrompt={settings.reformatterPrompt ?? ''}
-					characterCreatorProviderId={settings.characterCreatorProviderId ?? ''}
-					characterCreatorModel={settings.characterCreatorModel ?? ''}
-					characterCreatorPrompt={settings.characterCreatorPrompt ?? ''}
-					compactionEnabled={(settings as any).compactionEnabled ?? false}
-					compactionThreshold={(settings as any).compactionThreshold ?? 80}
-					compactionMode={(settings as any).compactionMode ?? 'window'}
-					compactionWindowPercent={(settings as any).compactionWindowPercent ?? 30}
-					compactionFixedCount={(settings as any).compactionFixedCount ?? 20}
-					compactionProviderId={(settings as any).compactionProviderId ?? ''}
-					compactionModel={(settings as any).compactionModel ?? ''}
-					compactionPrompt={(settings as any).compactionPrompt ?? ''}
-					speechOpacity={settings.speechOpacity ?? 100}
-					speechBold={settings.speechBold ?? true}
-					speechItalic={settings.speechItalic ?? false}
-					thoughtOpacity={settings.thoughtOpacity ?? 75}
-					thoughtBold={settings.thoughtBold ?? false}
-					thoughtItalic={settings.thoughtItalic ?? true}
-					linkOpacity={settings.linkOpacity ?? 100}
-					linkBold={settings.linkBold ?? false}
-					linkItalic={settings.linkItalic ?? false}
-					narrationOpacity={settings.narrationOpacity ?? 100}
-					narrationBold={settings.narrationBold ?? false}
-					narrationItalic={settings.narrationItalic ?? false}
-					nestedEmphasisInSpeech={settings.nestedEmphasisInSpeech ?? true}
-					promptSlotOrder={settings.promptSlotOrder ?? ''}
 					user={data.user ?? null}
 					onchatimported={handleImportedChat}
 					onclose={() => { showOnlyPanel('chats'); if (isMobile) mobileOpen = true; }}

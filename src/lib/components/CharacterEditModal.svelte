@@ -19,6 +19,7 @@
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
 
 	interface Props {
 		open: boolean;
@@ -550,12 +551,11 @@
 
 {#snippet viewField(label: string, content: string, mono?: boolean)}
 	{#if content.trim()}
-		<div>
-			<span class={labelClass}>{label}</span>
+		<SettingRow {label}>
 			<div class="message-content text-sm leading-relaxed {mono ? 'font-mono' : ''}">
 				{@html renderField(content)}
 			</div>
-		</div>
+		</SettingRow>
 	{/if}
 {/snippet}
 
@@ -610,38 +610,32 @@
 					</div>
 				</div>
 				<div class="flex-1 space-y-4">
-					<div>
-						<label for="edit-name" class={labelClass}>Name <span class="text-destructive">*</span></label>
+					<SettingRow label="Name *" htmlFor="edit-name">
 						<LimitedInput id="edit-name" bind:value={name} limit={FIELD_LIMITS.name} class={inputClass} placeholder="Character name" />
-					</div>
+					</SettingRow>
 					<div class="grid grid-cols-2 gap-3">
-						<div>
-							<label for="edit-creator" class={labelClass}>Creator</label>
+						<SettingRow label="Creator" htmlFor="edit-creator">
 							<LimitedInput id="edit-creator" bind:value={creator} limit={FIELD_LIMITS.name} class={inputClass} placeholder="Author name" />
-						</div>
-						<div>
-							<label for="edit-version" class={labelClass}>Version</label>
+						</SettingRow>
+						<SettingRow label="Version" htmlFor="edit-version">
 							<LimitedInput id="edit-version" bind:value={characterVersion} limit={FIELD_LIMITS.name} class={inputClass} placeholder="1.0" />
-						</div>
+						</SettingRow>
 					</div>
 				</div>
 			</div>
 
-			<div>
-				<label for="edit-desc" class={labelClass}>Description</label>
+			<SettingRow label="Description" htmlFor="edit-desc">
 				<LimitedTextarea id="edit-desc" bind:value={description} rows={6} limit={FIELD_LIMITS.description} class={textareaClass} placeholder="Character description, background, appearance..." />
 				<p class={hintClass}>Supports plain text or markdown-style formatting (e.g. ### headings).</p>
-			</div>
+			</SettingRow>
 
-			<div>
-				<label for="edit-personality" class={labelClass}>Personality</label>
+			<SettingRow label="Personality" htmlFor="edit-personality">
 				<LimitedTextarea id="edit-personality" bind:value={personality} rows={3} limit={FIELD_LIMITS.personality} class={textareaClass} placeholder="Personality traits, behavior patterns..." />
-			</div>
+			</SettingRow>
 
-			<div>
-				<label for="edit-tags" class={labelClass}>Tags</label>
+			<SettingRow label="Tags" htmlFor="edit-tags">
 				<LimitedInput id="edit-tags" bind:value={tags} limit={FIELD_LIMITS.tags} class={inputClass} placeholder="fantasy, sci-fi, romance (comma-separated)" />
-			</div>
+			</SettingRow>
 		</div>
 		{:else}
 		<div class="grid gap-6 md:grid-cols-[minmax(0,260px)_1fr]">
@@ -695,31 +689,28 @@
 	{:else if activeTab === 'messages'}
 		{#if editing}
 		<div class="space-y-5">
-			<div class="flex items-center justify-between">
-				<span class={labelClass}>Greetings</span>
-				<button
-					onclick={reformatGreetings}
-					disabled={reformatting || (!firstMessage.trim() && alternateGreetings.every(g => !g.trim()))}
-					class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-40 disabled:pointer-events-none"
-				>
-					{#if reformatting}
-						<span class="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent"></span>
-						Reformatting...
-					{:else}
-						<Wand2 class="h-3.5 w-3.5" />
-						Reformat with AI
-					{/if}
-				</button>
-			</div>
-			<div>
-				<label for="edit-first" class={labelClass}>First Message</label>
+			<SettingRow label="First Message" htmlFor="edit-first">
+				{#snippet action()}
+					<button
+						onclick={reformatGreetings}
+						disabled={reformatting || (!firstMessage.trim() && alternateGreetings.every(g => !g.trim()))}
+						class="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-40 disabled:pointer-events-none"
+					>
+						{#if reformatting}
+							<span class="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent"></span>
+							Reformatting...
+						{:else}
+							<Wand2 class="h-3.5 w-3.5" />
+							Reformat with AI
+						{/if}
+					</button>
+				{/snippet}
 				<LimitedTextarea id="edit-first" bind:value={firstMessage} rows={8} limit={FIELD_LIMITS.firstMessage} class={textareaClass} placeholder="The opening message when a new chat starts..." />
 				<p class={hintClass}>Use &#123;&#123;char&#125;&#125; for the character's name and &#123;&#123;user&#125;&#125; for the user's name.</p>
-			</div>
+			</SettingRow>
 
-			<div>
-				<div class="mb-2 flex items-center justify-between">
-					<span class={labelClass}>Alternate Greetings ({alternateGreetings.length})</span>
+			<SettingRow label="Alternate Greetings ({alternateGreetings.length})">
+				{#snippet action()}
 					<button
 						onclick={addGreeting}
 						class="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
@@ -727,7 +718,7 @@
 						<Plus class="h-3 w-3" />
 						Add
 					</button>
-				</div>
+				{/snippet}
 				{#if alternateGreetings.length === 0}
 					<p class="rounded-lg border border-dashed border-border px-4 py-3 text-center text-sm text-muted-foreground">
 						No alternate greetings. Click "Add" to create one.
@@ -750,10 +741,9 @@
 						</button>
 					</div>
 				{/each}
-			</div>
+			</SettingRow>
 
-			<div>
-				<label for="edit-example" class={labelClass}>Example Messages</label>
+			<SettingRow label="Example Messages" htmlFor="edit-example">
 				<LimitedTextarea
 					id="edit-example"
 					bind:value={mesExample}
@@ -763,7 +753,7 @@
 					placeholder={"<START>\n{{char}}: Example dialogue here...\n{{user}}: Example response...\n{{char}}: Another example..."}
 				/>
 				<p class={hintClass}>Example dialogue to teach the AI the character's voice. Use &lt;START&gt; to separate examples.</p>
-			</div>
+			</SettingRow>
 		</div>
 		{:else}
 		{@const allGreetings = [firstMessage, ...alternateGreetings].filter(g => g.trim())}
@@ -797,12 +787,11 @@
 				</div>
 			{/if}
 			{#if mesExample.trim()}
-				<div>
-					<span class={labelClass}>Example Messages</span>
+				<SettingRow label="Example Messages">
 					<div class="message-content text-sm leading-relaxed font-mono">
 						{@html renderField(mesExample)}
 					</div>
-				</div>
+				</SettingRow>
 			{/if}
 			{#if !firstMessage.trim() && alternateGreetings.every(g => !g.trim()) && !mesExample.trim()}
 				<p class="py-8 text-center text-sm text-muted-foreground">No messages defined.</p>
@@ -813,23 +802,20 @@
 	{:else if activeTab === 'prompts'}
 		{#if editing}
 		<div class="space-y-5">
-			<div>
-				<label for="edit-scenario" class={labelClass}>Scenario</label>
+			<SettingRow label="Scenario" htmlFor="edit-scenario">
 				<LimitedTextarea id="edit-scenario" bind:value={scenario} rows={4} limit={FIELD_LIMITS.scenario} class={textareaClass} placeholder="The setting, situation, or context for the roleplay..." />
 				<p class={hintClass}>Describes the circumstances and environment for the conversation.</p>
-			</div>
+			</SettingRow>
 
-			<div>
-				<label for="edit-system" class={labelClass}>System Prompt</label>
+			<SettingRow label="System Prompt" htmlFor="edit-system">
 				<LimitedTextarea id="edit-system" bind:value={systemPrompt} rows={6} limit={FIELD_LIMITS.systemPrompt} class={textareaClass} placeholder="Custom system prompt for this character..." />
 				<p class={hintClass}>Overrides or supplements the global system prompt when chatting with this character.</p>
-			</div>
+			</SettingRow>
 
-			<div>
-				<label for="edit-post" class={labelClass}>Post-History Instructions</label>
+			<SettingRow label="Post-History Instructions" htmlFor="edit-post">
 				<LimitedTextarea id="edit-post" bind:value={postHistoryInstructions} rows={3} limit={FIELD_LIMITS.postHistoryInstructions} class={textareaClass} placeholder="Instructions injected after the chat history..." />
 				<p class={hintClass}>Added after all messages, right before the AI responds. Good for reminders and formatting rules.</p>
-			</div>
+			</SettingRow>
 		</div>
 		{:else}
 		<div class="space-y-5">
@@ -883,7 +869,7 @@
 					class="flex-1 rounded-lg px-3 py-1.5 text-sm transition-colors {editingThemeMode === 'light' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
 				>Light variant</button>
 			</div>
-			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+			<div class="grid grid-cols-2 gap-4 @xl:grid-cols-3">
 				{#each themeColorKeys as { key, label }}
 					<div>
 						<div class="mb-1.5 flex items-center justify-between">
@@ -1072,7 +1058,7 @@
 		<!-- Body -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="flex-1 overflow-y-auto p-6 {embEnterFrom === 'left' ? 'tab-enter-from-left' : embEnterFrom === 'right' ? 'tab-enter-from-right' : ''}"
+			class="@container flex-1 overflow-y-auto p-6 {embEnterFrom === 'left' ? 'tab-enter-from-left' : embEnterFrom === 'right' ? 'tab-enter-from-right' : ''}"
 			style={embSwiping ? `transform: translateX(${embSwipeX}px); transition: none` : embSettling ? 'transform: translateX(0); transition: transform 200ms ease-out' : ''}
 			ontouchstart={embTouchStart}
 			ontouchmove={embTouchMove}
@@ -1212,7 +1198,7 @@
 			</div>
 
 			<!-- Body -->
-			<div class="flex-1 overflow-y-auto p-6 {gestures.contentClass}" style={gestures.contentStyle}>
+			<div class="@container flex-1 overflow-y-auto p-6 {gestures.contentClass}" style={gestures.contentStyle}>
 				{@render tabContent()}
 			</div>
 		</div>

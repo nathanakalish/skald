@@ -7,6 +7,7 @@
 	import { api } from '$lib/api.js';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
 	import { checkAutoSaveLimit } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
@@ -152,7 +153,7 @@
 			</button>
 		</div>
 
-		<div class="flex-1 overflow-y-auto p-6">
+		<div class="@container flex-1 overflow-y-auto p-6">
 			{#if loading}
 				<div class="flex items-center justify-center py-12 text-muted-foreground">
 					<div class="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
@@ -161,8 +162,7 @@
 				<div class="mx-auto max-w-4xl space-y-4">
 					<!-- Name & Description -->
 					<div class="mb-6 space-y-3">
-						<div>
-							<label for="lbe-emb-name" class="mb-1 block text-sm font-medium text-muted-foreground">Name</label>
+						<SettingRow size="sm" label="Name" htmlFor="lbe-emb-name">
 							<LimitedInput
 								id="lbe-emb-name"
 								bind:value={lorebookName}
@@ -171,9 +171,8 @@
 								class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 								placeholder="Lorebook name"
 							/>
-						</div>
-						<div>
-							<label for="lbe-emb-desc" class="mb-1 block text-sm font-medium text-muted-foreground">Description</label>
+						</SettingRow>
+						<SettingRow size="sm" label="Description" htmlFor="lbe-emb-desc">
 							<LimitedInput
 								id="lbe-emb-desc"
 								bind:value={lorebookDesc}
@@ -182,7 +181,7 @@
 								class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 								placeholder="Lorebook description"
 							/>
-						</div>
+						</SettingRow>
 					</div>
 
 					{#if entries.length === 0}
@@ -215,19 +214,18 @@
 										<Trash2 class="h-4 w-4" />
 									</button>
 								</div>
-								<div class="grid gap-3 sm:grid-cols-2">
-									<div>
-										<label for="emb-entry-kw-{entry.id}" class="mb-1 block text-xs font-medium text-muted-foreground">Keywords (comma-separated)</label>
+								<div class="grid gap-3 @2xl:grid-cols-2">
+									<SettingRow size="sm" label="Keywords (comma-separated)" htmlFor="emb-entry-kw-{entry.id}">
 										<LimitedInput id="emb-entry-kw-{entry.id}" bind:value={entry.keywords} onblur={() => saveEntry(entry)} limit={FIELD_LIMITS.lorebookEntryKeys} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="keyword1, keyword2" />
-									</div>
-									<div>
-										<label for="emb-entry-order-{entry.id}" class="mb-1 block text-xs font-medium text-muted-foreground">Insertion Order</label>
+									</SettingRow>
+									<SettingRow size="sm" label="Insertion Order" htmlFor="emb-entry-order-{entry.id}">
 										<input id="emb-entry-order-{entry.id}" type="number" bind:value={entry.insertionOrder} onblur={() => saveEntry(entry)} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-									</div>
+									</SettingRow>
 								</div>
 								<div class="mt-3">
-									<label for="emb-entry-content-{entry.id}" class="mb-1 block text-xs font-medium text-muted-foreground">Content</label>
-									<LimitedTextarea id="emb-entry-content-{entry.id}" bind:value={entry.content} onblur={() => saveEntry(entry)} rows={3} limit={FIELD_LIMITS.lorebookEntryContent} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="The content to inject when keywords match..." />
+									<SettingRow size="sm" label="Content" htmlFor="emb-entry-content-{entry.id}">
+										<LimitedTextarea id="emb-entry-content-{entry.id}" bind:value={entry.content} onblur={() => saveEntry(entry)} rows={3} limit={FIELD_LIMITS.lorebookEntryContent} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="The content to inject when keywords match..." />
+									</SettingRow>
 								</div>
 							</div>
 						{/each}
@@ -277,7 +275,7 @@
 			</div>
 
 			<!-- Body -->
-			<div class="flex-1 overflow-y-auto p-6">
+			<div class="@container flex-1 overflow-y-auto p-6">
 				{#if loading}
 					<div class="flex items-center justify-center py-12 text-muted-foreground">
 						<p>Loading...</p>
@@ -286,8 +284,7 @@
 					<div class="mx-auto max-w-4xl space-y-4">
 						<!-- Name & Description -->
 						<div class="mb-6 space-y-3">
-							<div>
-								<label for="lbe-name" class="mb-1 block text-sm font-medium text-muted-foreground">Name</label>
+							<SettingRow size="sm" label="Name" htmlFor="lbe-name">
 								<LimitedInput
 									id="lbe-name"
 									bind:value={lorebookName}
@@ -296,9 +293,8 @@
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Lorebook name"
 								/>
-							</div>
-							<div>
-								<label for="lbe-desc" class="mb-1 block text-sm font-medium text-muted-foreground">Description</label>
+							</SettingRow>
+							<SettingRow size="sm" label="Description" htmlFor="lbe-desc">
 								<LimitedInput
 									id="lbe-desc"
 									bind:value={lorebookDesc}
@@ -307,7 +303,7 @@
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Lorebook description"
 								/>
-							</div>
+							</SettingRow>
 						</div>
 
 						{#if entries.length === 0}
@@ -356,12 +352,8 @@
 										</button>
 									</div>
 
-									<div class="grid gap-3 sm:grid-cols-2">
-										<div>
-											<label
-												for="entry-kw-{entry.id}"
-												class="mb-1 block text-xs font-medium text-muted-foreground"
-											>Keywords (comma-separated)</label>
+									<div class="grid gap-3 @2xl:grid-cols-2">
+										<SettingRow size="sm" label="Keywords (comma-separated)" htmlFor="entry-kw-{entry.id}">
 											<LimitedInput
 												id="entry-kw-{entry.id}"
 												bind:value={entry.keywords}
@@ -370,12 +362,8 @@
 												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 												placeholder="keyword1, keyword2"
 											/>
-										</div>
-										<div>
-											<label
-												for="entry-order-{entry.id}"
-												class="mb-1 block text-xs font-medium text-muted-foreground"
-											>Insertion Order</label>
+										</SettingRow>
+										<SettingRow size="sm" label="Insertion Order" htmlFor="entry-order-{entry.id}">
 											<input
 												id="entry-order-{entry.id}"
 												type="number"
@@ -383,23 +371,21 @@
 												onblur={() => saveEntry(entry)}
 												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 											/>
-										</div>
+										</SettingRow>
 									</div>
 
 									<div class="mt-3">
-										<label
-											for="entry-content-{entry.id}"
-											class="mb-1 block text-xs font-medium text-muted-foreground"
-										>Content</label>
-										<LimitedTextarea
-											id="entry-content-{entry.id}"
-											bind:value={entry.content}
-											onblur={() => saveEntry(entry)}
-											rows={3}
-											limit={FIELD_LIMITS.lorebookEntryContent}
-											class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-											placeholder="The content to inject when keywords match..."
-										/>
+										<SettingRow size="sm" label="Content" htmlFor="entry-content-{entry.id}">
+											<LimitedTextarea
+												id="entry-content-{entry.id}"
+												bind:value={entry.content}
+												onblur={() => saveEntry(entry)}
+												rows={3}
+												limit={FIELD_LIMITS.lorebookEntryContent}
+												class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+												placeholder="The content to inject when keywords match..."
+											/>
+										</SettingRow>
 									</div>
 								</div>
 							{/each}

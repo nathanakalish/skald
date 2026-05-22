@@ -9,6 +9,8 @@
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
+	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
 
 	interface Props {
 		open: boolean;
@@ -289,6 +291,15 @@
 	});
 </script>
 
+<!-- "Use default / Use global / Clear" link-button that sits next to a field
+     label whenever it has a per-chat override. Centralised so the tiny styling
+     and icon stays consistent across all ~16 reset spots. -->
+{#snippet resetLink(onclick: () => void, label: string)}
+	<button {onclick} type="button" class="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+		<RotateCcw class="h-3 w-3" /> {label}
+	</button>
+{/snippet}
+
 {#if modal.visible}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
@@ -359,16 +370,10 @@
 								<p class="text-sm text-muted-foreground">Rendering and visual options</p>
 							</div>
 
-							<!-- Render Mode -->
-							<div class="space-y-2">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Text renderer</span>
-									{#if renderModeOverride}
-										<button onclick={() => resetField('renderMode')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Use global
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="Text renderer">
+								{#snippet action()}
+									{#if renderModeOverride}{@render resetLink(() => resetField('renderMode'), 'Use global')}{/if}
+								{/snippet}
 								<div class="flex gap-2">
 									{#each [{ value: null, label: 'Global default' }, { value: 'roleplay', label: 'Roleplay' }, { value: 'markdown', label: 'Markdown' }] as opt}
 										<button
@@ -380,23 +385,15 @@
 									{/each}
 								</div>
 								<p class="text-xs text-muted-foreground">The AI will be told which formatting to use</p>
-							</div>
+							</SettingRow>
 
 							{#if characterHasTheme}
-								<!-- Character Theme -->
-								<button
-									type="button"
-									onclick={() => { useCharacterTheme = !useCharacterTheme; }}
-									class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50"
-								>
-									<div>
-										<span class="block text-sm font-medium">Character theme</span>
-										<span class="block text-xs text-muted-foreground">Apply this character's custom colors</span>
-									</div>
-									<div class="ml-3 h-5 w-9 shrink-0 rounded-full transition-colors {useCharacterTheme ? 'bg-primary' : 'bg-muted'}">
-										<div class="h-5 w-5 rounded-full border-2 bg-white transition-transform {useCharacterTheme ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted'}"></div>
-									</div>
-								</button>
+								<ToggleSwitch
+									checked={useCharacterTheme}
+									label="Character theme"
+									description="Apply this character's custom colors"
+									onchange={(next) => { useCharacterTheme = next; }}
+								/>
 							{/if}
 						</div>
 
@@ -409,16 +406,10 @@
 							</div>
 
 							<div class="grid gap-4 @xl:grid-cols-2">
-								<!-- Provider -->
-								<div class="space-y-1.5">
-									<div class="flex items-center justify-between">
-										<label for="cs-provider" class="text-sm font-medium">Provider</label>
-										{#if providerId}
-											<button onclick={() => resetField('provider')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Use default
-											</button>
-										{/if}
-									</div>
+								<SettingRow label="Provider" htmlFor="cs-provider">
+									{#snippet action()}
+										{#if providerId}{@render resetLink(() => resetField('provider'), 'Use default')}{/if}
+									{/snippet}
 									<Combobox
 										id="cs-provider"
 										value={providerId == null ? '' : String(providerId)}
@@ -427,18 +418,12 @@
 										placeholder="Default"
 										searchPlaceholder="Filter providers…"
 									/>
-								</div>
+								</SettingRow>
 
-								<!-- Model -->
-								<div class="space-y-1.5">
-									<div class="flex items-center justify-between">
-										<span class="text-sm font-medium">Model</span>
-										{#if model}
-											<button onclick={() => resetField('model')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Use default
-											</button>
-										{/if}
-									</div>
+								<SettingRow label="Model">
+									{#snippet action()}
+										{#if model}{@render resetLink(() => resetField('model'), 'Use default')}{/if}
+									{/snippet}
 									<Combobox
 										value={model}
 										onchange={(v) => { model = v; }}
@@ -452,7 +437,7 @@
 									{#if !providerId && model}
 										<p class="text-xs text-muted-foreground">Applies to whatever provider is active globally</p>
 									{/if}
-								</div>
+								</SettingRow>
 							</div>
 						</div>
 
@@ -464,21 +449,15 @@
 								<p class="text-sm text-muted-foreground">Control how the AI generates responses</p>
 							</div>
 
-							<!-- Temperature -->
-							<div class="space-y-2">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Temperature</span>
-									<div class="flex items-center gap-2">
-										{#if temperature !== null}
-											<span class="text-sm tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>
-											<button onclick={() => resetField('temperature')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Default
-											</button>
-										{:else}
-											<span class="text-xs text-muted-foreground">Using provider default</span>
-										{/if}
-									</div>
-								</div>
+							<SettingRow label="Temperature">
+								{#snippet action()}
+									{#if temperature !== null}
+										<span class="text-sm tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>
+										{@render resetLink(() => resetField('temperature'), 'Default')}
+									{:else}
+										<span class="text-xs text-muted-foreground">Using provider default</span>
+									{/if}
+								{/snippet}
 								<input
 									type="range"
 									min="0"
@@ -492,18 +471,12 @@
 									<span>Precise</span>
 									<span>Creative</span>
 								</div>
-							</div>
+							</SettingRow>
 
-							<!-- Max Tokens -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Max Response Tokens</span>
-									{#if maxTokens !== null}
-										<button onclick={() => resetField('maxTokens')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="Max Response Tokens">
+								{#snippet action()}
+									{#if maxTokens !== null}{@render resetLink(() => resetField('maxTokens'), 'Default')}{/if}
+								{/snippet}
 								<input
 									type="number"
 									value={maxTokens ?? ''}
@@ -517,48 +490,21 @@
 									placeholder="Using provider default"
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm tabular-nums placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
 								/>
-							</div>
+							</SettingRow>
 
-							<!-- Include Reasoning -->
-							<button
-								type="button"
-								onclick={() => { includeReasoning = includeReasoning === null ? true : !includeReasoning; }}
-								class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50"
-							>
-								<div>
-									<span class="block text-sm font-medium">Include reasoning in context</span>
-									<span class="block text-xs text-muted-foreground">
-										{#if includeReasoning === null}
-											Using provider default
-										{:else}
-											Send reasoning from prior messages to the AI
-										{/if}
-									</span>
-								</div>
-								<div class="flex items-center gap-2">
-									{#if includeReasoning !== null}
-										<!-- svelte-ignore a11y_click_events_have_key_events -->
-										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div onclick={(e) => { e.stopPropagation(); resetField('includeReasoning'); }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" use:tooltip={'Reset to default'}>
-											<RotateCcw class="h-3.5 w-3.5" />
-										</div>
-									{/if}
-									<div class="h-5 w-9 shrink-0 rounded-full transition-colors {includeReasoning ? 'bg-primary' : 'bg-muted'}">
-										<div class="h-5 w-5 rounded-full border-2 bg-white transition-transform {includeReasoning ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted'}"></div>
-									</div>
-								</div>
-							</button>
+							<ToggleSwitch
+								checked={includeReasoning === true}
+								label="Include reasoning in context"
+								description={includeReasoning === null ? 'Using provider default' : 'Send reasoning from prior messages to the AI'}
+								onchange={(next) => { includeReasoning = next; }}
+								canReset={includeReasoning !== null}
+								onreset={() => resetField('includeReasoning')}
+							/>
 
-							<!-- Reasoning Effort -->
-							<div class="space-y-2">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Reasoning Effort</span>
-									{#if reasoningEffort !== null}
-										<button onclick={() => resetField('reasoningEffort')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="Reasoning Effort">
+								{#snippet action()}
+									{#if reasoningEffort !== null}{@render resetLink(() => resetField('reasoningEffort'), 'Default')}{/if}
+								{/snippet}
 								<div class="flex gap-2">
 									{#each ['off', 'low', 'medium', 'high'] as level}
 										<button
@@ -576,7 +522,7 @@
 										Request the model to think before responding. Z.AI only supports on/off.
 									{/if}
 								</p>
-							</div>
+							</SettingRow>
 						</div>
 
 					{:else if activeTab === 'persona'}
@@ -587,16 +533,10 @@
 								<p class="text-sm text-muted-foreground">Identity and custom instructions for this chat</p>
 							</div>
 
-							<!-- Persona -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<label for="cs-persona" class="text-sm font-medium">Persona</label>
-									{#if personaId !== null}
-										<button onclick={() => resetField('persona')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Use default
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="Persona" htmlFor="cs-persona">
+								{#snippet action()}
+									{#if personaId !== null}{@render resetLink(() => resetField('persona'), 'Use default')}{/if}
+								{/snippet}
 								<Combobox
 									id="cs-persona"
 									value={personaId == null ? '' : String(personaId)}
@@ -606,18 +546,12 @@
 									searchPlaceholder="Filter personas…"
 								/>
 								<p class="text-xs text-muted-foreground">Who &#123;&#123;user&#125;&#125; is in this chat</p>
-							</div>
+							</SettingRow>
 
-							<!-- Custom Instructions -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Custom Instructions</span>
-									{#if customPrompt}
-										<button onclick={() => resetField('customPrompt')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Clear
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="Custom Instructions">
+								{#snippet action()}
+									{#if customPrompt}{@render resetLink(() => resetField('customPrompt'), 'Clear')}{/if}
+								{/snippet}
 								<LimitedTextarea
 									bind:value={customPrompt}
 									rows={4}
@@ -626,18 +560,12 @@
 									placeholder="Override or extend the global custom instructions for this chat..."
 								/>
 								<p class="text-xs text-muted-foreground">Replaces provider custom instructions when set. Supports &#123;&#123;char&#125;&#125; / &#123;&#123;user&#125;&#125; macros.</p>
-							</div>
+							</SettingRow>
 
-							<!-- Chat-wide reply guidance -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Reply guidance</span>
-									{#if replyGuidance}
-										<button onclick={() => resetField('replyGuidance')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Clear
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="Reply guidance">
+								{#snippet action()}
+									{#if replyGuidance}{@render resetLink(() => resetField('replyGuidance'), 'Clear')}{/if}
+								{/snippet}
 								<LimitedTextarea
 									bind:value={replyGuidance}
 									rows={3}
@@ -646,31 +574,17 @@
 									placeholder="e.g. keep replies short, avoid breaking the fourth wall…"
 								/>
 								<p class="text-xs text-muted-foreground">Sent on every reply in this chat, in addition to any per-message guidance.</p>
-							</div>
+							</SettingRow>
 
-							<!-- External Resources -->
-							<button
-								type="button"
-								onclick={() => { allowExternalResources = allowExternalResources === null ? true : !allowExternalResources; }}
-								class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50"
-							>
-								<div>
-									<span class="block text-sm font-medium">External resources in creator notes</span>
-									<span class="block text-xs text-muted-foreground">{allowExternalResources === null ? 'Using global setting' : 'Per-chat override'}</span>
-								</div>
-								<div class="flex items-center gap-2">
-									{#if allowExternalResources !== null}
-										<!-- svelte-ignore a11y_click_events_have_key_events -->
-										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div onclick={(e) => { e.stopPropagation(); allowExternalResources = null; }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" use:tooltip={'Reset to global default'}>
-											<RotateCcw class="h-3.5 w-3.5" />
-										</div>
-									{/if}
-									<div class="h-5 w-9 shrink-0 rounded-full transition-colors {allowExternalResources === true ? 'bg-primary' : 'bg-muted'}">
-										<div class="h-5 w-5 rounded-full border-2 bg-white transition-transform {allowExternalResources === true ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted'}"></div>
-									</div>
-								</div>
-							</button>
+							<ToggleSwitch
+								checked={allowExternalResources === true}
+								label="External resources in creator notes"
+								description={allowExternalResources === null ? 'Using global setting' : 'Per-chat override'}
+								onchange={(next) => { allowExternalResources = next; }}
+								canReset={allowExternalResources !== null}
+								onreset={() => { allowExternalResources = null; }}
+								resetTooltip="Reset to global default"
+							/>
 						</div>
 
 					{:else if activeTab === 'compaction'}
@@ -681,42 +595,24 @@
 								<p class="text-sm text-muted-foreground">Override global compaction behavior for this chat. Leave fields blank to use the global default from Settings &rsaquo; Prompts.</p>
 							</div>
 
-							<!-- Enabled override -->
-							<button
-								type="button"
-								onclick={() => { compactionEnabledOverride = compactionEnabledOverride === null ? true : !compactionEnabledOverride; }}
-								class="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-accent/50"
-							>
-								<div>
-									<span class="block text-sm font-medium">Auto-compact this chat</span>
-									<span class="block text-xs text-muted-foreground">{compactionEnabledOverride === null ? 'Using global setting' : compactionEnabledOverride ? 'Forced on for this chat' : 'Forced off for this chat'}</span>
-								</div>
-								<div class="flex items-center gap-2">
-									{#if compactionEnabledOverride !== null}
-										<!-- svelte-ignore a11y_click_events_have_key_events -->
-										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div onclick={(e) => { e.stopPropagation(); compactionEnabledOverride = null; }} class="rounded p-1 text-muted-foreground/60 hover:text-foreground" use:tooltip={'Reset to global default'}>
-											<RotateCcw class="h-3.5 w-3.5" />
-										</div>
-									{/if}
-									<div class="h-5 w-9 shrink-0 rounded-full transition-colors {compactionEnabledOverride === true ? 'bg-primary' : 'bg-muted'}">
-										<div class="h-5 w-5 rounded-full border-2 bg-white transition-transform {compactionEnabledOverride === true ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted'}"></div>
-									</div>
-								</div>
-							</button>
+							<ToggleSwitch
+								checked={compactionEnabledOverride === true}
+								label="Auto-compact this chat"
+								description={compactionEnabledOverride === null ? 'Using global setting' : compactionEnabledOverride ? 'Forced on for this chat' : 'Forced off for this chat'}
+								onchange={(next) => { compactionEnabledOverride = next; }}
+								canReset={compactionEnabledOverride !== null}
+								onreset={() => { compactionEnabledOverride = null; }}
+								resetTooltip="Reset to global default"
+							/>
 
-							<!-- Threshold -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Trigger threshold</span>
+							<SettingRow label="Trigger threshold">
+								{#snippet action()}
 									{#if compactionThresholdOverride !== null}
-										<button onclick={() => { compactionThresholdOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
+										{@render resetLink(() => { compactionThresholdOverride = null; }, 'Default')}
 									{:else}
 										<span class="text-xs text-muted-foreground">Using global</span>
 									{/if}
-								</div>
+								{/snippet}
 								<div class="flex items-center gap-3">
 									<input
 										type="range" min="50" max="95" step="5"
@@ -726,18 +622,12 @@
 									/>
 									<span class="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{compactionThresholdOverride ?? 80}%</span>
 								</div>
-							</div>
+							</SettingRow>
 
-							<!-- Mode -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">What to compact</span>
-									{#if compactionModeOverride !== null}
-										<button onclick={() => { compactionModeOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
-									{/if}
-								</div>
+							<SettingRow label="What to compact">
+								{#snippet action()}
+									{#if compactionModeOverride !== null}{@render resetLink(() => { compactionModeOverride = null; }, 'Default')}{/if}
+								{/snippet}
 								<div class="flex gap-2">
 									{#each [{ value: null, label: 'Global' }, { value: 'window', label: 'Rolling window' }, { value: 'fixed', label: 'Fixed count' }] as opt}
 										<button
@@ -748,20 +638,17 @@
 										</button>
 									{/each}
 								</div>
-							</div>
+							</SettingRow>
 
 {#if compactionModeOverride === 'window' || compactionModeOverride === null}
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Window size per run</span>
+							<SettingRow label="Window size per run">
+								{#snippet action()}
 									{#if compactionWindowPercentOverride !== null}
-										<button onclick={() => { compactionWindowPercentOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
+										{@render resetLink(() => { compactionWindowPercentOverride = null; }, 'Default')}
 									{:else}
 										<span class="text-xs text-muted-foreground">Using global</span>
 									{/if}
-								</div>
+								{/snippet}
 								<div class="flex items-center gap-3">
 									<input
 										type="range" min="10" max="60" step="5"
@@ -770,20 +657,15 @@
 										class="flex-1 accent-primary"
 									/>
 									<span class="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{compactionWindowPercentOverride ?? 30}%</span>
-									</div>
 								</div>
+							</SettingRow>
 							{/if}
 
 							{#if compactionModeOverride === 'fixed'}
-								<div class="space-y-1.5">
-									<div class="flex items-center justify-between">
-										<span class="text-sm font-medium">Messages per run</span>
-										{#if compactionFixedCountOverride !== null}
-											<button onclick={() => { compactionFixedCountOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Default
-											</button>
-										{/if}
-									</div>
+								<SettingRow label="Messages per run">
+									{#snippet action()}
+										{#if compactionFixedCountOverride !== null}{@render resetLink(() => { compactionFixedCountOverride = null; }, 'Default')}{/if}
+									{/snippet}
 									<input
 										type="number" min="2" max="500"
 										value={compactionFixedCountOverride ?? ''}
@@ -794,20 +676,14 @@
 										}}
 										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
 									/>
-								</div>
+								</SettingRow>
 							{/if}
 
 							<div class="grid gap-4 @xl:grid-cols-2">
-								<!-- Provider override -->
-								<div class="space-y-1.5">
-									<div class="flex items-center justify-between">
-										<label for="cs-comp-provider" class="text-sm font-medium">Summarizer provider</label>
-										{#if compactionProviderIdOverride !== null}
-											<button onclick={() => { compactionProviderIdOverride = null; compactionModelOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Default
-											</button>
-										{/if}
-									</div>
+								<SettingRow label="Summarizer provider" htmlFor="cs-comp-provider">
+									{#snippet action()}
+										{#if compactionProviderIdOverride !== null}{@render resetLink(() => { compactionProviderIdOverride = null; compactionModelOverride = null; }, 'Default')}{/if}
+									{/snippet}
 									<Combobox
 										id="cs-comp-provider"
 										value={compactionProviderIdOverride == null ? '' : String(compactionProviderIdOverride)}
@@ -820,18 +696,12 @@
 										placeholder="Use global setting"
 										searchPlaceholder="Filter providers…"
 									/>
-								</div>
+								</SettingRow>
 
-								<!-- Model override -->
-								<div class="space-y-1.5">
-									<div class="flex items-center justify-between">
-										<span class="text-sm font-medium">Summarizer model</span>
-										{#if compactionModelOverride}
-											<button onclick={() => { compactionModelOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-												<RotateCcw class="h-3 w-3" /> Default
-											</button>
-										{/if}
-									</div>
+								<SettingRow label="Summarizer model">
+									{#snippet action()}
+										{#if compactionModelOverride}{@render resetLink(() => { compactionModelOverride = null; }, 'Default')}{/if}
+									{/snippet}
 									<Combobox
 										value={compactionModelOverride ?? ''}
 										onchange={(v) => { compactionModelOverride = v || null; }}
@@ -842,61 +712,61 @@
 										searchPlaceholder="Filter models…"
 										emptyText="No matching models"
 									/>
-								</div>
+								</SettingRow>
 							</div>
 
 							<!-- Stored summary editor -->
-							<div class="space-y-1.5 border-t border-border pt-5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Current summary</span>
-									<div class="flex items-center gap-1">
-										{#if compactionSummaryDraft.trim()}
-											<button onclick={clearCompactionState} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
-												<RotateCcw class="h-3 w-3" /> Clear
-											</button>
-										{/if}
-										<!-- ... overflow menu -->
-										<div class="relative">
-											<button
-												onclick={(e) => { e.stopPropagation(); showSummaryMenu = !showSummaryMenu; }}
-												class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-												aria-label="More options"
-											>
-												<MoreHorizontal class="h-3.5 w-3.5" />
-											</button>
-											{#if showSummaryMenu}
-												<!-- svelte-ignore a11y_no_static_element_interactions -->
-												<div
-													class="absolute right-0 top-full z-10 mt-1 w-52 rounded-xl border border-border bg-popover py-1 shadow-xl"
-													onmouseleave={() => { showSummaryMenu = false; }}
-												>
-													<button
-														onclick={reprocessLastBatch}
-														disabled={!chat.compactedUpToMessageId || reprocessingNow}
-														class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-													>
-														{#if reprocessingNow}
-															<Loader2 class="h-4 w-4 animate-spin" /> Re-processing…
-														{:else}
-															<RefreshCw class="h-4 w-4" /> Re-process last batch
-														{/if}
-													</button>
-												</div>
+							<div class="border-t border-border pt-5">
+								<SettingRow label="Current summary">
+									{#snippet action()}
+										<div class="flex items-center gap-1">
+											{#if compactionSummaryDraft.trim()}
+												<button onclick={clearCompactionState} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
+													<RotateCcw class="h-3 w-3" /> Clear
+												</button>
 											{/if}
+											<div class="relative">
+												<button
+													onclick={(e) => { e.stopPropagation(); showSummaryMenu = !showSummaryMenu; }}
+													class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+													aria-label="More options"
+												>
+													<MoreHorizontal class="h-3.5 w-3.5" />
+												</button>
+												{#if showSummaryMenu}
+													<!-- svelte-ignore a11y_no_static_element_interactions -->
+													<div
+														class="absolute right-0 top-full z-10 mt-1 w-52 rounded-xl border border-border bg-popover py-1 shadow-xl"
+														onmouseleave={() => { showSummaryMenu = false; }}
+													>
+														<button
+															onclick={reprocessLastBatch}
+															disabled={!chat.compactedUpToMessageId || reprocessingNow}
+															class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+														>
+															{#if reprocessingNow}
+																<Loader2 class="h-4 w-4 animate-spin" /> Re-processing…
+															{:else}
+																<RefreshCw class="h-4 w-4" /> Re-process last batch
+															{/if}
+														</button>
+													</div>
+												{/if}
+											</div>
 										</div>
-									</div>
-								</div>
-								<LimitedTextarea
-									bind:value={compactionSummaryDraft}
-									rows={6}
-									limit={FIELD_LIMITS.compactionSummary}
-									placeholder="No summary yet. Run compaction below or write one manually."
-									class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
-								/>
-								<p class="text-xs text-muted-foreground">Saved with the rest of the chat settings. Clearing the summary also resets the high-water mark so the next run starts from the very first message.</p>
-								{#if chat.compactionLastRunAt}
-									<p class="text-xs text-muted-foreground">Last run: {new Date(chat.compactionLastRunAt + 'Z').toLocaleString()}</p>
-								{/if}
+									{/snippet}
+									<LimitedTextarea
+										bind:value={compactionSummaryDraft}
+										rows={6}
+										limit={FIELD_LIMITS.compactionSummary}
+										placeholder="No summary yet. Run compaction below or write one manually."
+										class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring"
+									/>
+									<p class="text-xs text-muted-foreground">Saved with the rest of the chat settings. Clearing the summary also resets the high-water mark so the next run starts from the very first message.</p>
+									{#if chat.compactionLastRunAt}
+										<p class="text-xs text-muted-foreground">Last run: {new Date(chat.compactionLastRunAt + 'Z').toLocaleString()}</p>
+									{/if}
+								</SettingRow>
 							</div>
 
 							<!-- Run now -->

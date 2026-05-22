@@ -3,6 +3,7 @@
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
 	import ThemeEditModal from '$lib/components/ThemeEditModal.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { themesStore } from '$lib/stores/themes.svelte.js';
@@ -143,8 +144,7 @@
 	</div>
 
 	<!-- Character Themes -->
-	<div class="space-y-3">
-		<span class="block text-sm font-medium">Character Themes</span>
+	<SettingRow label="Character Themes">
 		<div class="grid gap-3 @xl:grid-cols-2">
 			<ToggleSwitch
 				label="Always apply character themes"
@@ -160,11 +160,10 @@
 			/>
 		</div>
 		<p class="text-xs text-muted-foreground">Theme colors are automatically derived from the character's avatar. Background images are provided by the character's creator. Themes can be disabled per-chat in chat settings.</p>
-	</div>
+	</SettingRow>
 
 	<!-- External Content -->
-	<div class="space-y-3">
-		<span class="block text-sm font-medium">External Content</span>
+	<SettingRow label="External Content">
 		<ToggleSwitch
 			label="Load external content"
 			description="Allow remote images, fonts, and other external resources to load. When disabled, only locally cached images are shown."
@@ -172,12 +171,11 @@
 			onchange={() => toggle('allowExternalCreatorNotes')}
 		/>
 		<p class="text-xs text-muted-foreground">Disabling this blocks all external requests — images in chats and creator notes will only display if they were cached by the server. Useful for privacy and for verifying image caching is working.</p>
-	</div>
+	</SettingRow>
 
 	<!-- Font Size + Compact/Motion: pair them on wider viewports -->
 	<div class="grid gap-4 @xl:grid-cols-2">
-		<div class="space-y-2">
-			<span class="block text-sm font-medium">Font size</span>
+		<SettingRow label="Font size">
 			<div class="flex gap-2">
 				{#each [{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }] as opt}
 					<button
@@ -186,7 +184,7 @@
 					>{opt.label}</button>
 				{/each}
 			</div>
-		</div>
+		</SettingRow>
 		<div class="space-y-3">
 			<ToggleSwitch
 				label="Compact mode"
@@ -206,8 +204,7 @@
 	<!-- Theme Selection -->
 	<div class="space-y-3">
 		<!-- Color mode selector -->
-		<div>
-			<span class="mb-2 block text-sm font-medium">Color Mode</span>
+		<SettingRow label="Color Mode">
 			<div class="flex gap-1 rounded-xl border border-border p-1">
 				<button
 					onclick={() => saveColorMode('light')}
@@ -223,9 +220,9 @@
 				>System</button>
 			</div>
 			{#if localColorMode === 'system'}
-				<p class="mt-1.5 text-xs text-muted-foreground">Follows your OS dark/light preference automatically.</p>
+				<p class="text-xs text-muted-foreground">Follows your OS dark/light preference automatically.</p>
 			{/if}
-		</div>
+		</SettingRow>
 
 		{#snippet themeSlot(slot: 'dark' | 'light', list: any[], selectedId: number | null | undefined, isOpen: boolean, setOpen: (v: boolean) => void)}
 			{@const selected = list.find((t: any) => t.id === selectedId) ?? list[0] ?? null}
@@ -327,7 +324,7 @@
 			</div>
 		{/snippet}
 
-		<div class="grid grid-cols-1 gap-4 @xl:grid-cols-2">
+		<div class="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
 			{@render themeSlot('dark', darkThemes, settingsStore.systemDarkTheme?.id ?? settingsStore.settings.systemDarkThemeId, darkDropdownOpen, (v: boolean) => (darkDropdownOpen = v))}
 			{@render themeSlot('light', lightThemes, settingsStore.systemLightTheme?.id ?? settingsStore.settings.systemLightThemeId, lightDropdownOpen, (v: boolean) => (lightDropdownOpen = v))}
 		</div>

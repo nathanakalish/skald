@@ -168,8 +168,8 @@
 				</button>
 			</div>
 
-			<div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-				<div class="grid gap-3 sm:grid-cols-2">
+			<div class="@container flex-1 space-y-4 overflow-y-auto px-5 py-4">
+				<div class="grid gap-3 @xl:grid-cols-2">
 					<div>
 						<label for="theme-name" class="mb-1 block text-xs font-medium text-muted-foreground">Name</label>
 						<LimitedInput
@@ -209,7 +209,7 @@
 					<span class="mb-2 block text-xs font-medium text-muted-foreground">
 						Colors{#if readonly} (read-only — duplicate to customize){/if}
 					</span>
-					<div class="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+					<div class="grid grid-cols-2 gap-x-4 gap-y-3 @xl:grid-cols-3">
 						{#each colorKeys as key}
 							<div class="flex items-center gap-2">
 								<span

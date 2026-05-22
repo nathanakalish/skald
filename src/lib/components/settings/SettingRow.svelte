@@ -8,16 +8,28 @@
 	// layout='stacked'  → label on top, control below (default; works in any width)
 	// layout='inline'   → label left, control right, vertically centered
 	//                     (best for toggles and short controls)
+	// size='md'         → standard label (text-sm, foreground) — for settings panels
+	// size='sm'         → compact label (text-xs, muted) — for modal inline-edit cards
 	interface Props {
 		label?: string;
 		description?: string;
 		htmlFor?: string;
 		layout?: 'stacked' | 'inline';
-		children: Snippet;
+		size?: 'md' | 'sm';
+		children?: Snippet;
 		labelChildren?: Snippet;
+		// Rendered inline on the right of the label row — useful for "reset to
+		// default" buttons or status hints that should sit beside the label.
+		action?: Snippet;
 	}
 
-	let { label, description, htmlFor, layout = 'stacked', children, labelChildren }: Props = $props();
+	let { label, description, htmlFor, layout = 'stacked', size = 'md', children, labelChildren, action }: Props = $props();
+
+	const labelClass = $derived(
+		size === 'sm'
+			? 'block text-xs font-medium text-muted-foreground'
+			: 'block text-sm font-medium text-foreground'
+	);
 </script>
 
 {#if layout === 'inline'}
@@ -25,9 +37,9 @@
 		<div class="min-w-0 flex-1">
 			{#if label}
 				{#if htmlFor}
-					<label for={htmlFor} class="block text-sm font-medium text-foreground">{label}</label>
+					<label for={htmlFor} class={labelClass}>{label}</label>
 				{:else}
-					<div class="text-sm font-medium text-foreground">{label}</div>
+					<div class={labelClass}>{label}</div>
 				{/if}
 			{/if}
 			{#if labelChildren}{@render labelChildren()}{/if}
@@ -35,21 +47,28 @@
 				<p class="mt-0.5 text-xs text-muted-foreground">{description}</p>
 			{/if}
 		</div>
-		<div class="shrink-0">{@render children()}</div>
+		<div class="shrink-0">{#if children}{@render children()}{/if}</div>
 	</div>
 {:else}
 	<div class="space-y-1.5">
-		{#if label}
-			{#if htmlFor}
-				<label for={htmlFor} class="block text-sm font-medium text-foreground">{label}</label>
-			{:else}
-				<div class="text-sm font-medium text-foreground">{label}</div>
-			{/if}
+		{#if label || action}
+			<div class="flex items-center justify-between gap-3">
+				{#if label}
+					{#if htmlFor}
+						<label for={htmlFor} class={labelClass}>{label}</label>
+					{:else}
+						<div class={labelClass}>{label}</div>
+					{/if}
+				{:else}
+					<div></div>
+				{/if}
+				{#if action}{@render action()}{/if}
+			</div>
 		{/if}
 		{#if labelChildren}{@render labelChildren()}{/if}
 		{#if description}
 			<p class="text-xs text-muted-foreground">{description}</p>
 		{/if}
-		{@render children()}
+		{@render children?.()}
 	</div>
 {/if}

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { X, Server, Palette, Users, MessageSquare, Settings2, Info, User, Bell, Sparkles, Type, PackageOpen } from 'lucide-svelte';
 	import { untrack } from 'svelte';
-	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { focusTrap } from '$lib/focusTrap.js';
 	import { tooltip } from '$lib/tooltip.js';
@@ -13,11 +12,11 @@
 	import AccountPanel from '$lib/components/settings/AccountPanel.svelte';
 	import AppearancePanel from '$lib/components/settings/AppearancePanel.svelte';
 	import ChatPanel from '$lib/components/settings/ChatPanel.svelte';
+	import FormattingPanel from '$lib/components/settings/FormattingPanel.svelte';
 	import PromptsPanel from '$lib/components/settings/PromptsPanel.svelte';
 	import NotificationsPanel from '$lib/components/settings/NotificationsPanel.svelte';
 	import InstancePanel from '$lib/components/settings/InstancePanel.svelte';
 	import { providersStore } from '$lib/stores/providers.svelte.js';
-	import { settingsStore } from '$lib/stores/settings.svelte.js';
 
 	interface Props {
 		open: boolean;
@@ -25,136 +24,17 @@
 		mode?: 'modal' | 'embedded' | 'page';
 		activeTab?: 'providers' | 'prompts' | 'formatting' | 'appearance' | 'chat' | 'notifications' | 'import-export' | 'account' | 'about' | 'instance' | 'users';
 		providers: any[];
-		themes: any[];
-		alwaysUseCharacterThemes: boolean;
-		allowExternalCreatorNotes: boolean;
-		colorCharacterCards: boolean;
-		fontSize: string;
-		compactMode: boolean;
-		reduceMotion: boolean;
-		sendWithEnterDesktop: boolean;
-		sendWithEnterMobile: boolean;
-		autoScrollThreshold: string;
-		confirmDeletions: boolean;
-		messageTimestamps: string;
-		showReasoning: boolean;
-		notificationSound: boolean;
-		notificationStyle: string;
-		notificationAvatar: boolean;
-		inAppNotifications: boolean;
-		notificationDuration: number;
-		quietHoursEnabled: boolean;
-		quietHoursStart: string;
-		quietHoursEnd: string;
-		renderMode: string;
-		chatPageSize: number;
-		autoLoadEarlierMessages: boolean;
-		reformatterProviderId: string;
-		reformatterModel: string;
-		reformatterPrompt: string;
-		characterCreatorProviderId: string;
-		characterCreatorModel: string;
-		characterCreatorPrompt: string;
-		compactionEnabled: boolean;
-		compactionThreshold: number;
-		compactionMode: string;
-		compactionWindowPercent: number;
-		compactionFixedCount: number;
-		compactionProviderId: string;
-		compactionModel: string;
-		compactionPrompt: string;
-		speechOpacity: number;
-		speechBold: boolean;
-		speechItalic: boolean;
-		thoughtOpacity: number;
-		thoughtBold: boolean;
-		thoughtItalic: boolean;
-		linkOpacity: number;
-		linkBold: boolean;
-		linkItalic: boolean;
-		narrationOpacity: number;
-		narrationBold: boolean;
-		narrationItalic: boolean;
-		nestedEmphasisInSpeech: boolean;
-		promptSlotOrder: string;
 		user: { id: number; username: string; role: string } | null;
 		onchatimported?: (chatId: number) => void;
 		onclose: () => void;
 	}
 
 	let {
-		open, embedded = false, mode: modeProp, activeTab: activeTabProp, providers, themes = [], alwaysUseCharacterThemes = false, allowExternalCreatorNotes = false, colorCharacterCards = false,
-		fontSize = 'medium', compactMode = false, reduceMotion = false,
-		sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true,
-		messageTimestamps = 'relative', showReasoning = false, notificationSound = false, notificationStyle = 'generic', notificationAvatar = true,
-		inAppNotifications = true, notificationDuration = 5,
-		quietHoursEnabled = false, quietHoursStart = '22:00', quietHoursEnd = '07:00',
-		renderMode = 'roleplay',
-		chatPageSize = 50,
-		autoLoadEarlierMessages = false,
-		reformatterProviderId = '', reformatterModel = '', reformatterPrompt = '',
-		characterCreatorProviderId = '', characterCreatorModel = '', characterCreatorPrompt = '',
-		compactionEnabled = false, compactionThreshold = 80, compactionMode = 'window',
-		compactionWindowPercent = 30, compactionFixedCount = 20,
-		compactionProviderId = '', compactionModel = '', compactionPrompt = '',
-		speechOpacity = 100, speechBold = true, speechItalic = false,
-		thoughtOpacity = 75, thoughtBold = false, thoughtItalic = true,
-		linkOpacity = 100, linkBold = false, linkItalic = false,
-		narrationOpacity = 100, narrationBold = false, narrationItalic = false,
-		nestedEmphasisInSpeech = true,
-		promptSlotOrder = '',
+		open, embedded = false, mode: modeProp, activeTab: activeTabProp, providers,
 		user = null, onchatimported, onclose
 	}: Props = $props();
 	const isAdmin = $derived(user?.role === 'admin');
 	const mode = $derived(modeProp ?? (embedded ? 'embedded' : 'modal'));
-
-	let localRenderMode = $state('roleplay');
-
-	let localSpeechOpacity = $state(100);
-	let localSpeechBold = $state(true);
-	let localSpeechItalic = $state(false);
-	let localThoughtOpacity = $state(75);
-	let localThoughtBold = $state(false);
-	let localThoughtItalic = $state(true);
-	let localLinkOpacity = $state(100);
-	let localLinkBold = $state(false);
-	let localLinkItalic = $state(false);
-	let localNarrationOpacity = $state(100);
-	let localNarrationBold = $state(false);
-	let localNarrationItalic = $state(false);
-	let localNestedEmphasis = $state(true);
-
-	$effect(() => {
-		if (open) {
-			untrack(() => {
-				localRenderMode = renderMode;
-				localSpeechOpacity = speechOpacity;
-				localSpeechBold = speechBold;
-				localSpeechItalic = speechItalic;
-				localThoughtOpacity = thoughtOpacity;
-				localThoughtBold = thoughtBold;
-				localThoughtItalic = thoughtItalic;
-				localLinkOpacity = linkOpacity;
-				localLinkBold = linkBold;
-				localLinkItalic = linkItalic;
-				localNarrationOpacity = narrationOpacity;
-				localNarrationBold = narrationBold;
-				localNarrationItalic = narrationItalic;
-				localNestedEmphasis = nestedEmphasisInSpeech;
-			});
-		}
-	});
-
-	async function saveSetting(key: string, value: string | boolean | number) {
-		const ok = await settingsStore.save(key as any, value);
-		if (ok) toasts.success('Setting saved');
-	}
-
-	async function toggleBoolSetting(key: string, getter: () => boolean, setter: (v: boolean) => void) {
-		const newVal = !getter();
-		setter(newVal);
-		await saveSetting(key, newVal);
-	}
 
 	// Sidebar order follows the data-flow: connect → generate → display →
 	// alerts → you → admin → meta. Prompts/Formatting are upstream of how
@@ -232,122 +112,7 @@
 						<ChatPanel active={activeTab === 'chat'} />
 
 					{:else if activeTab === 'formatting'}
-						<!-- Formatting Tab -->
-						<div class="space-y-6">
-							<div>
-								<h3 class="text-base font-semibold">Formatting</h3>
-								<p class="text-sm text-muted-foreground">How model output is rendered and transformed</p>
-							</div>
-
-							<!-- Text Rendering -->
-							<div class="space-y-2">
-								<span class="block text-sm font-medium">Text rendering</span>
-								<div class="flex gap-2">
-									{#each [{ value: 'roleplay', label: 'Roleplay' }, { value: 'markdown', label: 'Markdown' }] as opt}
-										<button
-											onclick={async () => { localRenderMode = opt.value; await saveSetting('renderMode', opt.value); }}
-											class="flex-1 rounded-lg border px-3 py-1.5 text-sm {localRenderMode === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}"
-										>{opt.label}</button>
-									{/each}
-								</div>
-								<p class="text-xs text-muted-foreground">Roleplay: *thoughts*, "speech", and plain narration. Markdown: full formatting with bold, italic, headings, lists, code blocks, etc. The AI will be told which formatting to use.</p>
-							</div>
-
-							<!-- Roleplay Formatting -->
-							<div class="space-y-3 rounded-xl border border-border bg-background/40 p-4">
-								<div>
-									<span class="block text-sm font-medium">Roleplay formatting</span>
-									<p class="text-xs text-muted-foreground">Tune how "speech", *thoughts*, [links], and plain narration appear inside chat bubbles.</p>
-								</div>
-								{#each [
-									{ key: 'speech', label: 'Speech', sample: '"Hello there"', op: localSpeechOpacity, bold: localSpeechBold, italic: localSpeechItalic },
-									{ key: 'thought', label: 'Thoughts', sample: '*A quiet thought*', op: localThoughtOpacity, bold: localThoughtBold, italic: localThoughtItalic },
-									{ key: 'narration', label: 'Narration', sample: 'She walked across the room.', op: localNarrationOpacity, bold: localNarrationBold, italic: localNarrationItalic },
-									{ key: 'link', label: 'Links', sample: '[a link](https://example.com)', op: localLinkOpacity, bold: localLinkBold, italic: localLinkItalic }
-								] as row (row.key)}
-									<div class="space-y-2 rounded-lg border border-border/60 bg-card px-3 py-3">
-										<div class="flex items-center justify-between gap-3">
-											<div class="min-w-0 flex-1">
-												<span class="block text-sm font-medium">{row.label}</span>
-												<span
-													class="mt-0.5 block truncate text-xs text-muted-foreground"
-													style="opacity: {row.op / 100}; font-weight: {row.bold ? 700 : 400}; font-style: {row.italic ? 'italic' : 'normal'};"
-												>{row.sample}</span>
-											</div>
-											<div class="flex shrink-0 items-center gap-1.5">
-												<button
-													type="button"
-													onclick={async () => {
-														if (row.key === 'speech') { localSpeechBold = !localSpeechBold; await saveSetting('speechBold', localSpeechBold); }
-														else if (row.key === 'thought') { localThoughtBold = !localThoughtBold; await saveSetting('thoughtBold', localThoughtBold); }
-														else if (row.key === 'narration') { localNarrationBold = !localNarrationBold; await saveSetting('narrationBold', localNarrationBold); }
-														else { localLinkBold = !localLinkBold; await saveSetting('linkBold', localLinkBold); }
-													}}
-													class="flex h-8 w-8 items-center justify-center rounded-md border text-sm font-bold transition-colors {row.bold ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-													use:tooltip={'Bold'}
-													aria-label="Bold"
-													aria-pressed={row.bold}
-												>B</button>
-												<button
-													type="button"
-													onclick={async () => {
-														if (row.key === 'speech') { localSpeechItalic = !localSpeechItalic; await saveSetting('speechItalic', localSpeechItalic); }
-														else if (row.key === 'thought') { localThoughtItalic = !localThoughtItalic; await saveSetting('thoughtItalic', localThoughtItalic); }
-														else if (row.key === 'narration') { localNarrationItalic = !localNarrationItalic; await saveSetting('narrationItalic', localNarrationItalic); }
-														else { localLinkItalic = !localLinkItalic; await saveSetting('linkItalic', localLinkItalic); }
-													}}
-													class="flex h-8 w-8 items-center justify-center rounded-md border text-sm italic transition-colors {row.italic ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-													use:tooltip={'Italic'}
-													aria-label="Italic"
-													aria-pressed={row.italic}
-												>I</button>
-											</div>
-										</div>
-										<div class="flex items-center gap-3">
-											<span class="text-[11px] text-muted-foreground">Opacity</span>
-											<input
-												type="range"
-												min="10"
-												max="100"
-												step="5"
-												value={row.op}
-												oninput={(e) => {
-													const v = Number((e.target as HTMLInputElement).value);
-													if (row.key === 'speech') localSpeechOpacity = v;
-													else if (row.key === 'thought') localThoughtOpacity = v;
-													else if (row.key === 'narration') localNarrationOpacity = v;
-													else localLinkOpacity = v;
-												}}
-												onchange={async (e) => {
-													const v = Number((e.target as HTMLInputElement).value);
-													const k = row.key === 'speech' ? 'speechOpacity'
-														: row.key === 'thought' ? 'thoughtOpacity'
-														: row.key === 'narration' ? 'narrationOpacity'
-														: 'linkOpacity';
-													await saveSetting(k, v);
-												}}
-												class="flex-1 accent-primary"
-											/>
-											<span class="w-10 text-right text-[11px] tabular-nums text-muted-foreground">{row.op}%</span>
-										</div>
-									</div>
-								{/each}
-
-								<button
-									type="button"
-									onclick={() => toggleBoolSetting('nestedEmphasisInSpeech', () => localNestedEmphasis, (v) => { localNestedEmphasis = v; })}
-									class="flex w-full items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:bg-accent/50"
-								>
-									<div class="min-w-0 flex-1">
-										<span class="block text-sm font-medium">Nested emphasis in speech</span>
-										<span class="block text-xs text-muted-foreground">Apply <em>thought</em> styling to <code class="rounded bg-muted px-1">*asterisks*</code> that appear inside <code class="rounded bg-muted px-1">"quotes"</code>.</span>
-									</div>
-									<div class="ml-3 h-5 w-9 shrink-0 rounded-full transition-colors {localNestedEmphasis ? 'bg-primary' : 'bg-muted'}">
-										<div class="h-5 w-5 rounded-full border-2 bg-white transition-transform {localNestedEmphasis ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted'}"></div>
-									</div>
-								</button>
-							</div>
-					</div>
+						<FormattingPanel />
 
 					{:else if activeTab === 'appearance'}
 						<AppearancePanel />

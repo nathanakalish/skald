@@ -6,6 +6,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
+	import SettingRow from '$lib/components/settings/SettingRow.svelte';
 	import { personasStore } from '$lib/stores/personas.svelte.js';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
@@ -225,14 +226,13 @@
 			</div>
 
 			<!-- Body -->
-			<div class="flex-1 overflow-y-auto p-6">
+			<div class="@container flex-1 overflow-y-auto p-6">
 				{#if showCreateForm}
 					<div class="mb-6 rounded-xl border border-primary/20 bg-card p-4">
 						<h3 class="mb-4 text-sm font-semibold">New Persona</h3>
 						<div class="space-y-3">
-							<div class="grid gap-3 sm:grid-cols-2">
-								<div>
-									<label for="persona-display" class="mb-1 block text-xs font-medium text-muted-foreground">Label</label>
+							<div class="grid gap-3 @xl:grid-cols-2">
+								<SettingRow size="sm" label="Label" htmlFor="persona-display">
 									<LimitedInput
 										id="persona-display"
 										bind:value={displayName}
@@ -240,9 +240,8 @@
 										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 										placeholder="e.g. My Fantasy Persona"
 									/>
-								</div>
-								<div>
-									<label for="persona-name" class="mb-1 block text-xs font-medium text-muted-foreground">In-Chat Name *</label>
+								</SettingRow>
+								<SettingRow size="sm" label="In-Chat Name *" htmlFor="persona-name">
 									<LimitedInput
 										id="persona-name"
 										bind:value={name}
@@ -250,10 +249,9 @@
 										class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 										placeholder={"Name used for {{user}}"}
 									/>
-								</div>
+								</SettingRow>
 							</div>
-							<div>
-								<label for="persona-desc" class="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
+							<SettingRow size="sm" label="Description" htmlFor="persona-desc">
 								<LimitedTextarea
 									id="persona-desc"
 									bind:value={description}
@@ -262,7 +260,7 @@
 									class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 									placeholder="Describe your persona (injected into context for the AI)"
 								/>
-							</div>
+							</SettingRow>
 							<label class="flex items-center gap-2 text-sm {personas.length === 0 ? 'opacity-50' : ''}">
 								<input type="checkbox" checked={personas.length === 0 || isDefault} oninput={(e) => { if (personas.length > 0) isDefault = e.currentTarget.checked; }} class="rounded" disabled={personas.length === 0} />
 								Set as default persona
@@ -316,20 +314,17 @@
 								</div>
 								{#if editingId === persona.id}
 									<div class="min-w-0 flex-1 space-y-3">
-										<div class="grid gap-3 sm:grid-cols-2">
-											<div>
-												<label for="edit-display" class="mb-1 block text-xs font-medium text-muted-foreground">Label</label>
+										<div class="grid gap-3 @xl:grid-cols-2">
+											<SettingRow size="sm" label="Label" htmlFor="edit-display">
 												<LimitedInput id="edit-display" bind:value={displayName} limit={FIELD_LIMITS.name} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. My Fantasy Persona" />
-											</div>
-											<div>
-												<label for="edit-name" class="mb-1 block text-xs font-medium text-muted-foreground">In-Chat Name *</label>
+											</SettingRow>
+											<SettingRow size="sm" label="In-Chat Name *" htmlFor="edit-name">
 												<LimitedInput id="edit-name" bind:value={name} limit={FIELD_LIMITS.name} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder={"Name used for {{user}}"} />
-											</div>
+											</SettingRow>
 										</div>
-										<div>
-											<label for="edit-desc" class="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
+										<SettingRow size="sm" label="Description" htmlFor="edit-desc">
 											<LimitedTextarea id="edit-desc" bind:value={description} rows={3} limit={FIELD_LIMITS.description} class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Describe your persona" />
-										</div>
+										</SettingRow>
 										<label class="flex items-center gap-2 text-sm">
 											<input type="checkbox" bind:checked={isDefault} class="rounded" />
 											Set as default persona
