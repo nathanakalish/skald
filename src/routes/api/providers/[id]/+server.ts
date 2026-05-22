@@ -13,6 +13,9 @@ const PROVIDER_FIELD_LIMITS = {
 	endpoint: 'url',
 	defaultModel: 'name',
 	customPrompt: 'systemPrompt',
+	imageModel: 'name',
+	imageComfyPromptNodeId: 'name',
+	imageComfyWorkflow: 'prompt',
 } as const;
 
 export const GET: RequestHandler = async (event) => {

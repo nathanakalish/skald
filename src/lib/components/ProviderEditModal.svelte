@@ -477,8 +477,9 @@
 
 						<!-- Image model selector — only when this provider type supports image gen.
 						     ComfyUI gets a workflow-JSON textarea + file upload + prompt-node id
-						     instead of a model dropdown. -->
-						{#if imageCapability !== 'none' && !isCreate}
+						     instead of a model dropdown. Available during create too so users can
+						     paste the ComfyUI workflow at the same time they pick the type. -->
+						{#if imageCapability !== 'none'}
 							{#if imageCapability === 'comfyui'}
 								<div class="border-t border-border pt-4 space-y-3">
 									<h4 class="text-sm font-semibold text-muted-foreground">Image Generation</h4>
@@ -503,16 +504,16 @@
 												bind:value={imageModel}
 												items={modelsToItems(imageModelList, type)}
 												loading={imageModelLoading}
-												placeholder={imageModelList.length ? 'Select an image model…' : (imageModel ? imageModel : 'Click refresh to load image models')}
+												placeholder={imageModelList.length ? 'Select an image model…' : (imageModel ? imageModel : (isCreate ? 'Save first, then refresh to list image models' : 'Click refresh to load image models'))}
 												searchPlaceholder="Filter image models…"
 												emptyText="No Image Generation Models Available"
 											/>
 										</div>
 										<button
 											onclick={fetchImageModels}
-											disabled={imageModelLoading}
+											disabled={imageModelLoading || isCreate}
 											class="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs transition-colors hover:bg-accent disabled:opacity-50"
-											use:tooltip={'Fetch available image models'}
+											use:tooltip={isCreate ? 'Save the provider first to fetch image models' : 'Fetch available image models'}
 										>
 											<RefreshCw class="h-3.5 w-3.5 {imageModelLoading ? 'animate-spin' : ''}" />
 										</button>

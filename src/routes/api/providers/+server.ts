@@ -12,6 +12,9 @@ const PROVIDER_FIELD_LIMITS = {
 	name: 'name',
 	endpoint: 'url',
 	defaultModel: 'name',
+	imageModel: 'name',
+	imageComfyPromptNodeId: 'name',
+	imageComfyWorkflow: 'prompt',
 } as const;
 
 // Strip the api key from a provider row and replace with a `hasKey` flag —
@@ -62,6 +65,9 @@ export const POST: RequestHandler = async (event) => {
 			endpoint: body.endpoint,
 			apiKey: body.apiKey || '',
 			defaultModel: body.defaultModel || '',
+			imageModel: body.imageModel || '',
+			imageComfyWorkflow: body.imageComfyWorkflow || '',
+			imageComfyPromptNodeId: body.imageComfyPromptNodeId || '',
 			enabled: isFirst,
 			sortOrder: nextOrder
 		})
