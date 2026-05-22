@@ -408,49 +408,51 @@
 								<p class="text-sm text-muted-foreground">Override which AI provider and model to use</p>
 							</div>
 
-							<!-- Provider -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<label for="cs-provider" class="text-sm font-medium">Provider</label>
-									{#if providerId}
-										<button onclick={() => resetField('provider')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Use default
-										</button>
-									{/if}
+							<div class="grid gap-4 sm:grid-cols-2">
+								<!-- Provider -->
+								<div class="space-y-1.5">
+									<div class="flex items-center justify-between">
+										<label for="cs-provider" class="text-sm font-medium">Provider</label>
+										{#if providerId}
+											<button onclick={() => resetField('provider')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+												<RotateCcw class="h-3 w-3" /> Use default
+											</button>
+										{/if}
+									</div>
+									<Combobox
+										id="cs-provider"
+										value={providerId == null ? '' : String(providerId)}
+										onchange={(v) => { providerId = v ? parseInt(v) : null; }}
+										items={providerItems}
+										placeholder="Default"
+										searchPlaceholder="Filter providers…"
+									/>
 								</div>
-								<Combobox
-									id="cs-provider"
-									value={providerId == null ? '' : String(providerId)}
-									onchange={(v) => { providerId = v ? parseInt(v) : null; }}
-									items={providerItems}
-									placeholder="Default"
-									searchPlaceholder="Filter providers…"
-								/>
-							</div>
 
-							<!-- Model -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Model</span>
-									{#if model}
-										<button onclick={() => resetField('model')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Use default
-										</button>
+								<!-- Model -->
+								<div class="space-y-1.5">
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-medium">Model</span>
+										{#if model}
+											<button onclick={() => resetField('model')} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+												<RotateCcw class="h-3 w-3" /> Use default
+											</button>
+										{/if}
+									</div>
+									<Combobox
+										value={model}
+										onchange={(v) => { model = v; }}
+										items={modelsToItems(modelList, activeProviderType)}
+										loading={modelLoading}
+										disabled={!providerId}
+										placeholder={providerId ? 'Default (from provider)' : 'Override provider first'}
+										searchPlaceholder="Filter models…"
+										emptyText="No matching models"
+									/>
+									{#if !providerId && model}
+										<p class="text-xs text-muted-foreground">Applies to whatever provider is active globally</p>
 									{/if}
 								</div>
-								<Combobox
-									value={model}
-									onchange={(v) => { model = v; }}
-									items={modelsToItems(modelList, activeProviderType)}
-									loading={modelLoading}
-									disabled={!providerId}
-									placeholder={providerId ? 'Default (from provider)' : 'Override provider first'}
-									searchPlaceholder="Filter models…"
-									emptyText="No matching models"
-								/>
-								{#if !providerId && model}
-									<p class="text-xs text-muted-foreground">Applies to whatever provider is active globally</p>
-								{/if}
 							</div>
 						</div>
 
@@ -795,50 +797,52 @@
 								</div>
 							{/if}
 
-							<!-- Provider override -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<label for="cs-comp-provider" class="text-sm font-medium">Summarizer provider</label>
-									{#if compactionProviderIdOverride !== null}
-										<button onclick={() => { compactionProviderIdOverride = null; compactionModelOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
-									{/if}
+							<div class="grid gap-4 sm:grid-cols-2">
+								<!-- Provider override -->
+								<div class="space-y-1.5">
+									<div class="flex items-center justify-between">
+										<label for="cs-comp-provider" class="text-sm font-medium">Summarizer provider</label>
+										{#if compactionProviderIdOverride !== null}
+											<button onclick={() => { compactionProviderIdOverride = null; compactionModelOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+												<RotateCcw class="h-3 w-3" /> Default
+											</button>
+										{/if}
+									</div>
+									<Combobox
+										id="cs-comp-provider"
+										value={compactionProviderIdOverride == null ? '' : String(compactionProviderIdOverride)}
+										onchange={(v) => {
+											const n = v ? parseInt(v) : NaN;
+											compactionProviderIdOverride = isNaN(n) ? null : n;
+											compactionModelOverride = null;
+										}}
+										items={providerItems}
+										placeholder="Use global setting"
+										searchPlaceholder="Filter providers…"
+									/>
 								</div>
-								<Combobox
-									id="cs-comp-provider"
-									value={compactionProviderIdOverride == null ? '' : String(compactionProviderIdOverride)}
-									onchange={(v) => {
-										const n = v ? parseInt(v) : NaN;
-										compactionProviderIdOverride = isNaN(n) ? null : n;
-										compactionModelOverride = null;
-									}}
-									items={providerItems}
-									placeholder="Use global setting"
-									searchPlaceholder="Filter providers…"
-								/>
-							</div>
 
-							<!-- Model override -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-medium">Summarizer model</span>
-									{#if compactionModelOverride}
-										<button onclick={() => { compactionModelOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-											<RotateCcw class="h-3 w-3" /> Default
-										</button>
-									{/if}
+								<!-- Model override -->
+								<div class="space-y-1.5">
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-medium">Summarizer model</span>
+										{#if compactionModelOverride}
+											<button onclick={() => { compactionModelOverride = null; }} class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+												<RotateCcw class="h-3 w-3" /> Default
+											</button>
+										{/if}
+									</div>
+									<Combobox
+										value={compactionModelOverride ?? ''}
+										onchange={(v) => { compactionModelOverride = v || null; }}
+										items={modelsToItems(compactionModelList, compProviderType)}
+										loading={compactionModelLoading}
+										disabled={!compactionProviderIdOverride}
+										placeholder={compactionProviderIdOverride ? 'Provider default' : 'Select provider first'}
+										searchPlaceholder="Filter models…"
+										emptyText="No matching models"
+									/>
 								</div>
-								<Combobox
-									value={compactionModelOverride ?? ''}
-									onchange={(v) => { compactionModelOverride = v || null; }}
-									items={modelsToItems(compactionModelList, compProviderType)}
-									loading={compactionModelLoading}
-									disabled={!compactionProviderIdOverride}
-									placeholder={compactionProviderIdOverride ? 'Provider default' : 'Select provider first'}
-									searchPlaceholder="Filter models…"
-									emptyText="No matching models"
-								/>
 							</div>
 
 							<!-- Stored summary editor -->
