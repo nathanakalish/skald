@@ -116,6 +116,15 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 	if ('overrideImageModel' in body) updates.overrideImageModel = body.overrideImageModel ?? null;
 	if ('overrideImagePromptTemplate' in body) updates.overrideImagePromptTemplate = body.overrideImagePromptTemplate ?? null;
+	// Null means "inherit the global toggle"; explicit true/false records an override.
+	if ('overrideImageIncludeAvatar' in body) {
+		const v = body.overrideImageIncludeAvatar;
+		updates.overrideImageIncludeAvatar = v == null ? null : (v ? 1 : 0);
+	}
+	if ('overrideImageIncludeCharacterDesc' in body) {
+		const v = body.overrideImageIncludeCharacterDesc;
+		updates.overrideImageIncludeCharacterDesc = v == null ? null : (v ? 1 : 0);
+	}
 	// Let the user edit / clear the stored compaction summary directly.
 	if ('compactionSummary' in body) {
 		const v = body.compactionSummary;

@@ -18,6 +18,10 @@ export interface ImageGenInput {
 	apiKey: string;
 	model: string;
 	prompt: string;
+	// Optional reference image (e.g. a character avatar) for img-to-img /
+	// edit-style endpoints. Dispatchers that don't support image input
+	// silently ignore this.
+	referenceImage?: { bytes: Buffer; mime: string };
 	// ComfyUI-specific
 	comfyWorkflow?: string;
 	comfyPromptNodeId?: string;
@@ -54,32 +58,66 @@ function sniffExt(buf: Buffer): string {
 	return '.png';
 }
 
+function mimeToExt(mime: string): string {
+	switch (mime) {
+		case 'image/png': return '.png';
+		case 'image/jpeg': case 'image/jpg': return '.jpg';
+		case 'image/webp': return '.webp';
+		case 'image/gif': return '.gif';
+		default: return '.png';
+	}
+}
+
 // OpenAI-compatible: POST {endpoint}/images/generations  with { model, prompt }
 // Returns either b64_json or url. We pull bytes from whichever we got.
+//
+// If a reference image is supplied we instead hit /images/edits, which gpt-image-1
+// supports as multipart form data. That gives the model an actual image to
+// look at rather than just text describing the character.
 async function openaiImageGen(input: ImageGenInput): Promise<ImageGenResult> {
 	await guard(input.endpoint);
 	const base = input.endpoint.replace(/\/$/, '');
-	const url = `${base}/images/generations`;
-	// `response_format` is rejected by gpt-image-* (it always returns b64_json
-	// and 400s if you send the param). dall-e-* accepts it but the response
-	// handler below copes with both b64_json and url returns, so it's safe to
-	// just omit the param across the board.
-	const body: Record<string, unknown> = {
-		model: input.model,
-		prompt: input.prompt,
-		n: 1
-	};
-	const res = await fetch(url, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
-		},
-		body: JSON.stringify(body)
-	});
+	const useEdits = !!input.referenceImage;
+	const url = useEdits ? `${base}/images/edits` : `${base}/images/generations`;
+
+	let res: Response;
+	if (useEdits && input.referenceImage) {
+		// /images/edits is multipart/form-data. Avoid response_format here too —
+		// gpt-image-1 rejects it on both endpoints.
+		const form = new FormData();
+		form.append('model', input.model);
+		form.append('prompt', input.prompt);
+		form.append('n', '1');
+		const ext = mimeToExt(input.referenceImage.mime);
+		const blob = new Blob([new Uint8Array(input.referenceImage.bytes)], { type: input.referenceImage.mime });
+		form.append('image', blob, `reference${ext}`);
+		res = await fetch(url, {
+			method: 'POST',
+			headers: { ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {}) },
+			body: form
+		});
+	} else {
+		// `response_format` is rejected by gpt-image-* (it always returns b64_json
+		// and 400s if you send the param). dall-e-* accepts it but the response
+		// handler below copes with both b64_json and url returns, so it's safe to
+		// just omit the param across the board.
+		const body: Record<string, unknown> = {
+			model: input.model,
+			prompt: input.prompt,
+			n: 1
+		};
+		res = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
+			},
+			body: JSON.stringify(body)
+		});
+	}
 	if (!res.ok) {
 		const text = await res.text().catch(() => '');
-		logger.warn('image gen: openai-compat error', { status: res.status, body: text.slice(0, 500) });
+		logger.warn('image gen: openai-compat error', { status: res.status, body: text.slice(0, 500), edits: useEdits });
 		// Try to surface the upstream error message so users can actually
 		// diagnose 400s (e.g. unknown model, content-policy refusals).
 		let detail = '';
@@ -147,12 +185,24 @@ async function geminiImageGen(input: ImageGenInput): Promise<ImageGenResult> {
 	}
 
 	// gemini-*-image style: generateContent with responseModalities: ['IMAGE'].
+	// If we have a reference image, prepend it as an inlineData part so the
+	// model can see who/what to draw.
 	const url = `${nativeBase}/models/${encodeURIComponent(input.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+	const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+	if (input.referenceImage) {
+		parts.push({
+			inlineData: {
+				mimeType: input.referenceImage.mime,
+				data: input.referenceImage.bytes.toString('base64')
+			}
+		});
+	}
+	parts.push({ text: input.prompt });
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
-			contents: [{ role: 'user', parts: [{ text: input.prompt }] }],
+			contents: [{ role: 'user', parts }],
 			generationConfig: { responseModalities: ['IMAGE'] }
 		})
 	});
@@ -164,8 +214,8 @@ async function geminiImageGen(input: ImageGenInput): Promise<ImageGenResult> {
 	const data = await res.json() as {
 		candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>
 	};
-	const parts = data?.candidates?.[0]?.content?.parts ?? [];
-	const inline = parts.map((p) => p.inlineData).find((d) => d?.data);
+	const respParts = data?.candidates?.[0]?.content?.parts ?? [];
+	const inline = respParts.map((p) => p.inlineData).find((d) => d?.data);
 	if (!inline?.data) throw new ImageGenError('Gemini returned no image');
 	const buffer = Buffer.from(inline.data, 'base64');
 	return { buffer, ext: sniffExt(buffer) };

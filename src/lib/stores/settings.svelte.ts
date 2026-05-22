@@ -73,6 +73,14 @@ export interface Settings {
 	 * with the source message's content. Per-chat override lives on
 	 * chats.overrideImagePromptTemplate. */
 	imagePromptTemplate: string;
+	/** Send the character's avatar as a reference image to the image gen
+	 * provider (when the provider/model supports image inputs). Per-chat
+	 * override lives on chats.overrideImageIncludeAvatar. */
+	imageIncludeAvatar: boolean;
+	/** Prepend the character's description to the image-gen prompt so the
+	 * model has context for who's in the scene. Per-chat override lives on
+	 * chats.overrideImageIncludeCharacterDesc. */
+	imageIncludeCharacterDesc: boolean;
 	[k: string]: unknown;
 }
 
@@ -135,7 +143,9 @@ const defaults: Settings = {
 	narrationItalic: false,
 	nestedEmphasisInSpeech: true,
 	pinnedMessageActions: '',
-	imagePromptTemplate: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}'
+	imagePromptTemplate: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}',
+	imageIncludeAvatar: false,
+	imageIncludeCharacterDesc: false
 };
 
 let _settings = $state<Settings>({ ...defaults });

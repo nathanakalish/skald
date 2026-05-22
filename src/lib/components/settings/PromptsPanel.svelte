@@ -386,5 +386,20 @@
 				}}
 			/>
 		</SettingRow>
+
+		<div class="mt-4 space-y-3">
+			<ToggleSwitch
+				label="Include character description"
+				description="Prepend the character's description to every image prompt so the model knows who's in the scene."
+				checked={s.imageIncludeCharacterDesc}
+				onchange={async () => { await save('imageIncludeCharacterDesc', !s.imageIncludeCharacterDesc); }}
+			/>
+			<ToggleSwitch
+				label="Include character avatar as reference image"
+				description="Send the character's avatar to the provider as a visual reference. Requires a model that accepts image input (e.g. gpt-image-1, gemini-2.5-flash-image). Ignored for ComfyUI."
+				checked={s.imageIncludeAvatar}
+				onchange={async () => { await save('imageIncludeAvatar', !s.imageIncludeAvatar); }}
+			/>
+		</div>
 	</div>
 </div>

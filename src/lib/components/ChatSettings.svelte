@@ -39,6 +39,8 @@
 			overrideImageProviderId?: number | null;
 			overrideImageModel?: string | null;
 			overrideImagePromptTemplate?: string | null;
+			overrideImageIncludeAvatar?: boolean | null;
+			overrideImageIncludeCharacterDesc?: boolean | null;
 			compactionSummary?: string | null;
 			compactedUpToMessageId?: number | null;
 			previousCompactedUpToMessageId?: number | null;
@@ -78,6 +80,8 @@
 	let imageProviderIdOverride = $state<number | null>(null);
 	let imageModelOverride = $state<string | null>(null);
 	let imagePromptTemplateOverride = $state<string>('');
+	let imageIncludeAvatarOverride = $state<boolean | null>(null);
+	let imageIncludeCharacterDescOverride = $state<boolean | null>(null);
 	let imageModelList = $state<string[]>([]);
 	let imageModelLoading = $state(false);
 	let compactingNow = $state(false);
@@ -131,6 +135,8 @@
 				imageProviderIdOverride = chat.overrideImageProviderId ?? null;
 				imageModelOverride = chat.overrideImageModel ?? null;
 				imagePromptTemplateOverride = chat.overrideImagePromptTemplate ?? '';
+				imageIncludeAvatarOverride = chat.overrideImageIncludeAvatar ?? null;
+				imageIncludeCharacterDescOverride = chat.overrideImageIncludeCharacterDesc ?? null;
 				compactionSummaryDraft = chat.compactionSummary ?? '';
 			});
 		}
@@ -276,6 +282,8 @@
 			overrideImageProviderId: imageProviderIdOverride,
 			overrideImageModel: imageModelOverride || null,
 			overrideImagePromptTemplate: imagePromptTemplateOverride.trim() ? imagePromptTemplateOverride : null,
+			overrideImageIncludeAvatar: imageIncludeAvatarOverride,
+			overrideImageIncludeCharacterDesc: imageIncludeCharacterDescOverride,
 			compactionSummary: compactionSummaryDraft.trim() ? compactionSummaryDraft : null,
 		};
 		onclose();
@@ -528,6 +536,25 @@
 										placeholder={`Generate an illustration that depicts: {{message}}`}
 									/>
 								</SettingRow>
+
+								<ToggleSwitch
+									checked={imageIncludeCharacterDescOverride === true}
+									label="Include character description"
+									description={imageIncludeCharacterDescOverride === null ? 'Using global setting' : 'Per-chat override'}
+									onchange={(next) => { imageIncludeCharacterDescOverride = next; }}
+									canReset={imageIncludeCharacterDescOverride !== null}
+									onreset={() => { imageIncludeCharacterDescOverride = null; }}
+									resetTooltip="Reset to global default"
+								/>
+								<ToggleSwitch
+									checked={imageIncludeAvatarOverride === true}
+									label="Include character avatar as reference image"
+									description={imageIncludeAvatarOverride === null ? 'Using global setting' : 'Per-chat override'}
+									onchange={(next) => { imageIncludeAvatarOverride = next; }}
+									canReset={imageIncludeAvatarOverride !== null}
+									onreset={() => { imageIncludeAvatarOverride = null; }}
+									resetTooltip="Reset to global default"
+								/>
 							</div>
 						</div>
 

@@ -1,17 +1,19 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, readFile } from 'fs/promises';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { eq, and, asc } from 'drizzle-orm';
 import { db } from '$lib/db/index.js';
-import { messages, chats, providers, messageImages, userSettings } from '$lib/db/schema.js';
+import { messages, chats, providers, messageImages, userSettings, characters } from '$lib/db/schema.js';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { ApiError } from '$lib/server/apiError.js';
 import { providerProfiles } from '$lib/providers/profiles.js';
 import { generateImage, ImageGenError } from '$lib/server/imageGen.js';
 import { parseSwipes } from '$lib/messageJson.js';
+import { getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
 
 const CACHE_DIR = join(process.cwd(), 'data', 'image-cache');
 
@@ -26,6 +28,16 @@ function publicImage(row: typeof messageImages.$inferSelect) {
 		isActive: !!row.isActive,
 		createdAt: row.createdAt ?? null
 	};
+}
+
+function extToMime(ext: string): string {
+	switch (ext) {
+		case '.png': return 'image/png';
+		case '.jpg': case '.jpeg': return 'image/jpeg';
+		case '.webp': return 'image/webp';
+		case '.gif': return 'image/gif';
+		default: return 'image/png';
+	}
 }
 
 // GET: list every image swipe attached to this message (active first, then by creation).
@@ -132,10 +144,71 @@ export const POST: RequestHandler = async (event) => {
 			? tmplGlobal
 			: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}');
 
+	// Resolve the two character-context toggles. Per-chat override wins; null
+	// means "inherit global".
+	const includeAvatarGlobal = db.select().from(userSettings)
+		.where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'imageIncludeAvatar')))
+		.get()?.value === 'true';
+	const includeDescGlobal = db.select().from(userSettings)
+		.where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'imageIncludeCharacterDesc')))
+		.get()?.value === 'true';
+	const includeAvatar = chat.overrideImageIncludeAvatar == null
+		? includeAvatarGlobal
+		: !!chat.overrideImageIncludeAvatar;
+	const includeDesc = chat.overrideImageIncludeCharacterDesc == null
+		? includeDescGlobal
+		: !!chat.overrideImageIncludeCharacterDesc;
+
+	// Pull character row only if we actually need it.
+	let character: typeof characters.$inferSelect | undefined;
+	if (includeAvatar || includeDesc) {
+		character = db.select().from(characters).where(eq(characters.id, chat.characterId)).get();
+	}
+
 	// Use the currently active swipe content as the source.
 	const swipes = parseSwipes(message.swipes);
 	const source = swipes[message.swipeIndex ?? 0] ?? message.content ?? '';
-	const finalPrompt = template.replaceAll('{{message}}', source);
+	let finalPrompt = template.replaceAll('{{message}}', source);
+
+	// Prepend a character context block. If we're also sending the avatar as a
+	// reference image, tell the model explicitly to use it — otherwise it may
+	// just describe the reference back at you instead of using it.
+	if (includeDesc && character?.description?.trim()) {
+		const charBlock = includeAvatar
+			? `The character in the reference image is ${character.name}. Description: ${character.description.trim()}\n\nUse this character (matching the reference image and description) as the subject of the following scene:\n\n`
+			: `Character: ${character.name}. Description: ${character.description.trim()}\n\nDepict this character in the following scene:\n\n`;
+		finalPrompt = charBlock + finalPrompt;
+	} else if (includeAvatar && character) {
+		finalPrompt = `Use the character shown in the reference image as the subject of the following scene. Match their appearance closely.\n\n${finalPrompt}`;
+	}
+
+	// Resolve the reference image bytes if requested + available.
+	let referenceImage: { bytes: Buffer; mime: string } | undefined;
+	if (includeAvatar && character?.avatarPath) {
+		const basename = character.avatarPath.split('/').pop() || '';
+		const originalPath = getOriginalAvatarPath(basename);
+		try {
+			if (originalPath && existsSync(originalPath)) {
+				const ext = originalPath.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? '.png';
+				referenceImage = { bytes: await readFile(originalPath), mime: extToMime(ext) };
+			} else {
+				const optimized = join(process.cwd(), 'static', character.avatarPath);
+				if (existsSync(optimized)) {
+					const ext = optimized.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? '.webp';
+					referenceImage = { bytes: await readFile(optimized), mime: extToMime(ext) };
+				}
+			}
+		} catch (err) {
+			event.locals.logger?.warn('image gen: failed to read avatar', { err: (err as Error).message });
+		}
+	}
+
+	// Reference image is only meaningful for capabilities that can actually
+	// consume one. ComfyUI is workflow-dependent (would need an image-load
+	// node id from the user), so skip there.
+	if (referenceImage && capability === 'comfyui') {
+		referenceImage = undefined;
+	}
 
 	// Generate.
 	let result;
@@ -145,6 +218,7 @@ export const POST: RequestHandler = async (event) => {
 			apiKey: provider.apiKey || '',
 			model,
 			prompt: finalPrompt,
+			referenceImage,
 			comfyWorkflow: provider.imageComfyWorkflow ?? '',
 			comfyPromptNodeId: provider.imageComfyPromptNodeId ?? ''
 		});

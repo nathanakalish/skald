@@ -106,6 +106,9 @@ export const chats = sqliteTable('chats', {
 	overrideImageProviderId: integer('override_image_provider_id').references((): AnySQLiteColumn => providers.id, { onDelete: 'set null' }),
 	overrideImageModel: text('override_image_model'),
 	overrideImagePromptTemplate: text('override_image_prompt_template'),
+	// Null = inherit the global toggle. 0/1 = explicit override.
+	overrideImageIncludeAvatar: integer('override_image_include_avatar', { mode: 'boolean' }),
+	overrideImageIncludeCharacterDesc: integer('override_image_include_character_desc', { mode: 'boolean' }),
 	unread: integer('unread').default(0),
 	muted: integer('muted', { mode: 'boolean' }).default(false),
 	useCharacterTheme: integer('use_character_theme', { mode: 'boolean' }).default(true),
