@@ -220,12 +220,12 @@
 		};
 	});
 
-	// Long-background recovery: if the tab was hidden for > 60s, the SSE
-	// stream has likely gone stale (mobile browsers freeze sockets) and the
-	// active chat may have drifted. Re-fetch the visible chat data and let
-	// connection.svelte.ts handle the SSE reconnect on its own visibility
-	// listener. Also drains any "while you were away" toast queue.
-	const STALE_THRESHOLD_MS = 60_000;
+	// Long-background recovery: when the tab comes back to the foreground we
+	// always refetch the visible chat and the sidebar list. The SSE replay
+	// buffer is small (5 min / 500 events) and mobile browsers freeze sockets,
+	// so any drift longer than the staleness window can silently lose updates.
+	// Cheap to refetch and worth it for the "latest info on focus" guarantee.
+	const STALE_THRESHOLD_MS = 10_000;
 	let hiddenSince: number | null = null;
 	let pendingAwayToasts: { chatId: number; characterName: string; characterAvatar: string | null; preview: string }[] = [];
 	function flushAwayToasts() {
@@ -249,12 +249,20 @@
 			const elapsed = hiddenSince ? Date.now() - hiddenSince : 0;
 			hiddenSince = null;
 			flushAwayToasts();
-			if (elapsed > STALE_THRESHOLD_MS && activeChatId) {
-				loadChat(activeChatId);
+			if (elapsed > STALE_THRESHOLD_MS) {
+				if (activeChatId) loadChat(activeChatId);
+				// Sidebar list can also drift (titles, unread counts, last message).
+				void chatsStore.load(true);
 			}
 		};
 		document.addEventListener('visibilitychange', handler);
-		return () => document.removeEventListener('visibilitychange', handler);
+		// `focus` catches the desktop case where the window regains focus without
+		// a visibility transition (clicking from another window into this one).
+		window.addEventListener('focus', handler);
+		return () => {
+			document.removeEventListener('visibilitychange', handler);
+			window.removeEventListener('focus', handler);
+		};
 	});
 
 	// PIN lock: hydrate synchronously (NOT in $effect) so the locked state
@@ -1205,18 +1213,16 @@
 		});
 	});
 
-	// When the chat view re-appears (panel closed) AND a generation is in
-	// flight for this chat, force a fresh fetch so ChatView remounts with
-	// up-to-date messages — including the user's most recent message and,
-	// for regenerations, the original assistant message at its real id (so
-	// hydration can target it precisely instead of appending a duplicate).
-	// We skip the refetch when no stream is in flight because the SSE
-	// message:* patching keeps the cache fresh.
+	// When the chat view re-appears (panel closed) force a fresh fetch so it
+	// remounts with up-to-date messages — including any user/assistant turn
+	// that arrived (or completed) while another panel was on screen. SSE
+	// patching usually keeps things in sync, but a quick refetch is the only
+	// way to guarantee we don't show a stale view on switch-back.
 	let prevChatViewShown = false;
 	$effect(() => {
 		const shown = !!activeChatId && !showSettings && !showCharacters && !showLorebooks && !showPersonas;
 		untrack(() => {
-			if (shown && !prevChatViewShown && activeChatId && generationsStore.has(activeChatId)) {
+			if (shown && !prevChatViewShown && activeChatId) {
 				loadChat(activeChatId);
 			}
 			prevChatViewShown = shown;
