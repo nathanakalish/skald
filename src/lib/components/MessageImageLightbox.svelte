@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createModalState } from '$lib/modal.svelte.js';
-	import { X, ChevronLeft, ChevronRight, RefreshCw, Trash2, Download, Loader2 } from 'lucide-svelte';
+	import { X, ChevronLeft, ChevronRight, RefreshCw, Trash2, Download, Loader2, Info } from 'lucide-svelte';
 	import { tooltip } from '$lib/tooltip.js';
 
 	interface ImageItem {
@@ -41,6 +41,15 @@
 	const currentIdx = $derived(images.findIndex((im) => im.id === viewingId));
 	const current = $derived(currentIdx >= 0 ? images[currentIdx] : null);
 	const total = $derived(images.length);
+
+	// Captions can be very long (character description + scene text), so they're
+	// hidden by default and toggled via the Info button in the toolbar.
+	let showPrompt = $state(false);
+	$effect(() => {
+		// Reset when switching images so the next one starts collapsed too.
+		viewingId;
+		showPrompt = false;
+	});
 
 	function go(delta: number) {
 		if (total === 0) return;
@@ -115,8 +124,8 @@
 				{/if}
 			</div>
 
-			{#if current.prompt}
-				<div class="max-w-2xl rounded-md bg-black/40 px-3 py-2 text-center text-xs text-white/80 backdrop-blur-sm">
+			{#if current.prompt && showPrompt}
+				<div class="max-h-32 max-w-2xl overflow-y-auto whitespace-pre-wrap rounded-md bg-black/60 px-3 py-2 text-center text-xs text-white/80 backdrop-blur-sm">
 					{current.prompt}
 				</div>
 			{/if}
@@ -125,6 +134,18 @@
 				{#if total > 1}
 					<span class="px-2 text-xs tabular-nums text-white/80">{currentIdx + 1}/{total}</span>
 					<span class="h-4 w-px bg-white/20"></span>
+				{/if}
+				{#if current.prompt}
+					<button
+						type="button"
+						onclick={() => { showPrompt = !showPrompt; }}
+						class="flex h-8 w-8 items-center justify-center rounded-full text-white/90 transition hover:bg-white/10 hover:text-white {showPrompt ? 'bg-white/10' : ''}"
+						use:tooltip={showPrompt ? 'Hide prompt' : 'Show prompt'}
+						aria-label={showPrompt ? 'Hide prompt' : 'Show prompt'}
+						aria-pressed={showPrompt}
+					>
+						<Info class="h-4 w-4" />
+					</button>
 				{/if}
 				<a
 					href={`/api/images/cache/${current.filePath}?original=1`}
