@@ -60,23 +60,39 @@ async function openaiImageGen(input: ImageGenInput): Promise<ImageGenResult> {
 	await guard(input.endpoint);
 	const base = input.endpoint.replace(/\/$/, '');
 	const url = `${base}/images/generations`;
+	// `response_format` is rejected by gpt-image-* (it always returns b64_json
+	// and 400s if you send the param). dall-e-* accepts it but the response
+	// handler below copes with both b64_json and url returns, so it's safe to
+	// just omit the param across the board.
+	const body: Record<string, unknown> = {
+		model: input.model,
+		prompt: input.prompt,
+		n: 1
+	};
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
 		},
-		body: JSON.stringify({
-			model: input.model,
-			prompt: input.prompt,
-			n: 1,
-			response_format: 'b64_json'
-		})
+		body: JSON.stringify(body)
 	});
 	if (!res.ok) {
 		const text = await res.text().catch(() => '');
 		logger.warn('image gen: openai-compat error', { status: res.status, body: text.slice(0, 500) });
-		throw new ImageGenError(`Image provider returned HTTP ${res.status}`, res.status);
+		// Try to surface the upstream error message so users can actually
+		// diagnose 400s (e.g. unknown model, content-policy refusals).
+		let detail = '';
+		try {
+			const parsed = JSON.parse(text);
+			detail = parsed?.error?.message || parsed?.message || '';
+		} catch {
+			detail = text.slice(0, 200);
+		}
+		throw new ImageGenError(
+			`Image provider returned HTTP ${res.status}${detail ? `: ${detail}` : ''}`,
+			res.status
+		);
 	}
 	const data = await res.json() as { data?: Array<{ b64_json?: string; url?: string }> };
 	const entry = data?.data?.[0];
