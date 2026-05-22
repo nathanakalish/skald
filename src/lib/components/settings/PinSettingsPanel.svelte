@@ -2,6 +2,7 @@
 	import { KeyRound, Lock, Unlock } from 'lucide-svelte';
 	import { pinLock } from '$lib/stores/pinLock.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	type PinPolicy = 'on-focus' | 'on-open' | 'timeout';
 
@@ -171,11 +172,11 @@
 	{#if mode === 'idle' && !editingPolicy}
 		<div class="flex flex-wrap gap-2">
 			{#if pinLock.enabled}
-				<button onclick={startPolicyEdit} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Change policy</button>
-				<button onclick={startChange} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Change PIN</button>
-				<button onclick={startRemove} class="rounded-lg border border-destructive/30 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10">Remove PIN</button>
+				<Button size="sm" onclick={startPolicyEdit}>Change policy</Button>
+				<Button size="sm" onclick={startChange}>Change PIN</Button>
+				<Button size="sm" variant="destructive" onclick={startRemove}>Remove PIN</Button>
 			{:else}
-				<button onclick={startSet} class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Set PIN</button>
+				<Button size="sm" variant="primary" onclick={startSet}>Set PIN</Button>
 			{/if}
 		</div>
 	{/if}
@@ -214,8 +215,8 @@
 				</div>
 			</div>
 			<div class="flex justify-end gap-2">
-				<button onclick={() => (editingPolicy = false)} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
-				<button onclick={savePolicy} disabled={busy} class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Save</button>
+				<Button size="sm" onclick={() => (editingPolicy = false)}>Cancel</Button>
+				<Button size="sm" variant="primary" disabled={busy} onclick={savePolicy}>Save</Button>
 			</div>
 		</div>
 	{/if}
@@ -255,8 +256,8 @@
 			</div>
 			{#if formError}<p class="text-sm text-destructive">{formError}</p>{/if}
 			<div class="flex justify-end gap-2">
-				<button onclick={cancel} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
-				<button onclick={submitSet} disabled={busy} class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Set PIN</button>
+				<Button size="sm" onclick={cancel}>Cancel</Button>
+				<Button size="sm" variant="primary" disabled={busy} onclick={submitSet}>Set PIN</Button>
 			</div>
 		</div>
 	{/if}
@@ -280,8 +281,8 @@
 			</div>
 			{#if formError}<p class="text-sm text-destructive">{formError}</p>{/if}
 			<div class="flex justify-end gap-2">
-				<button onclick={cancel} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
-				<button onclick={submitChange} disabled={busy} class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Update</button>
+				<Button size="sm" onclick={cancel}>Cancel</Button>
+				<Button size="sm" variant="primary" disabled={busy} onclick={submitChange}>Update</Button>
 			</div>
 		</div>
 	{/if}
@@ -293,8 +294,8 @@
 				class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
 			{#if formError}<p class="text-sm text-destructive">{formError}</p>{/if}
 			<div class="flex justify-end gap-2">
-				<button onclick={cancel} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
-				<button onclick={submitRemove} disabled={busy} class="rounded-lg bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50">Remove PIN</button>
+				<Button size="sm" onclick={cancel}>Cancel</Button>
+				<Button size="sm" variant="destructive" disabled={busy} onclick={submitRemove}>Remove PIN</Button>
 			</div>
 		</div>
 	{/if}

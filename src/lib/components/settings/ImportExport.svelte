@@ -9,6 +9,7 @@
 	import { lorebooksStore } from '$lib/stores/lorebooks.svelte.js';
 	import { chatsStore } from '$lib/stores/chats.svelte.js';
 	import ImportResolverModal from '$lib/components/ImportResolverModal.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	interface Props {
 		onchatimported?: (chatId: number) => void;
@@ -512,26 +513,17 @@
 				{/if}
 
 				<div class="flex flex-wrap items-center gap-2">
-					<button
+					<Button
+						variant="primary"
+						size="sm"
 						type="button"
-						onclick={startEverything}
 						disabled={backupRunning}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{#if backupRunning}
-							<Loader2 class="h-4 w-4 animate-spin" /> Building in background…
-						{:else}
-							<Package class="h-4 w-4" /> Build backup
-						{/if}
-					</button>
+						loading={backupRunning}
+						icon={backupRunning ? undefined : Package}
+						onclick={startEverything}
+					>{backupRunning ? 'Building in background…' : 'Build backup'}</Button>
 					{#if backupReady}
-						<button
-							type="button"
-							onclick={downloadEverything}
-							class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-						>
-							<Download class="h-4 w-4" /> Download ready backup
-						</button>
+						<Button size="sm" type="button" icon={Download} onclick={downloadEverything}>Download ready backup</Button>
 					{/if}
 				</div>
 			</div>
@@ -605,15 +597,15 @@
 						<span>Include chats with each character</span>
 					</label>
 
-					<button
+					<Button
+						variant="primary"
+						size="sm"
 						type="button"
-						onclick={exportCharacters}
 						disabled={exportingChars || selectedCharIds.size === 0}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{#if exportingChars}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
-						Export {pluralize(selectedCharIds.size, 'character')}
-					</button>
+						loading={exportingChars}
+						icon={exportingChars ? undefined : Download}
+						onclick={exportCharacters}
+					>Export {pluralize(selectedCharIds.size, 'character')}</Button>
 				{/if}
 			</div>
 		{/if}
@@ -683,15 +675,15 @@
 						{/each}
 					</div>
 
-					<button
+					<Button
+						variant="primary"
+						size="sm"
 						type="button"
-						onclick={exportLorebooks}
 						disabled={exportingLorebooks || selectedLorebookIds.size === 0}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{#if exportingLorebooks}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
-						Export {pluralize(selectedLorebookIds.size, 'lorebook')}
-					</button>
+						loading={exportingLorebooks}
+						icon={exportingLorebooks ? undefined : Download}
+						onclick={exportLorebooks}
+					>Export {pluralize(selectedLorebookIds.size, 'lorebook')}</Button>
 				{/if}
 			</div>
 		{/if}
@@ -771,15 +763,15 @@
 						<span>Include character card(s) with chats</span>
 					</label>
 
-					<button
+					<Button
+						variant="primary"
+						size="sm"
 						type="button"
-						onclick={exportChats}
 						disabled={exportingChats || selectedChatIds.size === 0}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{#if exportingChats}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
-						Export {pluralize(selectedChatIds.size, 'chat')}
-					</button>
+						loading={exportingChats}
+						icon={exportingChats ? undefined : Download}
+						onclick={exportChats}
+					>Export {pluralize(selectedChatIds.size, 'chat')}</Button>
 				{/if}
 			</div>
 		{/if}
@@ -869,7 +861,7 @@
 				</div>
 			</div>
 			<div class="mt-4 flex justify-end">
-				<button onclick={() => { importSummary = null; showProvidersWarning = false; }} class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Done</button>
+				<Button variant="primary" size="sm" onclick={() => { importSummary = null; showProvidersWarning = false; }}>Done</Button>
 			</div>
 		</div>
 	</div>

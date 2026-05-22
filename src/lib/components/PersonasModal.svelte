@@ -7,6 +7,9 @@
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
 	import SettingRow from '$lib/components/settings/SettingRow.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { personasStore } from '$lib/stores/personas.svelte.js';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
@@ -208,20 +211,8 @@
 			<div class="flex items-center justify-between border-b border-border px-6 py-4">
 				<h2 class="text-lg font-semibold">Personas</h2>
 				<div class="flex items-center gap-2">
-					<button
-						onclick={() => (showCreateForm = !showCreateForm)}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-					>
-						<Plus class="h-4 w-4" />
-						Create
-					</button>
-					<button
-						onclick={onclose}
-						aria-label="Close"
-						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
-					>
-						<X class="h-4 w-4" />
-					</button>
+					<Button variant="primary" size="sm" icon={Plus} onclick={() => (showCreateForm = !showCreateForm)}>Create</Button>
+					<IconButton icon={X} ariaLabel="Close" onclick={onclose} />
 				</div>
 			</div>
 
@@ -266,33 +257,15 @@
 								Set as default persona
 							</label>
 							<div class="flex justify-end gap-3 pt-1">
-								<button
-									onclick={() => {
-										showCreateForm = false;
-										resetForm();
-									}}
-									class="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-accent"
-								>
-									Cancel
-								</button>
-								<button
-									onclick={createPersona}
-									disabled={!name.trim()}
-									class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-								>
-									Create
-								</button>
+								<Button onclick={() => { showCreateForm = false; resetForm(); }}>Cancel</Button>
+								<Button variant="primary" disabled={!name.trim()} onclick={createPersona}>Create</Button>
 							</div>
 						</div>
 					</div>
 				{/if}
 
 				{#if personas.length === 0 && !showCreateForm}
-					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-						<User class="mb-4 h-12 w-12 opacity-30" />
-						<p class="text-lg">No personas yet</p>
-						<p class="mt-1 text-sm">Create a persona to set your name and description</p>
-					</div>
+					<EmptyState icon={User} title="No personas yet" description="Create a persona to set your name and description" />
 				{:else}
 					<div class="space-y-3">
 						{#each personas as persona}
@@ -330,8 +303,8 @@
 											Set as default persona
 										</label>
 										<div class="flex justify-end gap-3">
-											<button onclick={() => { editingId = null; resetForm(); }} class="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-accent">Cancel</button>
-											<button onclick={saveEdit} disabled={!name.trim()} class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">Save</button>
+											<Button onclick={() => { editingId = null; resetForm(); }}>Cancel</Button>
+											<Button variant="primary" disabled={!name.trim()} onclick={saveEdit}>Save</Button>
 										</div>
 									</div>
 								{:else}

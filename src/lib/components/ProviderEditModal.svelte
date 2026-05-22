@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { tooltip } from '$lib/tooltip.js';
 	import { X, Save, Trash2, TestTube, Loader2, Check, RefreshCw, ChevronDown, Sliders, Server } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { untrack } from 'svelte';
@@ -330,21 +332,9 @@
 				<h2 class="text-lg font-semibold">{isCreate ? 'New Provider' : `Edit ${name || 'Provider'}`}</h2>
 				<div class="flex items-center gap-2">
 					{#if !isCreate}
-						<button
-							onclick={() => (showDeleteConfirm = true)}
-							class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-							use:tooltip={'Delete provider'}
-						>
-							<Trash2 class="h-4 w-4" />
-						</button>
+						<IconButton icon={Trash2} ariaLabel="Delete provider" variant="destructive" size="sm" title="Delete provider" onclick={() => (showDeleteConfirm = true)} />
 					{/if}
-					<button
-						onclick={onclose}
-						aria-label="Close"
-						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
-					>
-						<X class="h-4 w-4" />
-					</button>
+					<IconButton icon={X} ariaLabel="Close" onclick={onclose} />
 				</div>
 			</div>
 
@@ -598,24 +588,16 @@
 
 			<!-- Footer -->
 			<div class="flex items-center justify-end gap-3 border-t border-border px-5 py-3.5">
-				<button
-					onclick={onclose}
-					class="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-accent"
-				>
-					Cancel
-				</button>
-				<button
+				<Button onclick={onclose}>Cancel</Button>
+				<Button
+					variant="primary"
+					icon={saving ? undefined : Save}
+					loading={saving}
 					onclick={save}
 					disabled={!name.trim() || saving}
-					class="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
 				>
-					{#if saving}
-						<Loader2 class="h-3.5 w-3.5 animate-spin" />
-					{:else}
-						<Save class="h-3.5 w-3.5" />
-					{/if}
 					{isCreate ? 'Add Provider' : 'Save'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -634,14 +616,8 @@
 			<h3 class="text-base font-semibold">Delete Provider</h3>
 			<p class="mt-2 text-sm text-muted-foreground">Are you sure you want to delete <strong>{name || 'this provider'}</strong>? This cannot be undone.</p>
 			<div class="mt-4 flex justify-end gap-2">
-				<button
-					onclick={() => (showDeleteConfirm = false)}
-					class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
-				>Cancel</button>
-				<button
-					onclick={deleteProvider}
-					class="rounded-lg bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
-				>Delete</button>
+				<Button size="sm" onclick={() => (showDeleteConfirm = false)}>Cancel</Button>
+				<Button variant="destructive" size="sm" onclick={deleteProvider}>Delete</Button>
 			</div>
 		</div>
 	</div>

@@ -4,6 +4,8 @@
 	import { providersStore } from '$lib/stores/providers.svelte.js';
 	import { haptic } from '$lib/utils/haptics.js';
 	import ProviderEditModal from '$lib/components/ProviderEditModal.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
 
 	interface Props {
 		providers: any[];
@@ -203,13 +205,7 @@
 			<h3 class="text-base font-semibold">LLM Providers</h3>
 			<p class="text-sm text-muted-foreground">Configure your AI model providers</p>
 		</div>
-		<button
-			onclick={openNewProvider}
-			class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-		>
-			<Plus class="h-4 w-4" />
-			Add Provider
-		</button>
+		<Button variant="primary" size="sm" icon={Plus} onclick={openNewProvider}>Add Provider</Button>
 	</div>
 
 	{#if (providers ?? []).length === 0}
@@ -274,27 +270,9 @@
 
 				<!-- Action buttons -->
 				<div class="flex shrink-0 gap-1">
-					<button
-						onclick={(e) => { e.stopPropagation(); cloneProvider(provider); }}
-						class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-						use:tooltip={'Clone provider'}
-					>
-						<Copy class="h-3.5 w-3.5" />
-					</button>
-					<button
-						onclick={(e) => { e.stopPropagation(); openEditProvider(provider); }}
-						class="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-						use:tooltip={'Edit provider'}
-					>
-						<Pencil class="h-3.5 w-3.5" />
-					</button>
-					<button
-						onclick={(e) => requestDeleteProvider(provider.id, provider.name, e)}
-						class="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-						use:tooltip={'Delete provider'}
-					>
-						<Trash2 class="h-3.5 w-3.5" />
-					</button>
+					<IconButton icon={Copy} ariaLabel="Clone provider" title="Clone provider" size="sm" onclick={(e) => { e.stopPropagation(); cloneProvider(provider); }} />
+					<IconButton icon={Pencil} ariaLabel="Edit provider" title="Edit provider" size="sm" onclick={(e) => { e.stopPropagation(); openEditProvider(provider); }} />
+					<IconButton icon={Trash2} ariaLabel="Delete provider" title="Delete provider" size="sm" variant="destructive" onclick={(e) => requestDeleteProvider(provider.id, provider.name, e)} />
 				</div>
 			</div>
 		{/each}
@@ -320,14 +298,8 @@
 			<h3 class="text-base font-semibold">Delete Provider</h3>
 			<p class="mt-2 text-sm text-muted-foreground">Are you sure you want to delete <strong>{confirmDeleteName}</strong>? This cannot be undone.</p>
 			<div class="mt-4 flex justify-end gap-2">
-				<button
-					onclick={cancelDeleteProvider}
-					class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
-				>Cancel</button>
-				<button
-					onclick={confirmDeleteProvider}
-					class="rounded-lg bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
-				>Delete</button>
+				<Button size="sm" onclick={cancelDeleteProvider}>Cancel</Button>
+				<Button variant="destructive" size="sm" onclick={confirmDeleteProvider}>Delete</Button>
 			</div>
 		</div>
 	</div>

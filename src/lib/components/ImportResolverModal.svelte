@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { X, Upload, Link2, Plus, AlertCircle, Check, Loader2 } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { charactersStore } from '$lib/stores/characters.svelte.js';
 
@@ -130,7 +132,7 @@
 				<h3 class="truncate text-base font-semibold">Link chat to a character</h3>
 				<p class="truncate text-xs text-muted-foreground">{workingIdx + 1} of {items.length} unresolved</p>
 			</div>
-			<button onclick={onclose} class="rounded-lg p-1 text-muted-foreground hover:bg-accent" aria-label="Close"><X class="h-4 w-4" /></button>
+			<IconButton icon={X} ariaLabel="Close" size="sm" onclick={onclose} />
 		</div>
 
 		<div class="flex-1 overflow-y-auto p-4 space-y-4">
@@ -189,17 +191,15 @@
 					<p class="text-sm font-medium">Import a character file</p>
 				</div>
 				<p class="mb-2 text-xs text-muted-foreground">Upload a .png card or .json — we'll import it and link this chat to it.</p>
-				<button
+				<Button
+					size="sm"
+					icon={importingChar ? undefined : Upload}
+					loading={importingChar}
 					onclick={() => charFileInput?.click()}
 					disabled={importingChar}
-					class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent disabled:opacity-50"
 				>
-					{#if importingChar}
-						<Loader2 class="h-3.5 w-3.5 animate-spin" /> Importing…
-					{:else}
-						<Upload class="h-3.5 w-3.5" /> Choose file…
-					{/if}
-				</button>
+					{importingChar ? 'Importing…' : 'Choose file…'}
+				</Button>
 				<input bind:this={charFileInput} type="file" accept=".png,.json" class="hidden" onchange={importCharacterFile} />
 			</div>
 
@@ -215,24 +215,22 @@
 						bind:value={stubName}
 						class="flex-1 rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 					/>
-					<button
+					<Button
+						variant="primary"
+						size="sm"
+						icon={creatingStub ? undefined : Plus}
+						loading={creatingStub}
 						onclick={createStub}
 						disabled={creatingStub || !stubName.trim()}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
 					>
-						{#if creatingStub}
-							<Loader2 class="h-3.5 w-3.5 animate-spin" />
-						{:else}
-							<Plus class="h-3.5 w-3.5" />
-						{/if}
 						Create
-					</button>
+					</Button>
 				</div>
 			</div>
 		</div>
 
 		<div class="flex justify-end gap-2 border-t border-border px-4 py-3">
-			<button onclick={skip} class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent">Skip this chat</button>
+			<Button size="sm" onclick={skip}>Skip this chat</Button>
 		</div>
 	</div>
 </div>

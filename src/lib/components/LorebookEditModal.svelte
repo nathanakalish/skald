@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { X, Plus, Trash2, GripVertical } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { untrack } from 'svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { focusTrap } from '$lib/focusTrap.js';
@@ -144,13 +147,7 @@
 					{lorebookName.toLowerCase().includes('lorebook') ? lorebookName : `${lorebookName} Lorebook`}
 				</h2>
 			</div>
-			<button
-				onclick={addEntry}
-				class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-			>
-				<Plus class="h-4 w-4" />
-				Add Entry
-			</button>
+			<Button variant="primary" size="sm" icon={Plus} onclick={addEntry}>Add Entry</Button>
 		</div>
 
 		<div class="@container flex-1 overflow-y-auto p-6">
@@ -185,9 +182,7 @@
 					</div>
 
 					{#if entries.length === 0}
-						<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-							<p>No entries yet. Add an entry to get started.</p>
-						</div>
+						<EmptyState compact title="No entries yet" description="Add an entry to get started." />
 					{:else}
 						{#each entries as entry (entry.id)}
 							<div class="rounded-xl border border-border bg-background p-4">
@@ -207,12 +202,7 @@
 											Case sensitive
 										</label>
 									</div>
-									<button
-										onclick={() => deleteEntry(entry.id)}
-										class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-									>
-										<Trash2 class="h-4 w-4" />
-									</button>
+									<IconButton icon={Trash2} ariaLabel="Delete entry" variant="destructive" size="sm" onclick={() => deleteEntry(entry.id)} />
 								</div>
 								<div class="grid gap-3 @2xl:grid-cols-2">
 									<SettingRow size="sm" label="Keywords (comma-separated)" htmlFor="emb-entry-kw-{entry.id}">
@@ -258,19 +248,8 @@
 					</h2>
 				</div>
 				<div class="flex items-center gap-2">
-					<button
-						onclick={addEntry}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-					>
-						<Plus class="h-4 w-4" />
-						Add Entry
-					</button>
-					<button
-						onclick={close}
-						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
-					>
-						<X class="h-4 w-4" />
-					</button>
+					<Button variant="primary" size="sm" icon={Plus} onclick={addEntry}>Add Entry</Button>
+					<IconButton icon={X} ariaLabel="Close" onclick={close} />
 				</div>
 			</div>
 
@@ -307,9 +286,7 @@
 						</div>
 
 						{#if entries.length === 0}
-							<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-								<p>No entries yet. Add an entry to get started.</p>
-							</div>
+							<EmptyState compact title="No entries yet" description="Add an entry to get started." />
 						{:else}
 							{#each entries as entry (entry.id)}
 								<div class="rounded-xl border border-border bg-background p-4">
@@ -344,15 +321,7 @@
 												Case sensitive
 											</label>
 										</div>
-										<button
-											onclick={() => deleteEntry(entry.id)}
-											class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-										>
-											<Trash2 class="h-4 w-4" />
-										</button>
-									</div>
-
-									<div class="grid gap-3 @2xl:grid-cols-2">
+									<IconButton icon={Trash2} ariaLabel="Delete entry" variant="destructive" size="sm" onclick={() => deleteEntry(entry.id)} />
 										<SettingRow size="sm" label="Keywords (comma-separated)" htmlFor="entry-kw-{entry.id}">
 											<LimitedInput
 												id="entry-kw-{entry.id}"

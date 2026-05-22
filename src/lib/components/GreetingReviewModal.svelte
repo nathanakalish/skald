@@ -6,6 +6,7 @@
 	import { focusTrap } from '$lib/focusTrap.js';
 	import { renderRoleplay } from '$lib/utils/rp-format.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	interface GreetingResult {
 		index: number;
@@ -235,45 +236,18 @@
 			<div class="flex items-center justify-between border-t border-border px-5 py-3">
 				<div class="flex items-center gap-2">
 					{#if regenerating}
-						<button
-							onclick={stopRegenerate}
-							class="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
-						>
-							<Square class="h-4 w-4" />
-							Stop
-						</button>
+						<Button variant="destructive" size="md" icon={Square} onclick={stopRegenerate}>Stop</Button>
 					{:else}
-						<button
-							onclick={regenerateCurrent}
-							class="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
-						>
-							<RefreshCw class="h-4 w-4" />
-							Regenerate
-						</button>
+						<Button size="md" icon={RefreshCw} onclick={regenerateCurrent}>Regenerate</Button>
 					{/if}
 				</div>
 				<div class="flex items-center gap-2">
-					<button
-						onclick={onclose}
-						class="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
-					>Cancel</button>
+					<Button onclick={onclose}>Cancel</Button>
 					{#if !accepted[activeIndex]}
-						<button
-							onclick={acceptCurrent}
-							class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-						>
-							<Check class="h-4 w-4" />
-							Accept
-						</button>
+						<Button variant="primary" icon={Check} onclick={acceptCurrent}>Accept</Button>
 					{/if}
 					{#if results.length > 1 && !allAccepted}
-						<button
-							onclick={() => onaccept(results)}
-							class="flex items-center gap-2 rounded-lg border border-primary/50 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-						>
-							<CheckCheck class="h-4 w-4" />
-							Accept All
-						</button>
+						<Button variant="text" icon={CheckCheck} onclick={() => onaccept(results)}>Accept All</Button>
 					{/if}
 				</div>
 			</div>

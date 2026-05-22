@@ -2,6 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { pinLock } from '$lib/stores/pinLock.svelte.js';
 	import { KeyRound } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	let pinInput = $state('');
 	let inputEl = $state<HTMLInputElement | undefined>();
@@ -114,11 +115,13 @@
 					<p class="text-center text-sm text-destructive">{error}</p>
 				{/if}
 
-				<button
+				<Button
+					variant="primary"
 					type="submit"
+					fullWidth
+					loading={busy}
 					disabled={busy || lockoutRemainingSec > 0 || pinInput.length < 4}
-					class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-				>{busy ? 'Checking…' : 'Unlock'}</button>
+				>{busy ? 'Checking…' : 'Unlock'}</Button>
 			</form>
 		</div>
 	</div>

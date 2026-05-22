@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '$lib/tooltip.js';
 	import { Pencil, Save, Star, Trash2, User as UserIcon, Upload, X, MoreHorizontal } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import { personasStore, type Persona } from '$lib/stores/personas.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -262,22 +263,18 @@
 		</div>
 		<div class="flex items-center gap-2">
 			{#if editing}
-				<button
+				<Button type="button" size="sm" icon={X} onclick={cancelEdit}>Cancel</Button>
+				<Button
 					type="button"
-					onclick={cancelEdit}
-					class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-				>
-					<X class="h-4 w-4" /> Cancel
-				</button>
-				<button
-					type="button"
+					variant="primary"
+					size="sm"
+					icon={Save}
+					loading={saving}
 					onclick={save}
 					disabled={!name.trim() || saving}
-					class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
 				>
-					<Save class="h-4 w-4" />
 					{saving ? 'Saving…' : isCreate ? 'Create' : 'Save'}
-				</button>
+				</Button>
 			{:else if !isCreate}
 				<div class="relative" data-persona-menu>
 					<button

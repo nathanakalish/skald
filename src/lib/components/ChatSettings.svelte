@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { X, RotateCcw, ChevronDown, Loader2, Monitor, Server, Sliders, UserPen, Archive, MoreHorizontal, RefreshCw } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import Combobox, { type ComboboxItem } from '$lib/components/Combobox.svelte';
 	import { modelsToItems } from '$lib/components/modelItems.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
@@ -791,19 +792,10 @@
 
 			<!-- Footer -->
 			<div class="flex items-center justify-end gap-3 border-t border-border px-5 py-4">
-				<button
-					onclick={onclose}
-					class="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-				>
-					Cancel
-				</button>
-				<button
-					onclick={save}
-					disabled={saving}
-					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-				>
+				<Button variant="ghost" onclick={onclose}>Cancel</Button>
+				<Button variant="primary" onclick={save} loading={saving} disabled={saving}>
 					{saving ? 'Saving...' : 'Save'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>

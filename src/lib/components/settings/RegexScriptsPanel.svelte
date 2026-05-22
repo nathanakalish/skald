@@ -5,6 +5,8 @@
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
@@ -171,13 +173,9 @@
 			</label>
 		</div>
 		<div class="flex gap-2">
-			<button onclick={save} class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-				{editing ? 'Update' : 'Add Script'}
-			</button>
+			<Button variant="primary" size="sm" onclick={save}>{editing ? 'Update' : 'Add Script'}</Button>
 			{#if editing}
-				<button onclick={reset} class="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent/50">
-					Cancel
-				</button>
+				<Button size="sm" onclick={reset}>Cancel</Button>
 			{/if}
 		</div>
 	</div>
@@ -207,12 +205,8 @@
 						</div>
 						<p class="truncate font-mono text-xs text-muted-foreground">{s.findRegex} → {s.replaceString || '(empty)'}</p>
 					</div>
-					<button onclick={() => startEdit(s)} class="shrink-0 rounded p-1 hover:bg-accent/50" use:tooltip={'Edit'}>
-						<Pencil class="h-3.5 w-3.5" />
-					</button>
-					<button onclick={() => remove(s.id)} class="shrink-0 rounded p-1 text-destructive hover:bg-destructive/10" use:tooltip={'Delete'}>
-						<Trash2 class="h-3.5 w-3.5" />
-					</button>
+					<IconButton icon={Pencil} ariaLabel="Edit" title="Edit" size="sm" onclick={() => startEdit(s)} />
+					<IconButton icon={Trash2} ariaLabel="Delete" title="Delete" size="sm" variant="destructive" onclick={() => remove(s.id)} />
 				</div>
 			{/each}
 		</div>

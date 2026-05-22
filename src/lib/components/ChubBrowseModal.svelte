@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { Search, X, Loader2, Globe, BookOpen, Users, Download, AlertTriangle, ArrowLeft, Link2, SlidersHorizontal, Plus, ChevronDown, Check } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { focusTrap } from '$lib/focusTrap.js';
 	import ImageModal from '$lib/components/ImageModal.svelte';
@@ -777,11 +780,11 @@
 						<p class="text-sm">Searching CHUB…</p>
 					</div>
 				{:else if cards.length === 0 && !errorMsg}
-					<div class="flex flex-col items-center justify-center py-16 text-muted-foreground">
-						<Globe class="mb-2 h-8 w-8 opacity-40" />
-						<p class="text-sm">No results.</p>
-						<p class="text-xs">Try a different search or toggle NSFW.</p>
-					</div>
+					<EmptyState
+						icon={Globe}
+						title="No results"
+						description="Try a different search or toggle NSFW."
+					/>
 				{:else if visibleCards.length === 0}
 					<div class="flex flex-col items-center justify-center py-16 text-muted-foreground">
 						<SlidersHorizontal class="mb-2 h-8 w-8 opacity-40" />
@@ -896,26 +899,23 @@
 						</button>
 						<div class="flex items-center gap-2">
 							{#if previewCard}
-								<button
-									onclick={() => openLinkPicker(previewCard!)}
+								<IconButton
+									icon={Link2}
+									ariaLabel="Link to existing"
+									title={`Link this CHUB card to an existing ${activeType} in your library`}
 									disabled={importingPath !== null}
-									use:tooltip={`Link this CHUB card to an existing ${activeType} in your library`}
-									aria-label="Link to existing"
-									class="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-								>
-									<Link2 class="h-4 w-4" />
-								</button>
-								<button
+									onclick={() => openLinkPicker(previewCard!)}
+								/>
+								<Button
+									variant="primary"
+									size="sm"
+									icon={importingPath === previewCard.fullPath ? undefined : Download}
+									loading={importingPath === previewCard.fullPath}
 									onclick={() => attemptImport(previewCard!)}
 									disabled={importingPath !== null}
-									class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
 								>
-									{#if importingPath === previewCard.fullPath}
-										<Loader2 class="h-4 w-4 animate-spin" /> Importing…
-									{:else}
-										<Download class="h-4 w-4" /> Import
-									{/if}
-								</button>
+									{importingPath === previewCard.fullPath ? 'Importing…' : 'Import'}
+								</Button>
 							{/if}
 						</div>
 					</div>

@@ -54,9 +54,11 @@
 		Type,
 		PackageOpen,
 	} from 'lucide-svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import DialogHost from '$lib/components/DialogHost.svelte';
+	import ChatListItem from '$lib/components/ChatListItem.svelte';
 	import { confirm as confirmDialog } from '$lib/dialog.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
 	import ChatView from '$lib/components/ChatView.svelte';
@@ -2008,114 +2010,6 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-{#snippet chatItem(chat: any, i: number, isActive: boolean, isPinned: boolean)}
-	{@const dragOver = reorder.dragOverChatId === chat.id && reorder.dragChatId !== chat.id}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		onclick={() => { if (!chatMenu.longPressFired) openChat(chat.id); }}
-		oncontextmenu={(e: MouseEvent) => chatMenu.open(chat.id, e)}
-		use:staggerOnMount={{ enabled: !debouncedSearch && chatListReady, index: i }}
-		class="group relative mb-0.5 flex w-full cursor-pointer items-center gap-3 rounded-2xl px-2 py-2 text-left transition-[background-color,transform] duration-100 {isActive
-			? 'bg-accent text-accent-foreground'
-			: 'hover:bg-accent/40 active:scale-[0.98]'}"
-		style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
-		ontouchstart={(e: TouchEvent) => chatMenu.startLongPress(chat.id, e)}
-		ontouchmove={(e: TouchEvent) => chatMenu.moveLongPress(e)}
-		ontouchend={() => chatMenu.endLongPress()}
-		ontouchcancel={() => chatMenu.endLongPress()}
-	>
-		<!-- Avatar with online/streaming dot -->
-		<div class="relative shrink-0">
-			{#if chat.characterAvatar}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-				<img
-					src={chat.characterAvatar}
-					alt={chat.characterName}
-					loading="lazy"
-					draggable="false"
-					class="h-12 w-12 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-80"
-					style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
-					onclick={(e) => { e.preventDefault(); e.stopPropagation(); enlargedImage = chat.characterAvatar?.replace('/avatars/', '/avatars/original/') ?? null; }}
-				/>
-			{:else}
-				<div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-base font-semibold text-primary">
-					{chat.characterName[0]}
-				</div>
-			{/if}
-			{#if streamingChats.has(chat.id)}
-				<button
-					type="button"
-					onclick={(e) => { e.preventDefault(); e.stopPropagation(); abortChatById(chat.id); }}
-					use:tooltip={'Stop generating'}
-					aria-label="Stop generating"
-					class="group/stop absolute -bottom-0.5 -right-0.5 flex items-center gap-0.5 rounded-full bg-sidebar/95 px-1 py-0.5 ring-1 ring-border transition-colors hover:bg-destructive hover:ring-destructive"
-				>
-					<span class="flex items-center gap-0.5 group-hover/stop:hidden">
-						<span class="sidebar-typing-dot h-1 w-1 rounded-full bg-emerald-500" style="animation-delay: 0ms"></span>
-						<span class="sidebar-typing-dot h-1 w-1 rounded-full bg-emerald-500" style="animation-delay: 160ms"></span>
-						<span class="sidebar-typing-dot h-1 w-1 rounded-full bg-emerald-500" style="animation-delay: 320ms"></span>
-					</span>
-					<X class="hidden h-2.5 w-2.5 text-destructive-foreground group-hover/stop:block" strokeWidth={3} />
-				</button>
-			{:else if isPinned}
-				<span class="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sidebar text-primary ring-2 ring-sidebar">
-					<Pin class="h-2.5 w-2.5 fill-current" />
-				</span>
-			{/if}
-		</div>
-
-		<!-- Title + preview -->
-		<div class="min-w-0 flex-1">
-			<div class="flex items-center justify-between gap-2">
-				<div class="flex min-w-0 items-center gap-1.5">
-					{#if chat.mode === 'texting'}<Smartphone class="inline h-3 w-3 shrink-0 text-emerald-500" />{:else}<BookOpen class="inline h-3 w-3 shrink-0 text-blue-400" />{/if}
-					{#if renamingChatId === chat.id}
-						<!-- svelte-ignore a11y_autofocus -->
-						<LimitedInput
-							type="text"
-							bind:value={renameValue}
-							autofocus
-							limit={FIELD_LIMITS.name}
-							class="w-full rounded border border-border bg-background px-1 py-0.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-primary"
-							onclick={(e) => e.stopPropagation()}
-							onkeydown={(e) => { if (e.key === 'Enter') renameChat(chat.id); if (e.key === 'Escape') renamingChatId = null; }}
-							onblur={() => renameChat(chat.id)}
-						/>
-					{:else}
-						<span class="truncate text-[15px] font-semibold leading-tight" ondblclick={(e) => { e.stopPropagation(); renamingChatId = chat.id; renameValue = chat.title; }}>{chat.title !== `Chat with ${chat.characterName}` ? chat.title : chat.characterName}</span>
-					{/if}
-				</div>
-				<span class="shrink-0 text-[11px] text-muted-foreground">{formatTime(chat.updatedAt ?? '')}</span>
-			</div>
-			<div class="mt-0.5 flex items-center justify-between gap-2">
-				<p class="truncate text-[13px] {unreadCounts[chat.id] && !isActive ? 'font-semibold text-foreground' : 'text-muted-foreground'}">{@html formatPreview(chat) || '\u00A0'}</p>
-				<div class="flex shrink-0 items-center gap-1">
-					{#if chat.muted}
-						<BellOff class="h-3 w-3 text-muted-foreground" />
-					{/if}
-					{#if unreadCounts[chat.id] && !isActive}
-						{#key unreadCounts[chat.id]}
-							<span class="badge-pop flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{unreadCounts[chat.id]}</span>
-						{/key}
-					{/if}
-				</div>
-			</div>
-		</div>
-
-		<!-- Hover ⋯ menu (desktop only; mobile uses long-press / drag for pin) -->
-		<button
-			onclick={(e) => chatMenu.open(chat.id, e)}
-			class="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-md opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100 {chatMenu.openChatId === chat.id ? '!opacity-100' : ''}"
-			use:tooltip={'More'}
-			aria-label="More actions"
-		>
-			<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
-		</button>
-	</div>
-{/snippet}
-
 <svelte:head>
 	<title>Skald</title>
 </svelte:head>
@@ -2636,16 +2530,14 @@
 								</div>
 							{/each}
 						</div>
+					{:else if searchQuery.trim()}
+						<EmptyState compact title="No matching chats" />
 					{:else}
-						<div class="px-3 py-8 text-center text-sm text-muted-foreground">
-							{#if searchQuery.trim()}
-								No matching chats
-							{:else}
-								<MessageSquare class="mx-auto mb-2 h-8 w-8 opacity-30" />
-								<p>No conversations yet</p>
-								<p class="mt-1 text-xs">Start a new chat to begin</p>
-							{/if}
-						</div>
+						<EmptyState
+							icon={MessageSquare}
+							title="No conversations yet"
+							description="Start a new chat to begin"
+						/>
 					{/if}
 				{:else}
 					{#each allRecentChats as chat, i (chat.id)}
@@ -2658,7 +2550,29 @@
 								axis: 'y'
 							}}
 						>
-							{@render chatItem(chat, i, activeChatId === chat.id, isPinned)}
+							<ChatListItem
+								{chat}
+								index={i}
+								isActive={activeChatId === chat.id}
+								{isPinned}
+								streaming={streamingChats.has(chat.id)}
+								muted={!!chat.muted}
+								unreadCount={unreadCounts[chat.id] ?? 0}
+								staggerEnabled={!debouncedSearch && chatListReady}
+								{renamingChatId}
+								bind:renameValue
+								{chatMenu}
+								onOpen={openChat}
+								onContextMenu={(id, e) => chatMenu.open(id, e)}
+								onAbort={abortChatById}
+								onEnlargeAvatar={(url) => { enlargedImage = url; }}
+								onRenameSubmit={renameChat}
+								onRenameCancel={() => { renamingChatId = null; }}
+								onStartRename={(id, title) => { renamingChatId = id; renameValue = title; }}
+								onMoreClick={(id, e) => chatMenu.open(id, e)}
+								{formatTime}
+								{formatPreview}
+							/>
 						</div>
 					{/each}
 					{#if chatsStore.hasMore && !searchQuery.trim()}

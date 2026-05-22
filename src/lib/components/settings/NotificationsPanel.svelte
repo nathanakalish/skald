@@ -8,6 +8,7 @@
 	import { tooltip } from '$lib/tooltip.js';
 	import ToggleSwitch from '$lib/components/settings/ToggleSwitch.svelte';
 	import SettingRow from '$lib/components/settings/SettingRow.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	interface Props {
 		active: boolean;
@@ -159,16 +160,7 @@
 			<p class="text-sm font-medium text-warning">Notifications require HTTPS</p>
 			<p class="text-xs text-muted-foreground">Web Push uses VAPID, which browsers only allow on secure origins (HTTPS or <code>localhost</code>). Reach Skald over HTTPS to enable notifications.</p>
 		</div>
-		<button
-			type="button"
-			disabled
-			aria-disabled="true"
-			use:tooltip={'HTTPS required for notifications'}
-			class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed"
-		>
-			<Bell class="h-4 w-4" />
-			Enable Notifications
-		</button>
+		<Button variant="primary" type="button" disabled title="HTTPS required for notifications" icon={Bell}>Enable Notifications</Button>
 	{:else if notifPermission === 'unsupported'}
 		<div class="rounded-lg border border-border px-4 py-3">
 			<p class="text-sm text-muted-foreground">Notifications are not supported in this browser.</p>
@@ -180,13 +172,7 @@
 		</div>
 		<p class="text-sm text-muted-foreground">You'll receive alerts when background responses complete.</p>
 	{:else}
-		<button
-			onclick={requestNotifPermission}
-			class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-		>
-			<Bell class="h-4 w-4" />
-			Enable Notifications
-		</button>
+		<Button variant="primary" icon={Bell} onclick={requestNotifPermission}>Enable Notifications</Button>
 		<p class="text-sm text-muted-foreground">Get alerts when background responses complete.</p>
 		{#if notifStatus}
 			<p class="text-xs text-warning">{notifStatus}</p>
@@ -309,30 +295,11 @@
 						<Bell class="h-4 w-4" />
 						<span>Push active on this device</span>
 					</div>
-					<button
-						onclick={unsubscribeFromPush}
-						disabled={pushLoading}
-						class="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
-					>
-						{pushLoading ? 'Working...' : 'Disable'}
-					</button>
+					<Button size="sm" disabled={pushLoading} onclick={unsubscribeFromPush}>{pushLoading ? 'Working...' : 'Disable'}</Button>
 				</div>
-				<button
-					onclick={testPush}
-					disabled={pushLoading}
-					class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
-				>
-					Send test notification
-				</button>
+				<Button size="sm" disabled={pushLoading} onclick={testPush}>Send test notification</Button>
 			{:else}
-				<button
-					onclick={subscribeToPush}
-					disabled={pushLoading}
-					class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-				>
-					<Bell class="h-4 w-4" />
-					{pushLoading ? 'Setting up...' : 'Enable push for this device'}
-				</button>
+				<Button variant="primary" icon={Bell} disabled={pushLoading} onclick={subscribeToPush}>{pushLoading ? 'Setting up...' : 'Enable push for this device'}</Button>
 			{/if}
 			{#if pushStatus}
 				<p class="text-xs text-warning">{pushStatus}</p>

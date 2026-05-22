@@ -3,6 +3,8 @@
 	import { onMount } from 'svelte';
 	import { Pencil, Trash2, Plus, Shield, KeyRound } from 'lucide-svelte';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
@@ -145,13 +147,7 @@
 			<h3 class="text-base font-semibold">User Management</h3>
 			<p class="text-sm text-muted-foreground">Create and manage user accounts</p>
 		</div>
-		<button
-			onclick={() => { showCreateUser = !showCreateUser; createUserError = ''; }}
-			class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-		>
-			<Plus class="h-4 w-4" />
-			Add User
-		</button>
+		<Button variant="primary" size="sm" icon={Plus} onclick={() => { showCreateUser = !showCreateUser; createUserError = ''; }}>Add User</Button>
 	</div>
 
 	{#if showCreateUser}
@@ -184,15 +180,8 @@
 					<p class="text-sm text-destructive">{createUserError}</p>
 				{/if}
 				<div class="flex justify-end gap-2">
-					<button
-						onclick={() => { showCreateUser = false; createUserError = ''; }}
-						class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
-					>Cancel</button>
-					<button
-						onclick={createUser}
-						disabled={!newUsername.trim()}
-						class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-					>Create User</button>
+					<Button size="sm" onclick={() => { showCreateUser = false; createUserError = ''; }}>Cancel</Button>
+					<Button variant="primary" size="sm" disabled={!newUsername.trim()} onclick={createUser}>Create User</Button>
 				</div>
 			</div>
 		</div>
@@ -240,15 +229,8 @@
 								<p class="text-sm text-destructive">{editUserError}</p>
 							{/if}
 							<div class="flex justify-end gap-2">
-								<button
-									onclick={cancelEditUser}
-									class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
-								>Cancel</button>
-								<button
-									onclick={saveEditUser}
-									disabled={!editUsername.trim()}
-									class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-								>Save Changes</button>
+								<Button size="sm" onclick={cancelEditUser}>Cancel</Button>
+								<Button variant="primary" size="sm" disabled={!editUsername.trim()} onclick={saveEditUser}>Save Changes</Button>
 							</div>
 						</div>
 					</div>
@@ -322,14 +304,8 @@
 			<h3 class="text-base font-semibold">Delete User</h3>
 			<p class="mt-2 text-sm text-muted-foreground">Are you sure you want to delete <strong>{confirmDeleteUsername}</strong>? All their data (characters, chats, etc.) will be permanently deleted.</p>
 			<div class="mt-4 flex justify-end gap-2">
-				<button
-					onclick={cancelDeleteUser}
-					class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
-				>Cancel</button>
-				<button
-					onclick={confirmDeleteUser}
-					class="rounded-lg bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
-				>Delete</button>
+				<Button size="sm" onclick={cancelDeleteUser}>Cancel</Button>
+				<Button variant="destructive" size="sm" onclick={confirmDeleteUser}>Delete</Button>
 			</div>
 		</div>
 	</div>
@@ -348,14 +324,8 @@
 			<h3 class="text-base font-semibold">Clear PIN</h3>
 			<p class="mt-2 text-sm text-muted-foreground">Remove the PIN lock for <strong>{confirmClearPinUsername}</strong>? They'll have to set a new one if they want the lock back.</p>
 			<div class="mt-4 flex justify-end gap-2">
-				<button
-					onclick={cancelClearPin}
-					class="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
-				>Cancel</button>
-				<button
-					onclick={confirmClearPin}
-					class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-				>Clear PIN</button>
+				<Button size="sm" onclick={cancelClearPin}>Cancel</Button>
+				<Button variant="primary" size="sm" onclick={confirmClearPin}>Clear PIN</Button>
 			</div>
 		</div>
 	</div>

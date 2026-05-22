@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Send, Square, Bot, ChevronLeft, ChevronRight, RefreshCw, Pencil, Trash2, Check, X, CornerRightUp, UserPen, GitBranch, GitBranchPlus, Undo2, ArrowDown, SlidersHorizontal, Brain, Smartphone, BookOpen, Info, Wand2, BookMarked, Search, MoreHorizontal, Copy, Loader2, Archive } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import { tick, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
@@ -10,6 +11,7 @@
 	import CharacterInfoModal from '$lib/components/CharacterInfoModal.svelte';
 	import CharacterLorebooksModal from '$lib/components/CharacterLorebooksModal.svelte';
 	import GreetingReviewModal from '$lib/components/GreetingReviewModal.svelte';
+	import ChatHeaderMenu from '$lib/components/ChatHeaderMenu.svelte';
 	import { haptic } from '$lib/utils/haptics.js';
 	import { renderRoleplay as renderRoleplayUtil } from '$lib/utils/rp-format.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
@@ -2760,43 +2762,20 @@
 
 		<!-- Right side: overflow menu -->
 		<div class="flex shrink-0 items-center">
-			<div class="relative" data-header-menu>
-				<button
-					onclick={(e) => { e.stopPropagation(); showHeaderMenu = !showHeaderMenu; }}
-					class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground {hasOverrides ? 'text-primary' : ''}"
-					use:tooltip={'More'}
-					aria-label="More actions"
-				>
-					<MoreHorizontal class="h-5 w-5" />
-				</button>
-				{#if showHeaderMenu}
-					<div class="popup-menu absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-border bg-popover py-1 shadow-2xl" style="--popup-origin: top right; max-height: calc(100dvh - 80px); overflow-y: auto;">
-						<button onclick={() => { closeHeaderMenu(); showCharacterInfo = true; }} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent">
-							<Info class="h-4 w-4" /> Character info
-						</button>
-						<button onclick={() => { closeHeaderMenu(); toggleMessageSearch(); }} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent">
-							<Search class="h-4 w-4" /> Search messages
-						</button>
-						<button onclick={() => { closeHeaderMenu(); showCharacterLorebooks = true; }} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent">
-							<BookMarked class="h-4 w-4" /> Lorebooks
-						</button>
-						<button onclick={() => { closeHeaderMenu(); runManualCompaction(); }} disabled={compactingNow} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50 disabled:pointer-events-none">
-							{#if compactingNow}
-								<Loader2 class="h-4 w-4 animate-spin" /> Compacting…
-							{:else}
-								<Archive class="h-4 w-4 {chat.compactionSummary ? 'text-primary' : ''}" /> Compact now
-							{/if}
-						</button>
-						<button onclick={() => { closeHeaderMenu(); openCompactionEditor(); }} disabled={!chat.compactionSummary} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50 disabled:pointer-events-none">
-							<Archive class="h-4 w-4 {chat.compactionSummary ? 'text-primary' : ''}" /> View compaction summary
-						</button>
-						<button onclick={() => { closeHeaderMenu(); showChatSettings = true; }} class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-accent">
-							<SlidersHorizontal class="h-4 w-4 {hasOverrides ? 'text-primary' : ''}" /> Chat settings
-							{#if hasOverrides}<span class="ml-auto h-1.5 w-1.5 rounded-full bg-primary"></span>{/if}
-						</button>
-					</div>
-				{/if}
-			</div>
+			<ChatHeaderMenu
+				open={showHeaderMenu}
+				{hasOverrides}
+				hasCompactionSummary={!!chat.compactionSummary}
+				{compactingNow}
+				onToggle={(e) => { e.stopPropagation(); showHeaderMenu = !showHeaderMenu; }}
+				onClose={closeHeaderMenu}
+				onCharacterInfo={() => { showCharacterInfo = true; }}
+				onSearchMessages={toggleMessageSearch}
+				onLorebooks={() => { showCharacterLorebooks = true; }}
+				onCompactNow={runManualCompaction}
+				onViewCompaction={openCompactionEditor}
+				onChatSettings={() => { showChatSettings = true; }}
+			/>
 		</div>
 	</header>
 
@@ -3108,21 +3087,16 @@
 				<p class="mt-2 text-xs text-muted-foreground">Editing here updates what the AI sees in place of the {(chat.compactedUpToMessageId ?? 0) > 0 ? 'compacted' : 'earlier'} messages. Clearing the text resets the high-water mark so the next compaction starts from the very first message.</p>
 			</div>
 			<div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-				<button
+				<Button type="button" variant="ghost" onclick={() => { showCompactionEditor = false; }}>Cancel</Button>
+				<Button
 					type="button"
-					onclick={() => { showCompactionEditor = false; }}
-					class="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
+					variant="primary"
 					onclick={saveCompactionSummary}
+					loading={savingCompactionSummary}
 					disabled={savingCompactionSummary}
-					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
 				>
 					{savingCompactionSummary ? 'Saving…' : 'Save summary'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -3190,18 +3164,10 @@
 				<p class="mt-2 text-sm text-muted-foreground">This message will be permanently deleted.</p>
 			{/if}
 			<div class="mt-4 flex items-center justify-end gap-2">
-				<button
-					onclick={cancelDelete}
-					class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-				>
-					Cancel
-				</button>
-				<button
-					onclick={confirmDelete}
-					class="rounded-lg bg-destructive px-3 py-1.5 text-sm text-destructive-foreground transition-colors hover:bg-destructive/90"
-				>
+				<Button variant="ghost" size="sm" onclick={cancelDelete}>Cancel</Button>
+				<Button variant="destructive" size="sm" onclick={confirmDelete}>
 					{deleteMode === 'thread' ? 'Delete Thread' : 'Delete Message'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -3548,21 +3514,11 @@
 				class="block min-h-[40vh] w-full flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring {guideModalTarget?.kind === 'impersonateView' ? 'cursor-default opacity-90' : ''}"
 			/>
 			<div class="mt-4 flex items-center justify-end gap-2">
-				<button
-					type="button"
-					onclick={() => { showGuideModal = false; guideModalTarget = null; }}
-					class="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-				>
+				<Button type="button" variant="ghost" size="sm" onclick={() => { showGuideModal = false; guideModalTarget = null; }}>
 					{guideModalTarget?.kind === 'impersonateView' ? 'Close' : 'Cancel'}
-				</button>
+				</Button>
 				{#if guideModalTarget?.kind !== 'impersonateView'}
-					<button
-						type="button"
-						onclick={submitGuideModal}
-						class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-					>
-						Go
-					</button>
+					<Button type="button" variant="primary" size="sm" onclick={submitGuideModal}>Go</Button>
 				{/if}
 			</div>
 		</div>

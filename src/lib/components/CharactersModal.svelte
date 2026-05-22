@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { Plus, Pencil, Trash2, MessageSquare, Users, X, Upload, Download, Loader2, Smartphone, Search, ArrowUpDown, BookOpen, Palette, Globe, LayoutGrid, List, Sparkles } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { focusTrap } from '$lib/focusTrap.js';
@@ -627,7 +630,7 @@
 					</button>
 					<div class="flex gap-2">
 						<button onclick={() => { showCreateForm = false; resetForm(); }} class="rounded-lg border border-border px-3 py-1 text-xs hover:bg-accent">Cancel</button>
-						<button onclick={createCharacter} disabled={!name.trim()} class="rounded-lg bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Create</button>
+						<Button variant="primary" size="sm" onclick={createCharacter} disabled={!name.trim()} class="!h-7 !px-3 !text-xs">Create</Button>
 					</div>
 				</div>
 			</div>
@@ -764,35 +767,32 @@
 			<div class="flex items-center justify-between border-b border-border px-6 py-4">
 				<h2 class="text-lg font-semibold">Characters</h2>
 				<div class="flex items-center gap-2">
-					<button
+					<Button
+						size="sm"
+						icon={Globe}
 						onclick={() => (chubOpen = true)}
-						class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent"
-						use:tooltip={'Browse CHUB'}
+						title="Browse CHUB"
 					>
-						<Globe class="h-4 w-4" />
 						<span class="hidden sm:inline">CHUB</span>
-					</button>
-					<button
+					</Button>
+					<Button
+						size="sm"
+						icon={importing ? undefined : Upload}
+						loading={importing}
 						onclick={importCharacter}
 						disabled={importing}
-						class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
 					>
-						<Upload class="h-4 w-4" />
 						{importing ? `Importing ${importDone}/${importTotal}...` : 'Import'}
-					</button>
-					<button
+					</Button>
+					<Button
+						variant="primary"
+						size="sm"
+						icon={Plus}
 						onclick={() => (showCreateForm = !showCreateForm)}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 					>
-						<Plus class="h-4 w-4" />
 						Create
-					</button>
-					<button
-						onclick={onclose}
-						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
-					>
-						<X class="h-4 w-4" />
-					</button>
+					</Button>
+					<IconButton icon={X} ariaLabel="Close" onclick={onclose} />
 				</div>
 			</div>
 
@@ -935,38 +935,27 @@
 								/>
 							</div>
 							<div class="flex justify-end gap-3 pt-1">
-								<button
-									onclick={() => {
-										showCreateForm = false;
-										resetForm();
-									}}
-									class="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-accent"
-								>
-									Cancel
-								</button>
-								<button
-									onclick={createCharacter}
-									disabled={!name.trim()}
-									class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-								>
-									Create
-								</button>
+								<Button onclick={() => { showCreateForm = false; resetForm(); }}>Cancel</Button>
+								<Button variant="primary" onclick={createCharacter} disabled={!name.trim()}>Create</Button>
 							</div>
 						</div>
 					</div>
 				{/if}
 
 				{#if filteredCharacters.length === 0 && !showCreateForm}
-					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-						<Users class="mb-4 h-12 w-12 opacity-30" />
-						{#if characters.length === 0}
-							<p class="text-lg">No characters yet</p>
-							<p class="mt-1 text-sm">Create a character or import a PNG/JSON card</p>
-						{:else}
-							<p class="text-lg">No matching characters</p>
-							<p class="mt-1 text-sm">Try a different search or clear your filters</p>
-						{/if}
-					</div>
+					{#if characters.length === 0}
+						<EmptyState
+							icon={Users}
+							title="No characters yet"
+							description="Create a character or import a PNG/JSON card"
+						/>
+					{:else}
+						<EmptyState
+							icon={Users}
+							title="No matching characters"
+							description="Try a different search or clear your filters"
+						/>
+					{/if}
 				{:else}
 					<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
 						{#each filteredCharacters as character}
@@ -1211,18 +1200,8 @@
 			</p>
 			<p class="mb-5 text-xs text-muted-foreground">Colors are derived from the character's avatar. You can disable the theme later in chat settings.</p>
 			<div class="flex items-center justify-end gap-3">
-				<button
-					onclick={() => startChat(themePromptCharId!, themePromptMode, false)}
-					class="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-				>
-					No thanks
-				</button>
-				<button
-					onclick={() => startChat(themePromptCharId!, themePromptMode)}
-					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-				>
-					Apply theme
-				</button>
+				<Button variant="ghost" onclick={() => startChat(themePromptCharId!, themePromptMode, false)}>No thanks</Button>
+				<Button variant="primary" onclick={() => startChat(themePromptCharId!, themePromptMode)}>Apply theme</Button>
 			</div>
 		</div>
 	</div>

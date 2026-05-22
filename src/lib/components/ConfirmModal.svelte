@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { AlertTriangle } from 'lucide-svelte';
 	import Modal from './Modal.svelte';
+	import Button from './ui/Button.svelte';
 
 	interface Props {
 		open: boolean;
@@ -39,26 +40,16 @@
 	<p class="mb-6 whitespace-pre-line text-sm text-muted-foreground">{message}</p>
 	<div class="flex justify-end gap-3">
 		{#if cancelLabel}
-		<button
-			onclick={oncancel}
-			class="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-accent"
-		>
-			{cancelLabel}
-		</button>
+			<Button variant="secondary" onclick={oncancel}>{cancelLabel}</Button>
 		{/if}
 		{#if secondaryLabel && onsecondary}
-		<button
-			onclick={onsecondary}
-			class="rounded-lg border border-border bg-accent px-4 py-2 text-sm font-medium transition-colors hover:bg-accent/80"
-		>
-			{secondaryLabel}
-		</button>
+			<Button variant="ghost" onclick={onsecondary}>{secondaryLabel}</Button>
 		{/if}
-		<button
+		<Button
+			variant={variant === 'info' ? 'primary' : 'destructive'}
 			onclick={onconfirm}
-			class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {variant === 'info' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}"
 		>
 			{confirmLabel}
-		</button>
+		</Button>
 	</div>
 </Modal>

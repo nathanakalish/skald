@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { tooltip } from '$lib/tooltip.js';
 	import { Plus, BookOpen, Pencil, Trash2, X, Upload, Search, ArrowUpDown, Globe } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { createModalState, createModalGestures } from '$lib/modal.svelte.js';
 	import { focusTrap } from '$lib/focusTrap.js';
@@ -252,7 +255,7 @@
 				/>
 				<div class="flex justify-end gap-2">
 					<button onclick={() => (showCreateForm = false)} class="rounded-lg border border-border px-3 py-1 text-xs hover:bg-accent">Cancel</button>
-					<button onclick={createLorebook} disabled={!name.trim()} class="rounded-lg bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Create</button>
+					<Button variant="primary" size="sm" onclick={createLorebook} disabled={!name.trim()} class="!h-7 !px-3 !text-xs">Create</Button>
 				</div>
 			</div>
 		</div>
@@ -335,28 +338,24 @@
 				<h2 class="text-lg font-semibold">Lorebooks</h2>
 				<div class="flex items-center gap-2">
 					<input bind:this={fileInput} type="file" accept=".json" class="hidden" onchange={handleImportFile} />
-					<button
+					<Button
+						size="sm"
+						icon={importing ? undefined : Upload}
+						loading={importing}
 						onclick={triggerImport}
 						disabled={importing}
-						class="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
 					>
-						<Upload class="h-4 w-4" />
 						{importing ? 'Importing...' : 'Import'}
-					</button>
-					<button
+					</Button>
+					<Button
+						variant="primary"
+						size="sm"
+						icon={Plus}
 						onclick={() => (showCreateForm = !showCreateForm)}
-						class="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 					>
-						<Plus class="h-4 w-4" />
 						Create
-					</button>
-					<button
-						onclick={onclose}
-						aria-label="Close"
-						class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
-					>
-						<X class="h-4 w-4" />
-					</button>
+					</Button>
+					<IconButton icon={X} ariaLabel="Close" onclick={onclose} />
 				</div>
 			</div>
 
@@ -409,30 +408,19 @@
 								/>
 							</div>
 							<div class="flex justify-end gap-3 pt-1">
-								<button
-									onclick={() => (showCreateForm = false)}
-									class="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-accent"
-								>
-									Cancel
-								</button>
-								<button
-									onclick={createLorebook}
-									disabled={!name.trim()}
-									class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-								>
-									Create
-								</button>
+								<Button onclick={() => (showCreateForm = false)}>Cancel</Button>
+								<Button variant="primary" onclick={createLorebook} disabled={!name.trim()}>Create</Button>
 							</div>
 						</div>
 					</div>
 				{/if}
 
 				{#if filteredLorebooks.length === 0 && !showCreateForm}
-					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-						<BookOpen class="mb-4 h-12 w-12 opacity-30" />
-						<p class="text-lg">No lorebooks yet</p>
-						<p class="mt-1 text-sm">Create a lorebook to add world info to your chats</p>
-					</div>
+					<EmptyState
+						icon={BookOpen}
+						title="No lorebooks yet"
+						description="Create a lorebook to add world info to your chats"
+					/>
 				{:else}
 					<div class="grid gap-3">
 						{#each filteredLorebooks as lorebook}
@@ -461,18 +449,8 @@
 									{/if}
 								</div>
 								<div class="flex items-center gap-2">
-								<button
-									onclick={() => { editLorebookId = lorebook.id; }}
-									class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-								>
-									<Pencil class="h-4 w-4" />
-								</button>
-									<button
-										onclick={() => askDeleteLorebook(lorebook.id, lorebook.name)}
-										class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-									>
-										<Trash2 class="h-4 w-4" />
-									</button>
+									<IconButton icon={Pencil} ariaLabel="Edit lorebook" size="sm" onclick={() => { editLorebookId = lorebook.id; }} />
+									<IconButton icon={Trash2} ariaLabel="Delete lorebook" variant="destructive" size="sm" onclick={() => askDeleteLorebook(lorebook.id, lorebook.name)} />
 								</div>
 							</div>
 						{/each}
