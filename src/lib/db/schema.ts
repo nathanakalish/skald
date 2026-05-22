@@ -109,6 +109,7 @@ export const chats = sqliteTable('chats', {
 	// Null = inherit the global toggle. 0/1 = explicit override.
 	overrideImageIncludeAvatar: integer('override_image_include_avatar', { mode: 'boolean' }),
 	overrideImageIncludeCharacterDesc: integer('override_image_include_character_desc', { mode: 'boolean' }),
+	overrideImageIncludePersonaDesc: integer('override_image_include_persona_desc', { mode: 'boolean' }),
 	unread: integer('unread').default(0),
 	muted: integer('muted', { mode: 'boolean' }).default(false),
 	useCharacterTheme: integer('use_character_theme', { mode: 'boolean' }).default(true),

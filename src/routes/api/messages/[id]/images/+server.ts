@@ -6,7 +6,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { eq, and, asc } from 'drizzle-orm';
 import { db } from '$lib/db/index.js';
-import { messages, chats, providers, messageImages, userSettings, characters } from '$lib/db/schema.js';
+import { messages, chats, providers, messageImages, userSettings, characters, personas } from '$lib/db/schema.js';
 import { requireUser } from '$lib/server/auth.js';
 import { broadcast } from '$lib/server/realtime.js';
 import { ApiError } from '$lib/server/apiError.js';
@@ -144,7 +144,7 @@ export const POST: RequestHandler = async (event) => {
 			? tmplGlobal
 			: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}');
 
-	// Resolve the two character-context toggles. Per-chat override wins; null
+	// Resolve the character + persona toggles. Per-chat override wins; null
 	// means "inherit global".
 	const includeAvatarGlobal = db.select().from(userSettings)
 		.where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'imageIncludeAvatar')))
@@ -152,17 +152,39 @@ export const POST: RequestHandler = async (event) => {
 	const includeDescGlobal = db.select().from(userSettings)
 		.where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'imageIncludeCharacterDesc')))
 		.get()?.value === 'true';
+	const includePersonaDescGlobal = db.select().from(userSettings)
+		.where(and(eq(userSettings.userId, user.id), eq(userSettings.key, 'imageIncludePersonaDesc')))
+		.get()?.value === 'true';
 	const includeAvatar = chat.overrideImageIncludeAvatar == null
 		? includeAvatarGlobal
 		: !!chat.overrideImageIncludeAvatar;
 	const includeDesc = chat.overrideImageIncludeCharacterDesc == null
 		? includeDescGlobal
 		: !!chat.overrideImageIncludeCharacterDesc;
+	const includePersonaDesc = chat.overrideImageIncludePersonaDesc == null
+		? includePersonaDescGlobal
+		: !!chat.overrideImageIncludePersonaDesc;
 
 	// Pull character row only if we actually need it.
 	let character: typeof characters.$inferSelect | undefined;
 	if (includeAvatar || includeDesc) {
 		character = db.select().from(characters).where(eq(characters.id, chat.characterId)).get();
+	}
+
+	// Resolve the active persona: chat override wins, otherwise fall back to
+	// the user's default persona. Only fetched if we actually need it.
+	let persona: typeof personas.$inferSelect | undefined;
+	if (includePersonaDesc) {
+		if (chat.overridePersonaId != null) {
+			persona = db.select().from(personas)
+				.where(and(eq(personas.id, chat.overridePersonaId), eq(personas.userId, user.id)))
+				.get();
+		}
+		if (!persona) {
+			persona = db.select().from(personas)
+				.where(and(eq(personas.userId, user.id), eq(personas.isDefault, true)))
+				.get();
+		}
 	}
 
 	// Use the currently active swipe content as the source.
@@ -180,6 +202,13 @@ export const POST: RequestHandler = async (event) => {
 		finalPrompt = charBlock + finalPrompt;
 	} else if (includeAvatar && character) {
 		finalPrompt = `Use the character shown in the reference image as the subject of the following scene. Match their appearance closely.\n\n${finalPrompt}`;
+	}
+
+	// Prepend the persona (user-side) context block. Goes above the character
+	// block so the model reads "user" then "scene character" in order.
+	if (includePersonaDesc && persona?.description?.trim()) {
+		const personaName = (persona.displayName?.trim() || persona.name).trim();
+		finalPrompt = `User-side character: ${personaName}. Description: ${persona.description.trim()}\n\n${finalPrompt}`;
 	}
 
 	// Resolve the reference image bytes if requested + available.

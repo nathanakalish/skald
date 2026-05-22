@@ -1025,6 +1025,9 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 	if (!chatColNamesImg.has('override_image_include_character_desc')) {
 		sqlite.exec('ALTER TABLE chats ADD COLUMN override_image_include_character_desc INTEGER');
 	}
+	if (!chatColNamesImg.has('override_image_include_persona_desc')) {
+		sqlite.exec('ALTER TABLE chats ADD COLUMN override_image_include_persona_desc INTEGER');
+	}
 
 	sqlite.exec(`
 		CREATE TABLE IF NOT EXISTS message_images (

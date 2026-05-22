@@ -81,6 +81,11 @@ export interface Settings {
 	 * model has context for who's in the scene. Per-chat override lives on
 	 * chats.overrideImageIncludeCharacterDesc. */
 	imageIncludeCharacterDesc: boolean;
+	/** Prepend the active persona's description to the image-gen prompt so
+	 * the model has context for the user-side character too. Uses the chat's
+	 * persona override if set, otherwise the default persona. Per-chat
+	 * override lives on chats.overrideImageIncludePersonaDesc. */
+	imageIncludePersonaDesc: boolean;
 	[k: string]: unknown;
 }
 
@@ -145,7 +150,8 @@ const defaults: Settings = {
 	pinnedMessageActions: '',
 	imagePromptTemplate: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}',
 	imageIncludeAvatar: false,
-	imageIncludeCharacterDesc: false
+	imageIncludeCharacterDesc: false,
+	imageIncludePersonaDesc: false
 };
 
 let _settings = $state<Settings>({ ...defaults });

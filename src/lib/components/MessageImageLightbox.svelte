@@ -107,11 +107,21 @@
 						<ChevronLeft class="h-5 w-5" />
 					</button>
 				{/if}
-				<img
-					src={`/api/images/cache/${current.filePath}?original=1`}
-					alt={current.prompt ?? 'Generated image'}
-					class="max-h-[80vh] max-w-full rounded-lg object-contain shadow-2xl"
-				/>
+				<div class="relative">
+					<img
+						src={`/api/images/cache/${current.filePath}?original=1`}
+						alt={current.prompt ?? 'Generated image'}
+						class="max-h-[80vh] max-w-full rounded-lg object-contain shadow-2xl transition-opacity {regenerating ? 'opacity-40' : ''}"
+					/>
+					{#if regenerating}
+						<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+							<div class="flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-sm text-white backdrop-blur-sm">
+								<Loader2 class="h-5 w-5 animate-spin" />
+								<span>Generating…</span>
+							</div>
+						</div>
+					{/if}
+				</div>
 				{#if total > 1}
 					<button
 						type="button"

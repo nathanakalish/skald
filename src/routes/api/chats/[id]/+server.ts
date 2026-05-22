@@ -125,6 +125,10 @@ export const PATCH: RequestHandler = async (event) => {
 		const v = body.overrideImageIncludeCharacterDesc;
 		updates.overrideImageIncludeCharacterDesc = v == null ? null : (v ? 1 : 0);
 	}
+	if ('overrideImageIncludePersonaDesc' in body) {
+		const v = body.overrideImageIncludePersonaDesc;
+		updates.overrideImageIncludePersonaDesc = v == null ? null : (v ? 1 : 0);
+	}
 	// Let the user edit / clear the stored compaction summary directly.
 	if ('compactionSummary' in body) {
 		const v = body.compactionSummary;

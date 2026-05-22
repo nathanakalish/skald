@@ -400,6 +400,12 @@
 				checked={s.imageIncludeAvatar}
 				onchange={async () => { await save('imageIncludeAvatar', !s.imageIncludeAvatar); }}
 			/>
+			<ToggleSwitch
+				label="Include persona description"
+				description="Prepend the active persona's description to every image prompt so the model knows who the user is. Uses the chat's persona override if set, otherwise the default persona."
+				checked={s.imageIncludePersonaDesc}
+				onchange={async () => { await save('imageIncludePersonaDesc', !s.imageIncludePersonaDesc); }}
+			/>
 		</div>
 	</div>
 </div>

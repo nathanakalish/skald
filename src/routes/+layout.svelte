@@ -387,6 +387,7 @@
 			imagePromptTemplate: (data as any).imagePromptTemplate ?? '',
 			imageIncludeAvatar: (data as any).imageIncludeAvatar ?? false,
 			imageIncludeCharacterDesc: (data as any).imageIncludeCharacterDesc ?? false,
+			imageIncludePersonaDesc: (data as any).imageIncludePersonaDesc ?? false,
 			systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 			systemLightThemeId: (data as any).systemLightThemeId ?? null
 		})),

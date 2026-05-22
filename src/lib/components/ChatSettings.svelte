@@ -41,6 +41,7 @@
 			overrideImagePromptTemplate?: string | null;
 			overrideImageIncludeAvatar?: boolean | null;
 			overrideImageIncludeCharacterDesc?: boolean | null;
+			overrideImageIncludePersonaDesc?: boolean | null;
 			compactionSummary?: string | null;
 			compactedUpToMessageId?: number | null;
 			previousCompactedUpToMessageId?: number | null;
@@ -82,6 +83,7 @@
 	let imagePromptTemplateOverride = $state<string>('');
 	let imageIncludeAvatarOverride = $state<boolean | null>(null);
 	let imageIncludeCharacterDescOverride = $state<boolean | null>(null);
+	let imageIncludePersonaDescOverride = $state<boolean | null>(null);
 	let imageModelList = $state<string[]>([]);
 	let imageModelLoading = $state(false);
 	let compactingNow = $state(false);
@@ -137,6 +139,7 @@
 				imagePromptTemplateOverride = chat.overrideImagePromptTemplate ?? '';
 				imageIncludeAvatarOverride = chat.overrideImageIncludeAvatar ?? null;
 				imageIncludeCharacterDescOverride = chat.overrideImageIncludeCharacterDesc ?? null;
+				imageIncludePersonaDescOverride = chat.overrideImageIncludePersonaDesc ?? null;
 				compactionSummaryDraft = chat.compactionSummary ?? '';
 			});
 		}
@@ -284,6 +287,7 @@
 			overrideImagePromptTemplate: imagePromptTemplateOverride.trim() ? imagePromptTemplateOverride : null,
 			overrideImageIncludeAvatar: imageIncludeAvatarOverride,
 			overrideImageIncludeCharacterDesc: imageIncludeCharacterDescOverride,
+			overrideImageIncludePersonaDesc: imageIncludePersonaDescOverride,
 			compactionSummary: compactionSummaryDraft.trim() ? compactionSummaryDraft : null,
 		};
 		onclose();
@@ -553,6 +557,15 @@
 									onchange={(next) => { imageIncludeAvatarOverride = next; }}
 									canReset={imageIncludeAvatarOverride !== null}
 									onreset={() => { imageIncludeAvatarOverride = null; }}
+									resetTooltip="Reset to global default"
+								/>
+								<ToggleSwitch
+									checked={imageIncludePersonaDescOverride === true}
+									label="Include persona description"
+									description={imageIncludePersonaDescOverride === null ? 'Using global setting' : 'Per-chat override'}
+									onchange={(next) => { imageIncludePersonaDescOverride = next; }}
+									canReset={imageIncludePersonaDescOverride !== null}
+									onreset={() => { imageIncludePersonaDescOverride = null; }}
 									resetTooltip="Reset to global default"
 								/>
 							</div>
