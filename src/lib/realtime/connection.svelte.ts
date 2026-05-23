@@ -87,6 +87,12 @@ export function createRealtimeConnection({
 		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 		let giveUpTimer: ReturnType<typeof setTimeout> | null = null;
 		let coldBootTimer: ReturnType<typeof setTimeout> | null = null;
+		// Latched true once the cold-boot grace window has been consumed —
+		// either by firing (overlay raised) OR by a successful first connect.
+		// Prevents the visibility handler from re-arming the grace timer on
+		// every tab switch, which would otherwise hide the overlay for another
+		// 4 seconds each time the user comes back to the tab.
+		let coldBootConsumed = false;
 
 		// Source of truth for "have we had a real, server-confirmed stream this
 		// session yet". Only flipped inside the `connected` sentinel handler —
@@ -114,7 +120,10 @@ export function createRealtimeConnection({
 		function clearAllTimers() {
 			if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 			if (giveUpTimer) { clearTimeout(giveUpTimer); giveUpTimer = null; }
-			if (coldBootTimer) { clearTimeout(coldBootTimer); coldBootTimer = null; }
+			// NOTE: coldBootTimer is intentionally NOT cleared here. It must fire
+			// (or be cancelled by a successful `connected` event) exactly once per
+			// session. Resetting it on every reconnect / visibility transition was
+			// the source of the "overlay disappears for 4s every tab switch" bug.
 		}
 
 		function armGiveUpTimer() {
@@ -187,13 +196,15 @@ export function createRealtimeConnection({
 			const es = new EventSource(`/api/events?sid=${sessionId}`);
 			eventSource = es;
 
-			// Cold-boot grace: only arm this on the FIRST attempt of the session.
-			// Once everConnected is true we trust onerror to drive the overlay
-			// instantly — the grace window is purely there to avoid flashing the
-			// overlay during the normal SSE handshake on a healthy load.
-			if (!everConnected && !coldBootTimer) {
+			// Cold-boot grace: only arm this ONCE per session, on the very first
+			// attempt. Once consumed (either by firing or by a successful connect),
+			// subsequent openConnection() calls from visibility / manualReconnect
+			// must NOT re-arm it — otherwise the overlay would drop every time we
+			// retry, producing visible flicker.
+			if (!coldBootConsumed && !coldBootTimer) {
 				coldBootTimer = setTimeout(() => {
 					coldBootTimer = null;
+					coldBootConsumed = true;
 					if (!everConnected) {
 						connectionState = 'reconnecting';
 						armGiveUpTimer();
@@ -211,6 +222,10 @@ export function createRealtimeConnection({
 				const wasOverlayUp = connectionState === 'reconnecting' || connectionState === 'failed';
 				const firstTime = !everConnected;
 				clearAllTimers();
+				// Successful connect also consumes the cold-boot grace window —
+				// future reopen calls should never re-arm it.
+				if (coldBootTimer) { clearTimeout(coldBootTimer); coldBootTimer = null; }
+				coldBootConsumed = true;
 				failedAttempts = 0;
 				everConnected = true;
 				connectionState = 'connected';
@@ -258,10 +273,11 @@ export function createRealtimeConnection({
 		manualReconnectFn = () => {
 			clearAllTimers();
 			failedAttempts = 0;
-			// Pretend we're starting fresh: hide the overlay during the manual
-			// retry handshake so the click feels responsive. If the retry fails
-			// the normal flow will put it back up.
-			connectionState = everConnected ? 'reconnecting' : 'connecting';
+			// Stay in 'reconnecting' (overlay visible) during the manual retry
+			// handshake. Dropping back to 'connecting' here would hide the overlay
+			// only to bring it straight back when the retry fails — flicker on a
+			// dead server. The 'Retry Now' button + spinner is feedback enough.
+			if (connectionState === 'failed') connectionState = 'reconnecting';
 			openConnection();
 		};
 
@@ -292,6 +308,10 @@ export function createRealtimeConnection({
 		// transition so we pick up anything buffered via Last-Event-ID.
 		const visibilityHandler = () => {
 			if (!document.hidden) {
+				// Cancel any pending backoff so the retry happens immediately, but
+				// leave the cold-boot grace timer alone (clearAllTimers excludes it).
+				// The overlay's visibility is driven purely by connectionState now —
+				// it will NOT briefly hide just because we kicked off a new attempt.
 				clearAllTimers();
 				checkVersion();
 				openConnection();
@@ -349,6 +369,7 @@ export function createRealtimeConnection({
 			eventSource?.close();
 			eventSource = null;
 			clearAllTimers();
+			if (coldBootTimer) { clearTimeout(coldBootTimer); coldBootTimer = null; }
 		};
 	});
 
