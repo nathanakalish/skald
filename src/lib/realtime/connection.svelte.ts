@@ -90,6 +90,13 @@ export function createRealtimeConnection({
 		const RECONNECT_BASE_MS = 5000;
 		const RECONNECT_CAP_MS = 60_000;
 		const GIVE_UP_AFTER = 3 * 60 * 1000;
+		// How long to wait for the very first SSE handshake before flipping the
+		// overlay on. Keeps a normal cold load from flashing an overlay during
+		// the ~100ms it takes to open the stream while still surfacing the
+		// "server unreachable" state quickly when we boot from the SW's cached
+		// shell with the upstream actually down.
+		const INITIAL_CONNECT_TIMEOUT_MS = 1500;
+		let initialConnectTimer: ReturnType<typeof setTimeout> | null = null;
 		function nextReconnectDelay(): number {
 			const exp = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * 2 ** failedAttempts);
 			return Math.floor(Math.random() * exp);
@@ -149,6 +156,7 @@ export function createRealtimeConnection({
 		function clearTimers() {
 			if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 			if (giveUpTimer) { clearTimeout(giveUpTimer); giveUpTimer = null; }
+			if (initialConnectTimer) { clearTimeout(initialConnectTimer); initialConnectTimer = null; }
 		}
 
 		function startGiveUpTimer() {
@@ -168,9 +176,30 @@ export function createRealtimeConnection({
 			}, nextReconnectDelay());
 		}
 
+		function showDisconnectedOverlay() {
+			if (disconnectToastShown) return;
+			connectionState = 'disconnected';
+			disconnectToastShown = true;
+			startGiveUpTimer();
+		}
+
 		function connect() {
 			eventSource?.close();
 			eventSource = new EventSource(`/api/events?sid=${sessionId}`);
+
+			// Cold-boot safety net: if we've never managed a successful SSE
+			// handshake and the EventSource is still spinning after a short
+			// window, surface the disconnect overlay. This covers the case
+			// where the SW served its cached shell and the upstream is
+			// genuinely down — without this, the onerror branch below stays
+			// silent (because wasConnected is false) and the user sees an
+			// empty, hydrating UI instead of the overlay.
+			if (!wasConnected && !initialConnectTimer) {
+				initialConnectTimer = setTimeout(() => {
+					initialConnectTimer = null;
+					if (!wasConnected) showDisconnectedOverlay();
+				}, INITIAL_CONNECT_TIMEOUT_MS);
+			}
 
 			eventSource.onopen = () => {
 				clearTimers();
@@ -206,18 +235,20 @@ export function createRealtimeConnection({
 
 			eventSource.onerror = () => {
 				eventSource?.close();
-				if (wasConnected) {
-					failedAttempts += 1;
-					// First failure: shut up and just retry. Most drops are transient
-					// (handover, restart, HMR) and recover on the next reconnect tick —
-					// flashing a modal at the user every time would be obnoxious. Once
-					// the silent retry ALSO fails, we surface the modal and start the
-					// give-up countdown.
-					if (failedAttempts >= 2 && !disconnectToastShown) {
-						connectionState = 'disconnected';
-						disconnectToastShown = true;
-						startGiveUpTimer();
-					}
+				failedAttempts += 1;
+				// Two separate "show the overlay" thresholds:
+				//   • Previously connected (transient drop): stay silent on the
+				//     first failure — most drops are mobile handover / HMR /
+				//     bouncing server, and recover on the next tick. Surface
+				//     after a second consecutive failure.
+				//   • Never connected (cold boot, almost always means the SW
+				//     handed back its cached shell because the server is down):
+				//     show the overlay on the very first failure so the user
+				//     isn't staring at an empty, mostly-broken UI while we
+				//     silently retry.
+				const threshold = wasConnected ? 2 : 1;
+				if (failedAttempts >= threshold) {
+					showDisconnectedOverlay();
 				}
 				scheduleReconnect();
 			};
