@@ -14,6 +14,8 @@ import { providerProfiles } from '$lib/providers/profiles.js';
 import { generateImage, ImageGenError } from '$lib/server/imageGen.js';
 import { parseSwipes } from '$lib/messageJson.js';
 import { getOriginalAvatarPath, optimizeCachedImage } from '$lib/services/imageOptimizer.js';
+import { activeImageGenerations } from '$lib/server/activeImageGenerations.js';
+import { logger } from '$lib/server/logger.js';
 
 const CACHE_DIR = join(process.cwd(), 'data', 'image-cache');
 
@@ -74,6 +76,14 @@ export const POST: RequestHandler = async (event) => {
 
 	if (message.role !== 'assistant') {
 		return ApiError.badRequest('Images can only be generated for assistant messages');
+	}
+
+	// Server-side de-dup. Without this, a double-click on the generate button
+	// (or two devices triggering at once) would each kick off a job and both
+	// would insert rows. The client also tracks this, but only as a UX hint —
+	// the authoritative check lives here.
+	if (activeImageGenerations.has(id)) {
+		return ApiError.conflict('An image is already being generated for this message');
 	}
 
 	// Resolve effective provider + model.
@@ -240,68 +250,95 @@ export const POST: RequestHandler = async (event) => {
 		referenceImage = undefined;
 	}
 
-	// Generate.
-	let result;
-	try {
-		result = await generateImage(capability, {
-			endpoint: provider.endpoint,
-			apiKey: provider.apiKey || '',
-			model,
-			prompt: finalPrompt,
-			referenceImage,
-			comfyWorkflow: provider.imageComfyWorkflow ?? '',
-			comfyPromptNodeId: provider.imageComfyPromptNodeId ?? ''
-		});
-	} catch (err) {
-		const msg = err instanceof ImageGenError ? err.message : (err instanceof Error ? err.message : 'Image generation failed');
-		event.locals.logger?.warn('image gen failed', { messageId: id, providerId, model, err: msg });
-		return ApiError.badRequest(msg);
-	}
-
-	// Persist file. Mirror the inline-image cache pattern: keep the original
-	// bytes and, when sharp can re-encode them, write an optimized .webp
-	// sibling that the bubble can use as a thumbnail. The lightbox keeps
-	// requesting ?original=1 to get the full-quality version.
-	await mkdir(CACHE_DIR, { recursive: true });
-	const uuid = randomUUID();
-	const originalFilename = `genimg_${uuid}${result.ext}`;
-	await writeFile(join(CACHE_DIR, originalFilename), result.buffer);
-
-	let storedFilename = originalFilename;
-	try {
-		const optimized = await optimizeCachedImage(result.buffer, result.ext);
-		if (optimized) {
-			const webpFilename = `genimg_${uuid}${optimized.ext}`;
-			await writeFile(join(CACHE_DIR, webpFilename), optimized.buffer);
-			storedFilename = webpFilename;
-		}
-	} catch (err) {
-		event.locals.logger?.warn('image gen: optimize failed; serving original', { err: (err as Error).message });
-	}
-
 	const swipeIndex = message.swipeIndex ?? 0;
 
-	// Insert row + flip prior actives off within the same (message, swipe).
-	// Other swipes keep their own active selection.
-	const inserted = db.transaction((tx) => {
-		tx.update(messageImages)
-			.set({ isActive: false })
-			.where(and(eq(messageImages.messageId, id), eq(messageImages.swipeIndex, swipeIndex)))
-			.run();
-		const row = tx.insert(messageImages).values({
-			messageId: id,
-			swipeIndex,
-			filePath: storedFilename,
-			prompt: finalPrompt,
-			model,
-			providerId,
-			isActive: true
-		}).returning().get();
-		return row;
-	});
+	// Register the job + tell every connected client it's started so the
+	// bubble/lightbox spinners reappear after a reload or on a second device.
+	activeImageGenerations.start({ messageId: id, chatId: chat.id, userId: user.id, swipeIndex });
+	broadcast(user.id, { type: 'messageImage:started', chatId: chat.id, messageId: id, swipeIndex });
 
-	const payload = publicImage(inserted);
-	broadcast(user.id, { type: 'messageImage:created', chatId: chat.id, messageId: id, image: payload });
+	// Snapshot everything the background job needs. We deliberately don't
+	// hold any per-request resources (response, event.locals) past this
+	// point — the response goes out immediately and the promise survives
+	// independently.
+	const jobChatId = chat.id;
+	const jobUserId = user.id;
+	const jobMessageId = id;
 
-	return json({ image: payload });
+	// Fire and forget. The HTTP response returns once we've registered the
+	// job; the actual provider call runs in the background and broadcasts a
+	// `messageImage:created` (or `messageImage:error`) when it finishes.
+	void (async () => {
+		try {
+			const result = await generateImage(capability, {
+				endpoint: provider.endpoint,
+				apiKey: provider.apiKey || '',
+				model,
+				prompt: finalPrompt,
+				referenceImage,
+				comfyWorkflow: provider.imageComfyWorkflow ?? '',
+				comfyPromptNodeId: provider.imageComfyPromptNodeId ?? ''
+			});
+
+			// Persist file. Mirror the inline-image cache pattern: keep the
+			// original bytes and, when sharp can re-encode them, write an
+			// optimized .webp sibling that the bubble can use as a thumbnail.
+			// The lightbox keeps requesting ?original=1 for full quality.
+			await mkdir(CACHE_DIR, { recursive: true });
+			const uuid = randomUUID();
+			const originalFilename = `genimg_${uuid}${result.ext}`;
+			await writeFile(join(CACHE_DIR, originalFilename), result.buffer);
+
+			let storedFilename = originalFilename;
+			try {
+				const optimized = await optimizeCachedImage(result.buffer, result.ext);
+				if (optimized) {
+					const webpFilename = `genimg_${uuid}${optimized.ext}`;
+					await writeFile(join(CACHE_DIR, webpFilename), optimized.buffer);
+					storedFilename = webpFilename;
+				}
+			} catch (err) {
+				logger.warn('image gen: optimize failed; serving original', { err: (err as Error).message });
+			}
+
+			// Insert row + flip prior actives off within the same (message, swipe).
+			const inserted = db.transaction((tx) => {
+				tx.update(messageImages)
+					.set({ isActive: false })
+					.where(and(eq(messageImages.messageId, jobMessageId), eq(messageImages.swipeIndex, swipeIndex)))
+					.run();
+				const row = tx.insert(messageImages).values({
+					messageId: jobMessageId,
+					swipeIndex,
+					filePath: storedFilename,
+					prompt: finalPrompt,
+					model,
+					providerId: providerId!,
+					isActive: true
+				}).returning().get();
+				return row;
+			});
+
+			broadcast(jobUserId, {
+				type: 'messageImage:created',
+				chatId: jobChatId,
+				messageId: jobMessageId,
+				image: publicImage(inserted)
+			});
+		} catch (err) {
+			const msg = err instanceof ImageGenError ? err.message
+				: (err instanceof Error ? err.message : 'Image generation failed');
+			logger.warn('image gen failed', { messageId: jobMessageId, providerId, model, err: msg });
+			broadcast(jobUserId, {
+				type: 'messageImage:error',
+				chatId: jobChatId,
+				messageId: jobMessageId,
+				error: msg
+			});
+		} finally {
+			activeImageGenerations.clear(jobMessageId);
+		}
+	})();
+
+	return json({ status: 'started', messageId: id, swipeIndex }, { status: 202 });
 };

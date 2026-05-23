@@ -54,9 +54,11 @@ export type RealtimeEvent =
 	| { type: 'message:created'; chatId: number; message: Record<string, unknown> }
 	| { type: 'message:patched'; chatId: number; id: number; patch: Record<string, unknown> }
 	| { type: 'message:deleted'; chatId: number; ids: number[] }
+	| { type: 'messageImage:started'; chatId: number; messageId: number; swipeIndex: number }
 	| { type: 'messageImage:created'; chatId: number; messageId: number; image: MessageImage }
 	| { type: 'messageImage:activated'; chatId: number; messageId: number; imageId: number }
 	| { type: 'messageImage:deleted'; chatId: number; messageId: number; imageId: number }
+	| { type: 'messageImage:error'; chatId: number; messageId: number; error: string }
 	| {
 			type: 'chat:impersonation';
 			chatId: number;

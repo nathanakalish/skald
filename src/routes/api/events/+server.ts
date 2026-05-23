@@ -3,6 +3,7 @@ import { eventBus } from '$lib/server/eventBus.js';
 import { requireUser } from '$lib/server/auth.js';
 import { presence } from '$lib/server/presence.js';
 import { activeGenerations } from '$lib/server/activeGenerations.js';
+import { activeImageGenerations } from '$lib/server/activeImageGenerations.js';
 import { logger } from '$lib/server/logger.js';
 
 /**
@@ -84,6 +85,24 @@ export const GET: RequestHandler = (requestEvent) => {
 			// indicator and the tokens that already streamed before it joined.
 			// id 0 keeps these synthetic events out of the client's lastEventId
 			// tracking.
+			// Image generations: synthetic `messageImage:started` for each
+			// in-flight job so reconnecting clients (reload, second device,
+			// nav back into the chat) restore their spinner state.
+			for (const img of activeImageGenerations.getForUser(user.id)) {
+				send(0, JSON.stringify({
+					id: 0,
+					type: 'messageImage:started',
+					userId: user.id,
+					chatId: img.chatId,
+					data: {
+						type: 'messageImage:started',
+						chatId: img.chatId,
+						messageId: img.messageId,
+						swipeIndex: img.swipeIndex
+					}
+				}));
+			}
+
 			for (const gen of activeGenerations.getForUser(user.id)) {
 				const base = { userId: user.id, chatId: gen.chatId };
 				send(0, JSON.stringify({

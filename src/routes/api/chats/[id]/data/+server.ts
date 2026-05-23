@@ -15,6 +15,7 @@ import {
 import { revertLeafUserMessages } from '$lib/server/chatRevert.js';
 import { logger } from '$lib/server/logger.js';
 import { ApiError } from '$lib/server/apiError.js';
+import { activeImageGenerations } from '$lib/server/activeImageGenerations.js';
 
 export const GET: RequestHandler = async (event) => {
 	const user = requireUser(event);
@@ -144,12 +145,19 @@ export const GET: RequestHandler = async (event) => {
 		});
 	}
 
+	// Image gens that are currently mid-flight for this chat. Tracked by
+	// (messageId, swipeIndex) so the spinner only renders on the swipe that
+	// actually requested it — switching to a different swipe shouldn't show
+	// a misleading "generating…" overlay.
+	const pendingImageGens = activeImageGenerations.getForChat(chatId);
+
 	return json({
 		chat,
 		character,
 		messages: messageList,
 		messageSiblings,
 		messageImages: imagesByMessage,
+		pendingImageGens,
 		hiddenBranchCount,
 		totalMessages,
 	});

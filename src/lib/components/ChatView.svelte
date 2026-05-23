@@ -28,11 +28,12 @@
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
-	let { chat, character, initialMessages, initialMessageImages = {}, messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
+	let { chat, character, initialMessages, initialMessageImages = {}, initialPendingImageGens = [], messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
 		chat: any;
 		character: any;
 		initialMessages: any[];
 		initialMessageImages?: Record<number, MessageImageRow[]>;
+		initialPendingImageGens?: Array<{ messageId: number; swipeIndex: number }>;
 		messageSiblingsData: Record<number, { index: number; total: number }>;
 		hiddenBranchData: number;
 		totalMessageCount?: number;
@@ -320,9 +321,15 @@
 	let messageList: Message[] = $state(untrack(() => (initialMessages ?? []).map(parseMessage)));
 	let messageSiblings: Record<number, { index: number; total: number }> = $state(untrack(() => messageSiblingsData ?? {}));
 	let messageImages: Record<number, MessageImageRow[]> = $state(untrack(() => initialMessageImages ?? {}));
-	// Messages currently waiting on an in-flight gen request from this tab.
-	// Cleared by the SSE messageImage:created handler.
-	let imageGenInFlight = $state(new Set<number>());
+	// Messages currently being generated server-side. Keyed by messageId
+	// with the value being the swipeIndex the gen is for — the server only
+	// allows one in-flight gen per message, so a flat Map is enough. Seeded
+	// from the chat load (in case generation was running before this client
+	// mounted) and kept in sync via `messageImage:started` /
+	// `messageImage:created` / `messageImage:error` SSE events.
+	let imageGenInFlight = $state(new Map<number, number>(
+		untrack(() => (initialPendingImageGens ?? []).map((p) => [p.messageId, p.swipeIndex] as [number, number]))
+	));
 	// Lightbox state — null hides; otherwise contains all gen rows for that message
 	let lightboxMessageId = $state<number | null>(null);
 	let hiddenBranchCount = $derived(hiddenBranchData ?? 0);
@@ -832,6 +839,13 @@
 			if (streamingAssistantIdx < 0 && !isStreaming) {
 				onrefresh?.();
 			}
+		} else if (type === 'messageImage:started' && eventData) {
+			const { messageId, swipeIndex } = eventData as { messageId: number; swipeIndex: number };
+			if (imageGenInFlight.get(messageId) !== swipeIndex) {
+				const next = new Map(imageGenInFlight);
+				next.set(messageId, swipeIndex ?? 0);
+				imageGenInFlight = next;
+			}
 		} else if (type === 'messageImage:created' && eventData?.image) {
 			const img = eventData.image as MessageImageRow;
 			const swipeIdx = img.swipeIndex ?? 0;
@@ -842,8 +856,19 @@
 			);
 			list.push(img);
 			messageImages = { ...messageImages, [img.messageId]: list };
-			imageGenInFlight.delete(img.messageId);
-			imageGenInFlight = new Set(imageGenInFlight);
+			if (imageGenInFlight.has(img.messageId)) {
+				const next = new Map(imageGenInFlight);
+				next.delete(img.messageId);
+				imageGenInFlight = next;
+			}
+		} else if (type === 'messageImage:error' && eventData) {
+			const { messageId, error } = eventData as { messageId: number; error: string };
+			if (imageGenInFlight.has(messageId)) {
+				const next = new Map(imageGenInFlight);
+				next.delete(messageId);
+				imageGenInFlight = next;
+			}
+			toasts.error(error || 'Image generation failed');
 		} else if (type === 'messageImage:activated' && eventData) {
 			const { messageId, imageId } = eventData as { messageId: number; imageId: number };
 			const list = messageImages[messageId];
@@ -2705,21 +2730,34 @@
 	// row via SSE — we just kick the request and surface failures.
 	async function generateImageForMessage(messageId: number) {
 		if (imageGenInFlight.has(messageId)) return;
-		imageGenInFlight = new Set(imageGenInFlight).add(messageId);
+		const msg = messageList.find((m) => m.id === messageId);
+		const swipeIdx = msg?.swipeIndex ?? 0;
+		// Optimistic: drop the spinner in right away. The SSE
+		// `messageImage:started` event confirms it; `messageImage:created`
+		// / `messageImage:error` clear it.
+		const optimistic = new Map(imageGenInFlight);
+		optimistic.set(messageId, swipeIdx);
+		imageGenInFlight = optimistic;
 		try {
 			const res = await fetch(`/api/messages/${messageId}/images`, { method: 'POST' });
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
-				const msg = body?.error || body?.message
+				const errMsg = body?.error || body?.message
 					|| 'No image provider configured. Set an image model in the provider profile or in this chat\u2019s settings.';
-				toasts.error(msg);
-				imageGenInFlight.delete(messageId);
-				imageGenInFlight = new Set(imageGenInFlight);
+				toasts.error(errMsg);
+				if (imageGenInFlight.has(messageId)) {
+					const next = new Map(imageGenInFlight);
+					next.delete(messageId);
+					imageGenInFlight = next;
+				}
 			}
 		} catch {
 			toasts.error('Failed to start image generation');
-			imageGenInFlight.delete(messageId);
-			imageGenInFlight = new Set(imageGenInFlight);
+			if (imageGenInFlight.has(messageId)) {
+				const next = new Map(imageGenInFlight);
+				next.delete(messageId);
+				imageGenInFlight = next;
+			}
 		}
 	}
 
@@ -2993,7 +3031,7 @@
 					<MessageBubble
 						{message}
 						generatedImageUrl={activeMsgImageUrl}
-						generatedImageLoading={imageGenInFlight.has(message.id)}
+						generatedImageLoading={imageGenInFlight.get(message.id) === (message.swipeIndex ?? 0)}
 						ongeneratedImageClick={() => (lightboxMessageId = message.id)}
 						{consecutive}
 						{groupEnd}
@@ -3392,7 +3430,11 @@
 				downloadName: `message-${lightboxMessageId}-${im.filePath}`
 			}));
 	})()}
-	regenerating={lightboxMessageId !== null && imageGenInFlight.has(lightboxMessageId)}
+	regenerating={(() => {
+		if (lightboxMessageId === null) return false;
+		const msg = messageList.find((m) => m.id === lightboxMessageId);
+		return imageGenInFlight.get(lightboxMessageId) === (msg?.swipeIndex ?? 0);
+	})()}
 	onclose={() => (lightboxMessageId = null)}
 	onactivate={(imageId) => lightboxMessageId !== null && activateMessageImage(lightboxMessageId, imageId as number)}
 	ondelete={(imageId) => lightboxMessageId !== null && deleteMessageImage(lightboxMessageId, imageId as number)}
