@@ -49,7 +49,6 @@
 		Palette,
 		Settings2,
 		Info,
-		WifiOff,
 		Sparkles,
 		Type,
 		PackageOpen,
@@ -64,6 +63,7 @@
 	import ChatView from '$lib/components/ChatView.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import PinLockOverlay from '$lib/components/PinLockOverlay.svelte';
+	import DisconnectOverlay from '$lib/components/DisconnectOverlay.svelte';
 	import { pinLock } from '$lib/stores/pinLock.svelte.js';
 	import { toasts } from '$lib/stores/toast.svelte.js';
 	import LimitedInput from '$lib/components/LimitedInput.svelte';
@@ -3076,29 +3076,7 @@
 <PinLockOverlay />
 
 {#if realtime.connectionState === 'reconnecting' || realtime.connectionState === 'failed'}
-	<div class="fixed inset-0 z-[300] flex items-center justify-center bg-background/80 backdrop-blur-md">
-		<div class="mx-4 flex w-full max-w-sm flex-col items-center gap-5 rounded-2xl border border-border bg-card p-8 text-center shadow-2xl">
-			<div class="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-				<WifiOff class="h-6 w-6 text-muted-foreground" />
-			</div>
-			<div class="flex flex-col gap-2">
-				<h2 class="text-lg font-semibold text-foreground">No Server Connection</h2>
-				<p class="text-sm leading-relaxed text-muted-foreground">
-					{#if realtime.connectionState === 'failed'}
-						Unable to reach the server after several minutes. Check that it's running, then retry.
-					{:else}
-						Lost connection to the server. Reconnecting automatically&hellip;
-					{/if}
-				</p>
-			</div>
-			<button
-				onclick={() => realtime.manualReconnect()}
-				class="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-95"
-			>
-				Retry Now
-			</button>
-		</div>
-	</div>
+	<DisconnectOverlay state={realtime.connectionState} onretry={() => realtime.manualReconnect()} />
 {/if}
 
 <style>
