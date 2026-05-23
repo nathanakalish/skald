@@ -72,6 +72,15 @@ export function createRealtimeConnection({
 	let connectionState = $state<ConnectionState>('connecting');
 	let manualReconnectFn: (() => void) | null = null;
 
+	// Wrapper so every mutation of the state shows up in a single place when
+	// debugging overlay flicker. The trace prefix makes it grep-friendly.
+	function setState(next: ConnectionState, reason: string) {
+		if (connectionState === next) return;
+		// eslint-disable-next-line no-console
+		console.debug(`[realtime] ${connectionState} → ${next} (${reason})`);
+		connectionState = next;
+	}
+
 	function reportPresence(payload: { activeChatId?: number | null; focused?: boolean }) {
 		// Skip when logged out — the 401 surfaces as a scary "access control"
 		// error in Safari's console and there's nothing useful to report anyway.
@@ -118,7 +127,7 @@ export function createRealtimeConnection({
 				giveUpTimer = null;
 				eventSource?.close();
 				eventSource = null;
-				connectionState = 'failed';
+				setState('failed', 'give-up timer expired');
 			}, GIVE_UP_AFTER_MS);
 		}
 
@@ -193,7 +202,7 @@ export function createRealtimeConnection({
 				clearReconnectTimers();
 				failedAttempts = 0;
 				everConnected = true;
-				connectionState = 'connected';
+				setState('connected', 'sentinel received');
 
 				if (wasOverlayUp && !firstTime) toasts.success('Reconnected to server');
 				checkVersion();
@@ -228,7 +237,7 @@ export function createRealtimeConnection({
 				// not slow handshakes — a healthy server's `connected` event
 				// arrives well before any error would.
 				if (connectionState !== 'reconnecting' && connectionState !== 'failed') {
-					connectionState = 'reconnecting';
+					setState('reconnecting', 'EventSource error');
 					armGiveUpTimer();
 				}
 				scheduleReconnect();
@@ -244,7 +253,7 @@ export function createRealtimeConnection({
 			// handshake. Dropping back to 'connecting' here would hide the overlay
 			// only to bring it straight back when the retry fails on a dead server.
 			// The button's own pressed/spinner state is the feedback for the click.
-			if (connectionState === 'failed') connectionState = 'reconnecting';
+			if (connectionState === 'failed') setState('reconnecting', 'manual retry from failed');
 			openConnection();
 		};
 

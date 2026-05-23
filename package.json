@@ -1,7 +1,7 @@
 {
 	"name": "skald",
 	"private": true,
-	"version": "1.61.7",
+	"version": "1.61.8",
 	"license": "AGPL-3.0-only",
 	"type": "module",
 	"scripts": {
