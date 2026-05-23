@@ -3076,7 +3076,7 @@
 <PinLockOverlay />
 
 {#if realtime.connectionState === 'reconnecting' || realtime.connectionState === 'failed'}
-	<DisconnectOverlay state={realtime.connectionState} onretry={() => realtime.manualReconnect()} />
+	<DisconnectOverlay connectionState={realtime.connectionState} onretry={() => realtime.manualReconnect()} />
 {/if}
 
 <style>

@@ -4,16 +4,20 @@
 	/**
 	 * Blocking overlay shown when the realtime SSE channel is down.
 	 *
-	 * Visibility is driven entirely by `state` — the parent passes the
-	 * realtime store's `connectionState` directly. We render nothing for
-	 * `connecting` and `connected`; this avoids any "show then hide" flash
-	 * during the normal handshake on a healthy load.
+	 * Visibility is driven entirely by `connectionState` — the parent passes
+	 * the realtime store's state directly. We render nothing for `connecting`
+	 * and `connected`; this avoids any "show then hide" flash during the
+	 * normal handshake on a healthy load.
+	 *
+	 * The prop is deliberately NOT named `state`: in Svelte 5, `$state(...)`
+	 * inside a script that also has a `state` prop trips the parser's store
+	 * auto-subscribe heuristic (`$store` → `state.subscribe(...)`).
 	 */
 	let {
-		state,
+		connectionState,
 		onretry
 	}: {
-		state: 'connecting' | 'connected' | 'reconnecting' | 'failed';
+		connectionState: 'connecting' | 'connected' | 'reconnecting' | 'failed';
 		onretry: () => void;
 	} = $props();
 
@@ -32,16 +36,16 @@
 
 	// If the connection actually recovers, drop the spinner state immediately
 	// so the next time the overlay reappears it doesn't open in a stale
-	// "retrying" pose. (The overlay itself unmounts on 'connected', but
-	// `state` may briefly flip to 'reconnecting' before any retry click.)
+	// "retrying" pose. (The overlay itself unmounts on 'connected', but the
+	// state may briefly flip to 'reconnecting' before any retry click.)
 	$effect(() => {
-		if (state === 'connected') {
+		if (connectionState === 'connected') {
 			retrying = false;
 			if (retryLockTimer) { clearTimeout(retryLockTimer); retryLockTimer = null; }
 		}
 	});
 
-	const show = $derived(state === 'reconnecting' || state === 'failed');
+	const show = $derived(connectionState === 'reconnecting' || connectionState === 'failed');
 </script>
 
 {#if show}
@@ -54,7 +58,7 @@
 	>
 		<div class="mx-4 flex w-full max-w-sm flex-col items-center gap-5 rounded-2xl border border-border bg-card p-8 text-center shadow-2xl">
 			<div class="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-				{#if state === 'failed'}
+				{#if connectionState === 'failed'}
 					<WifiOff class="h-6 w-6 text-muted-foreground" />
 				{:else}
 					<Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
@@ -62,10 +66,10 @@
 			</div>
 			<div class="flex flex-col gap-2">
 				<h2 id="disconnect-overlay-title" class="text-lg font-semibold text-foreground">
-					{state === 'failed' ? 'Can’t reach the server' : 'Reconnecting…'}
+					{connectionState === 'failed' ? 'Can’t reach the server' : 'Reconnecting…'}
 				</h2>
 				<p id="disconnect-overlay-body" class="text-sm leading-relaxed text-muted-foreground">
-					{#if state === 'failed'}
+					{#if connectionState === 'failed'}
 						We’ve been unable to reach the server for several minutes. Check that it’s running, then retry.
 					{:else}
 						The connection to the server has dropped. We’re trying to reconnect automatically.
