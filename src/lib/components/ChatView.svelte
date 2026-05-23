@@ -4,8 +4,7 @@
 	import { tick, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
-	import ImageModal from '$lib/components/ImageModal.svelte';
-	import MessageImageLightbox from '$lib/components/MessageImageLightbox.svelte';
+	import ImageLightbox from '$lib/components/ImageLightbox.svelte';
 	import MessageBubble from '$lib/components/MessageBubble.svelte';
 	import ChatSettings from '$lib/components/ChatSettings.svelte';
 	import ReasoningModal from '$lib/components/ReasoningModal.svelte';
@@ -3375,21 +3374,28 @@
 	</div>
 </div>
 
-<ImageModal src={enlargedImage} onclose={() => (enlargedImage = null)} />
+<ImageLightbox src={enlargedImage} onclose={() => (enlargedImage = null)} />
 
-<MessageImageLightbox
-	messageId={lightboxMessageId}
+<ImageLightbox
 	images={(() => {
 		if (lightboxMessageId === null) return [];
 		const list = messageImages[lightboxMessageId] ?? [];
 		const msg = messageList.find((m) => m.id === lightboxMessageId);
 		const swipeIdx = msg?.swipeIndex ?? 0;
-		return list.filter((im) => (im.swipeIndex ?? 0) === swipeIdx);
+		return list
+			.filter((im) => (im.swipeIndex ?? 0) === swipeIdx)
+			.map((im) => ({
+				id: im.id,
+				src: `/api/images/cache/${im.filePath}`,
+				prompt: im.prompt,
+				isActive: im.isActive,
+				downloadName: `message-${lightboxMessageId}-${im.filePath}`
+			}));
 	})()}
 	regenerating={lightboxMessageId !== null && imageGenInFlight.has(lightboxMessageId)}
 	onclose={() => (lightboxMessageId = null)}
-	onactivate={(imageId) => lightboxMessageId !== null && activateMessageImage(lightboxMessageId, imageId)}
-	ondelete={(imageId) => lightboxMessageId !== null && deleteMessageImage(lightboxMessageId, imageId)}
+	onactivate={(imageId) => lightboxMessageId !== null && activateMessageImage(lightboxMessageId, imageId as number)}
+	ondelete={(imageId) => lightboxMessageId !== null && deleteMessageImage(lightboxMessageId, imageId as number)}
 	onregenerate={() => lightboxMessageId !== null && generateImageForMessage(lightboxMessageId)}
 />
 
