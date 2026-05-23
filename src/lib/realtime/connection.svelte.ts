@@ -2,36 +2,36 @@ import { browser } from '$app/environment';
 import { toasts } from '$lib/stores/toast.svelte.js';
 
 /**
- * The whole long-lived realtime connection layer lives here:
- *   - SSE to `/api/events` with reconnect + eventual give-up;
- *   - exposes `connectionState` ('connected' | 'disconnected' | 'failed')
- *     plus a `manualReconnect()` action for the disconnect modal;
+ * Long-lived realtime layer:
+ *   - SSE to `/api/events` with jittered backoff + a hard give-up window;
+ *   - exposes a small connection state machine
+ *     ('connecting' | 'connected' | 'reconnecting' | 'failed')
+ *     plus `manualReconnect()` for the disconnect overlay;
  *   - revalidates the build version on connect / visibility / pageshow / online
- *     and reloads the page when the server's shipped a new bundle out from
- *     under us;
- *   - reports presence (focus + active chat) to `/api/presence` with a 30s heartbeat;
- *   - syncs the user's IANA timezone to the server on first connect;
- *   - listens for service-worker `open-chat` messages and forwards them via `onSwOpenChat`.
+ *     and reloads when the server's shipped a new bundle;
+ *   - heartbeats presence to `/api/presence` and syncs the user's timezone;
+ *   - listens for service-worker `open-chat` messages.
  *
- * Everything chat-state-y happens inside the caller's `onEvent` callback so
- * this stays UI-agnostic. SSE messages are JSON-parsed once and handed off;
- * malformed events get silently dropped (better than a noisy console).
- *
- * Lifted out of `+layout.svelte` (~400 lines was getting embarrassing).
+ * The state machine is deliberately tight: only the server's `connected`
+ * sentinel flips us to `connected`, and once the overlay is up it stays up
+ * until that sentinel arrives. That's what kills the "overlay → blank UI →
+ * overlay" flicker the older version had during deploys / mobile handovers.
  */
 
 declare const __APP_VERSION__: string;
 
-// Module-scoped so multiple effect runs (or two callers in the same tab)
-// can't each trigger their own reload toast. Once we've decided to reload
-// for a given server version, every other call short-circuits.
+// Module-scoped so concurrent effect runs / multiple callers in the same tab
+// can't each trigger their own reload toast. Once we've decided to reload for
+// a given server version, every other call short-circuits.
 let reloadingForUpdate = false;
 let versionCheckInFlight = false;
 
-// Hard cap: only ever reload ONCE per loaded shell, per server version.
-// If a stale service-worker keeps handing back the old bundle after the
-// reload, we'd otherwise loop forever (toast → reload → still stale → toast).
+// Hard cap: only ever reload ONCE per loaded shell, per server version. If a
+// stuck service worker keeps handing back the old bundle after the reload, we'd
+// otherwise loop forever (toast → reload → still stale → toast).
 const RELOAD_MARKER_KEY = 'skald:reloadedForVersion';
+
+export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 interface CreateRealtimeConnectionOptions {
 	/** Usually `() => !!data.user` — when false, no SSE / presence calls fire. */
@@ -54,13 +54,22 @@ export function createRealtimeConnection({
 	onSwOpenChat,
 	getInitialUserTimezone
 }: CreateRealtimeConnectionOptions) {
-	let connectionState = $state<'connected' | 'disconnected' | 'failed'>('connected');
+	// State machine semantics:
+	//   connecting   → we haven't confirmed a real SSE handshake yet this
+	//                  session. The overlay stays HIDDEN during this window so
+	//                  a normal cold load doesn't flash anything.
+	//   connected    → server sent us its `connected` sentinel; everything good.
+	//   reconnecting → either we lost a previously-good connection, or the
+	//                  cold-boot grace window expired without success. Overlay
+	//                  is shown and we keep retrying in the background.
+	//   failed       → exhausted the give-up window. Overlay still shown, copy
+	//                  prompts the user to do something about it.
+	let connectionState = $state<ConnectionState>('connecting');
 	let manualReconnectFn: (() => void) | null = null;
 
 	function reportPresence(payload: { activeChatId?: number | null; focused?: boolean }) {
-		// Skip if the user isn't logged in. The server returns 401, which Safari
-		// renders as a scary "access control" console error, and there's no point
-		// firing it in the first place.
+		// Skip when logged out — the 401 surfaces as a scary "access control"
+		// error in Safari's console and there's nothing useful to report anyway.
 		if (!getEnabled()) return;
 		fetch('/api/presence', {
 			method: 'POST',
@@ -77,204 +86,187 @@ export function createRealtimeConnection({
 		let eventSource: EventSource | null = null;
 		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 		let giveUpTimer: ReturnType<typeof setTimeout> | null = null;
-		let wasConnected = false;
-		// Failed connect attempts since the last successful onopen. We stay quiet on
-		// the first failure because most drops are transient (mobile network handover,
-		// server bounce, dev HMR reload) and recover on the next tick. Only when the
-		// silent retry ALSO fails do we surface a "Disconnected" toast.
+		let coldBootTimer: ReturnType<typeof setTimeout> | null = null;
+
+		// Source of truth for "have we had a real, server-confirmed stream this
+		// session yet". Only flipped inside the `connected` sentinel handler —
+		// never on EventSource.onopen, which some reverse-proxy setups fire
+		// spuriously for buffered responses that never deliver any data.
+		let everConnected = false;
 		let failedAttempts = 0;
-		let disconnectToastShown = false;
-		// Exponential backoff with full jitter (AWS-style). At 5s base / 60s cap and
-		// 2x growth: 5s, 10s, 20s, 40s, 60s, 60s, … with each delay randomised in
-		// [0, delay) so N tabs reconnecting after a server bounce don't thunder.
-		const RECONNECT_BASE_MS = 5000;
-		const RECONNECT_CAP_MS = 60_000;
-		const GIVE_UP_AFTER = 3 * 60 * 1000;
-		// How long to wait for the very first SSE handshake before flipping the
-		// overlay on. Keeps a normal cold load from flashing an overlay during
-		// the ~100ms it takes to open the stream while still surfacing the
-		// "server unreachable" state quickly when we boot from the SW's cached
-		// shell with the upstream actually down.
-		const INITIAL_CONNECT_TIMEOUT_MS = 1500;
-		let initialConnectTimer: ReturnType<typeof setTimeout> | null = null;
-		function nextReconnectDelay(): number {
-			const exp = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * 2 ** failedAttempts);
+
+		// Tunables. The cold-boot grace is generous on purpose: on slow networks
+		// the SSE handshake can easily take >1s, and a brief overlay flash on
+		// every normal page load was the loudest user complaint about the older
+		// implementation.
+		const RECONNECT_BASE_MS = 2000;
+		const RECONNECT_CAP_MS = 30_000;
+		const GIVE_UP_AFTER_MS = 3 * 60 * 1000;
+		const COLD_BOOT_GRACE_MS = 4000;
+
+		function jitteredBackoff(): number {
+			// Exponential backoff with full jitter (AWS-style): N tabs all
+			// reconnecting after a server bounce don't thunder.
+			const exp = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * 2 ** Math.min(failedAttempts, 6));
 			return Math.floor(Math.random() * exp);
 		}
 
-		async function checkVersion() {
-			if (reloadingForUpdate || versionCheckInFlight) return;
-			versionCheckInFlight = true;
-			try {
-				// Cache-bust so the PWA / service-worker fetch handler can't hand us
-				// back a stale /api/version from disk.
-				const res = await fetch('/api/version?t=' + Date.now(), {
-					cache: 'no-store',
-					headers: { 'Cache-Control': 'no-cache' },
-					signal: AbortSignal.timeout(5000)
-				});
-				if (res.ok) {
-					const { current } = await res.json();
-					// Always compare against the build constant baked into THIS bundle.
-					// We used to capture `serverVersion` from the first reply and compare
-					// against that, which left PWAs stuck on stale builds: if the server
-					// already had the new version when an old cached shell loaded, the
-					// first check just stored the new value and never reloaded.
-					if (current && current !== __APP_VERSION__) {
-						// Don't loop: if we already reloaded once for this server version
-						// but the cached bundle is still on the old version (likely a
-						// stuck service worker), just stop nagging the user. Settling on
-						// the next foreground / poll cycle is fine once the SW finally
-						// swaps in the new build.
-						let alreadyReloaded = false;
-						try { alreadyReloaded = sessionStorage.getItem(RELOAD_MARKER_KEY) === current; }
-						catch { /* sessionStorage may be blocked */ }
-						if (alreadyReloaded) return;
-						reloadingForUpdate = true;
-						try { sessionStorage.setItem(RELOAD_MARKER_KEY, current); }
-						catch { /* ignore */ }
-						toasts.info('New version detected, reloading...', 3000);
-						// Best-effort: poke the service worker to grab the new build
-						// before we reload, so the next page load isn't served from
-						// the previous version's cache.
-						try {
-							const reg = await navigator.serviceWorker?.getRegistration();
-							await reg?.update();
-						} catch { /* non-fatal */ }
-						setTimeout(() => window.location.reload(), 1500);
-					} else if (current && current === __APP_VERSION__) {
-						// Bundle matches server again — clear the marker so a future
-						// deploy in this same tab session can prompt another reload.
-						try { sessionStorage.removeItem(RELOAD_MARKER_KEY); }
-						catch { /* ignore */ }
-					}
-				}
-			} catch { /* version check failed, not the end of the world */ }
-			finally { versionCheckInFlight = false; }
-		}
-
-		function clearTimers() {
+		function clearAllTimers() {
 			if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 			if (giveUpTimer) { clearTimeout(giveUpTimer); giveUpTimer = null; }
-			if (initialConnectTimer) { clearTimeout(initialConnectTimer); initialConnectTimer = null; }
+			if (coldBootTimer) { clearTimeout(coldBootTimer); coldBootTimer = null; }
 		}
 
-		function startGiveUpTimer() {
+		function armGiveUpTimer() {
 			if (giveUpTimer) return;
 			giveUpTimer = setTimeout(() => {
-				clearTimers();
+				giveUpTimer = null;
 				eventSource?.close();
+				eventSource = null;
 				connectionState = 'failed';
-			}, GIVE_UP_AFTER);
+			}, GIVE_UP_AFTER_MS);
 		}
 
 		function scheduleReconnect() {
 			if (reconnectTimer) return;
 			reconnectTimer = setTimeout(() => {
 				reconnectTimer = null;
-				connect();
-			}, nextReconnectDelay());
+				openConnection();
+			}, jitteredBackoff());
 		}
 
-		function showDisconnectedOverlay() {
-			if (disconnectToastShown) return;
-			connectionState = 'disconnected';
-			disconnectToastShown = true;
-			startGiveUpTimer();
+		async function checkVersion() {
+			if (reloadingForUpdate || versionCheckInFlight) return;
+			versionCheckInFlight = true;
+			try {
+				// Cache-bust so the PWA / service worker can't hand us back a
+				// stale /api/version from disk.
+				const res = await fetch('/api/version?t=' + Date.now(), {
+					cache: 'no-store',
+					headers: { 'Cache-Control': 'no-cache' },
+					signal: AbortSignal.timeout(5000)
+				});
+				if (!res.ok) return;
+				const { current } = await res.json();
+				if (!current) return;
+				// Always compare against the build constant baked into THIS bundle.
+				// Comparing against a captured "first seen" value left PWAs stuck on
+				// stale builds when the server was already ahead at first load.
+				if (current !== __APP_VERSION__) {
+					let alreadyReloaded = false;
+					try { alreadyReloaded = sessionStorage.getItem(RELOAD_MARKER_KEY) === current; }
+					catch { /* sessionStorage may be blocked */ }
+					if (alreadyReloaded) return;
+					reloadingForUpdate = true;
+					try { sessionStorage.setItem(RELOAD_MARKER_KEY, current); } catch { /* ignore */ }
+					toasts.info('New version detected, reloading...', 3000);
+					// Poke the SW so the next load gets the new bundle from network,
+					// not the previous version's cache.
+					try {
+						const reg = await navigator.serviceWorker?.getRegistration();
+						await reg?.update();
+					} catch { /* non-fatal */ }
+					setTimeout(() => window.location.reload(), 1500);
+				} else {
+					// Bundle matches server again — clear the marker so a future deploy
+					// in this same tab can prompt another reload.
+					try { sessionStorage.removeItem(RELOAD_MARKER_KEY); } catch { /* ignore */ }
+				}
+			} catch { /* version check best-effort */ }
+			finally { versionCheckInFlight = false; }
 		}
 
-		function connect() {
+		function openConnection() {
+			// Tear down any previous attempt. Capture `es` in closures so the old
+			// handlers can detect they're stale (the spec doesn't guarantee
+			// close() suppresses queued onerror dispatches, and we've seen them
+			// flip state mid-reconnect in practice).
 			eventSource?.close();
-			eventSource = new EventSource(`/api/events?sid=${sessionId}`);
+			eventSource = null;
 
-			// Cold-boot safety net: if we've never managed a successful SSE
-			// handshake and the EventSource is still spinning after a short
-			// window, surface the disconnect overlay. This covers the case
-			// where the SW served its cached shell and the upstream is
-			// genuinely down — without this, the onerror branch below stays
-			// silent (because wasConnected is false) and the user sees an
-			// empty, hydrating UI instead of the overlay.
-			if (!wasConnected && !initialConnectTimer) {
-				initialConnectTimer = setTimeout(() => {
-					initialConnectTimer = null;
-					if (!wasConnected) showDisconnectedOverlay();
-				}, INITIAL_CONNECT_TIMEOUT_MS);
+			const es = new EventSource(`/api/events?sid=${sessionId}`);
+			eventSource = es;
+
+			// Cold-boot grace: only arm this on the FIRST attempt of the session.
+			// Once everConnected is true we trust onerror to drive the overlay
+			// instantly — the grace window is purely there to avoid flashing the
+			// overlay during the normal SSE handshake on a healthy load.
+			if (!everConnected && !coldBootTimer) {
+				coldBootTimer = setTimeout(() => {
+					coldBootTimer = null;
+					if (!everConnected) {
+						connectionState = 'reconnecting';
+						armGiveUpTimer();
+					}
+				}, COLD_BOOT_GRACE_MS);
 			}
 
-			// onopen alone isn't trustworthy: some reverse-proxy
-			// configurations briefly fire it for cached / pre-empty
-			// responses, then close the stream a beat later. If we reset
-			// `failedAttempts` / `disconnectToastShown` based on that fake
-			// open, the next onerror needs a second failure before re-showing
-			// the overlay — producing the "overlay → empty UI → overlay"
-			// flicker users see during a flapping deploy. Hold all the
-			// connected-state side effects until the server's `connected`
-			// sentinel event actually arrives, which only happens when the
-			// stream is genuinely being served by us.
-			eventSource.addEventListener('connected', () => {
-				clearTimers();
-				if (wasConnected && disconnectToastShown) {
-					toasts.success('Reconnected to server');
-					checkVersion();
-				} else if (!wasConnected) {
-					checkVersion();
-				}
-				wasConnected = true;
+			// `connected` is the ONLY trigger for flipping to the connected
+			// state. EventSource.onopen is not trustworthy in front of some
+			// proxies (it can fire for cached / buffered responses that never
+			// deliver real events). Driving state off the sentinel eliminates
+			// the overlay → blank UI → overlay flicker that pattern causes.
+			es.addEventListener('connected', () => {
+				if (eventSource !== es) return; // stale handler from a previous attempt
+				const wasOverlayUp = connectionState === 'reconnecting' || connectionState === 'failed';
+				const firstTime = !everConnected;
+				clearAllTimers();
 				failedAttempts = 0;
-				disconnectToastShown = false;
+				everConnected = true;
 				connectionState = 'connected';
-				// Resync full presence to the server immediately. Without this, the
-				// server-side session re-registered for this SSE has stale focus/chat
-				// state until the next focus event or 30s heartbeat — long enough to
-				// fire a "you're away" push for a message that arrives right as the
-				// user returns to the tab.
+
+				if (wasOverlayUp && !firstTime) toasts.success('Reconnected to server');
+				checkVersion();
+
+				// Resync presence immediately; without this the server's view of
+				// activeChatId/focused can lag long enough after a reconnect to
+				// fire a stray "you're away" push.
 				reportPresence({
 					focused: typeof document !== 'undefined' && document.hasFocus() && !document.hidden,
 					activeChatId: getActiveChatId()
 				});
 			});
 
-			eventSource.onmessage = (e) => {
-				try {
-					const event = JSON.parse(e.data);
-					onEvent(event);
-				} catch {
-					// skip malformed events
-				}
+			es.onmessage = (e) => {
+				if (eventSource !== es) return;
+				try { onEvent(JSON.parse(e.data)); }
+				catch { /* malformed payload, drop silently */ }
 			};
 
-			eventSource.onerror = () => {
-				eventSource?.close();
+			es.onerror = () => {
+				// Ignore errors from EventSources we've already replaced — otherwise
+				// a stale onerror after openConnection() would flip the state of a
+				// brand-new attempt and bump failedAttempts unnecessarily.
+				if (eventSource !== es) return;
+				es.close();
+				eventSource = null;
 				failedAttempts += 1;
-				// Two separate "show the overlay" thresholds:
-				//   • Previously connected (transient drop): stay silent on the
-				//     first failure — most drops are mobile handover / HMR /
-				//     bouncing server, and recover on the next tick. Surface
-				//     after a second consecutive failure.
-				//   • Never connected (cold boot, almost always means the SW
-				//     handed back its cached shell because the server is down):
-				//     show the overlay on the very first failure so the user
-				//     isn't staring at an empty, mostly-broken UI while we
-				//     silently retry.
-				const threshold = wasConnected ? 2 : 1;
-				if (failedAttempts >= threshold) {
-					showDisconnectedOverlay();
+
+				// Only flip the overlay on if we've actually had a working stream
+				// before. Cold-boot errors are handled by the grace timer — flipping
+				// here would defeat the anti-flicker delay.
+				if (everConnected && connectionState === 'connected') {
+					connectionState = 'reconnecting';
+					armGiveUpTimer();
 				}
 				scheduleReconnect();
 			};
 		}
 
-		connect();
+		openConnection();
 
 		manualReconnectFn = () => {
-			clearTimers();
+			clearAllTimers();
 			failedAttempts = 0;
-			disconnectToastShown = false;
-			if (connectionState === 'failed') connectionState = 'disconnected';
-			connect();
+			// Pretend we're starting fresh: hide the overlay during the manual
+			// retry handshake so the click feels responsive. If the retry fails
+			// the normal flow will put it back up.
+			connectionState = everConnected ? 'reconnecting' : 'connecting';
+			openConnection();
 		};
 
-		// Push the user's IANA timezone up so the server can evaluate quiet hours for push notifications.
+		// Push the user's IANA timezone up so the server can evaluate quiet
+		// hours for push notifications.
 		try {
 			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 			if (tz && tz !== getInitialUserTimezone?.()) {
@@ -294,31 +286,23 @@ export function createRealtimeConnection({
 		};
 		navigator.serviceWorker?.addEventListener('message', swMessageHandler);
 
-		// Hard reconnect every time we come back to the foreground.
-		// Mobile browsers (iOS Safari especially) freeze the page in the background and
-		// the SSE connection goes silently stale: it still claims `readyState === OPEN`
-		// but no events arrive. Forcing a reconnect on every visibility transition
-		// pulls the buffered `complete` event back via Last-Event-ID, which unsticks
-		// any chat that finished generating while we were away.
+		// Mobile (iOS Safari especially) freezes the page in the background and
+		// the SSE connection goes silently stale: readyState still reads OPEN
+		// but no events arrive. Force a fresh connect on every visibility
+		// transition so we pick up anything buffered via Last-Event-ID.
 		const visibilityHandler = () => {
 			if (!document.hidden) {
-				clearTimers();
-				// ALWAYS revalidate version on foreground. Quick visibility-driven
-				// reconnects used to skip this because `disconnectToastShown` stays
-				// false, leaving long-suspended PWAs running on a stale build forever.
+				clearAllTimers();
 				checkVersion();
-				connect();
+				openConnection();
 			}
-			// Send full presence (focus + active chat) so the server can't end up
-			// with a stale activeChatId after a long background period. The SSE
-			// onopen will repeat this once the new connection lands; the upsert in
-			// presence.update() makes either ordering safe.
 			reportPresence({ focused: !document.hidden, activeChatId: getActiveChatId() });
 		};
 		document.addEventListener('visibilitychange', visibilityHandler);
 
-		// Same revalidation on bfcache restore (Safari back/forward) and network-online —
-		// both can drop us back into a long-running app that hasn't checked its version in a while.
+		// Same revalidation on bfcache restore (Safari back/forward) and
+		// network-online — both can drop us back into a long-running app that
+		// hasn't checked its version in a while.
 		const pageshowHandler = (e: PageTransitionEvent) => {
 			if (e.persisted) checkVersion();
 		};
@@ -326,18 +310,18 @@ export function createRealtimeConnection({
 		window.addEventListener('pageshow', pageshowHandler);
 		window.addEventListener('online', onlineHandler);
 
-		// Background poll every 5 minutes while the tab/PWA is foregrounded — covers the
-		// case where neither visibility nor online ever fire (user keeps the PWA open
-		// across a deploy without backgrounding).
+		// Background poll while the tab/PWA is foregrounded — covers the case
+		// where neither visibility nor online ever fire (user keeps the PWA
+		// open across a deploy without backgrounding).
 		const VERSION_POLL_INTERVAL = 5 * 60 * 1000;
 		const versionPollTimer = setInterval(() => {
 			if (!document.hidden) checkVersion();
 		}, VERSION_POLL_INTERVAL);
-		// Immediate check on mount so a cold-loaded stale shell reloads even before
-		// the SSE handshake completes.
+		// Immediate check on mount so a cold-loaded stale shell reloads even
+		// before the SSE handshake completes.
 		checkVersion();
 
-		// Window focus/blur is more granular than visibilitychange, hence the second pair.
+		// Window focus/blur is more granular than visibilitychange.
 		const focusHandler = () => reportPresence({ focused: true, activeChatId: getActiveChatId() });
 		const blurHandler = () => reportPresence({ focused: false });
 		window.addEventListener('focus', focusHandler);
@@ -350,7 +334,7 @@ export function createRealtimeConnection({
 			if (document.hasFocus() && !document.hidden) {
 				reportPresence({ focused: true, activeChatId: getActiveChatId() });
 			}
-		}, 30000);
+		}, 30_000);
 
 		return () => {
 			manualReconnectFn = null;
@@ -363,7 +347,8 @@ export function createRealtimeConnection({
 			window.removeEventListener('blur', blurHandler);
 			navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
 			eventSource?.close();
-			clearTimers();
+			eventSource = null;
+			clearAllTimers();
 		};
 	});
 

@@ -3075,7 +3075,7 @@
 {/if}
 <PinLockOverlay />
 
-{#if realtime.connectionState !== 'connected'}
+{#if realtime.connectionState === 'reconnecting' || realtime.connectionState === 'failed'}
 	<div class="fixed inset-0 z-[300] flex items-center justify-center bg-background/80 backdrop-blur-md">
 		<div class="mx-4 flex w-full max-w-sm flex-col items-center gap-5 rounded-2xl border border-border bg-card p-8 text-center shadow-2xl">
 			<div class="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
