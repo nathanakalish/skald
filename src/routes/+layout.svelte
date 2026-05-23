@@ -201,7 +201,16 @@
 	// that re-validates if the restored snapshot shows no user but a cookie
 	// might exist.
 	onMount(() => {
-		const refresh = () => invalidateAll();
+		// Skip the revalidation round-trip when the server is unreachable.
+		// invalidateAll() re-runs +layout.server.ts; with the backend down that
+		// either errors out or transiently nulls `data.user`, which causes the
+		// app shell to flash underneath the disconnect overlay on every
+		// focus/visibility event. The overlay manager will trigger its own
+		// re-fetch path via the SSE `connected` sentinel once we're back.
+		const refresh = () => {
+			if (realtime.connectionState !== 'connected') return;
+			invalidateAll();
+		};
 		const onShow = () => refresh();
 		const onVisible = () => {
 			if (document.visibilityState === 'visible') refresh();
@@ -211,8 +220,9 @@
 		document.addEventListener('visibilitychange', onVisible);
 		// On bfcache restore the snapshot may show !user even though the cookie
 		// is still valid. Force one fresh load so we don't strand the user on
-		// the login form.
-		if (!data.user) refresh();
+		// the login form. (Only if we're already online; otherwise the reconnect
+		// effect below will pick this up once SSE re-establishes.)
+		if (!data.user && realtime.connectionState === 'connected') refresh();
 		return () => {
 			window.removeEventListener('pageshow', onShow);
 			window.removeEventListener('focus', refresh);
@@ -942,6 +952,19 @@
 		onEvent: handleRealtimeEvent,
 		onSwOpenChat: (chatId) => openChat(chatId),
 		getInitialUserTimezone: () => (data as any).userTimezone ?? null
+	});
+
+	// Re-fetch server data once whenever we transition back into 'connected'.
+	// The focus/visibility refresh path is now gated on connectionState so
+	// it won't fire while we're offline; this picks up the catch-up load
+	// exactly once when the connection actually returns.
+	let lastSeenConnState: typeof realtime.connectionState = realtime.connectionState;
+	$effect(() => {
+		const s = realtime.connectionState;
+		if (s === 'connected' && lastSeenConnState !== 'connected') {
+			invalidateAll();
+		}
+		lastSeenConnState = s;
 	});
 
 	function setLastChatCookie(id: number | null) {
