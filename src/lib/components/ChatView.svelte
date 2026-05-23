@@ -55,7 +55,7 @@
 		reduceMotion?: boolean;
 		blockExternalContent?: boolean;
 		nestedEmphasisInSpeech?: boolean;
-		connectionState?: 'connected' | 'disconnected' | 'failed';
+		connectionState?: 'connecting' | 'connected' | 'reconnecting' | 'failed';
 	} = $props();
 
 	// Resolve the active provider for this chat
