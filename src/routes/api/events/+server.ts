@@ -72,6 +72,13 @@ export const GET: RequestHandler = (requestEvent) => {
 				safeEnqueue(encoder.encode(': keepalive\n\n'));
 			}, 30000);
 
+			// Liveness sentinel sent BEFORE any replay / subscription work, so
+			// the client knows this stream is actually being served by us (not
+			// e.g. a reverse-proxy cached 200 that briefly fires `onopen` but
+			// never delivers real data). Sent as a named event with `id: 0` so
+			// it doesn't pollute Last-Event-ID tracking.
+			safeEnqueue(encoder.encode('event: connected\nid: 0\ndata: ok\n\n'));
+
 			// Replay any events missed since the last connection.
 			if (lastEventId > 0) {
 				const missed = eventBus.replay(lastEventId, user.id);
@@ -146,7 +153,6 @@ export const GET: RequestHandler = (requestEvent) => {
 				}
 			});
 
-			safeEnqueue(encoder.encode(': connected\n\n'));
 		},
 		cancel() {
 			cleanup();

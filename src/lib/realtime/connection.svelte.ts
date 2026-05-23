@@ -201,7 +201,17 @@ export function createRealtimeConnection({
 				}, INITIAL_CONNECT_TIMEOUT_MS);
 			}
 
-			eventSource.onopen = () => {
+			// onopen alone isn't trustworthy: some reverse-proxy
+			// configurations briefly fire it for cached / pre-empty
+			// responses, then close the stream a beat later. If we reset
+			// `failedAttempts` / `disconnectToastShown` based on that fake
+			// open, the next onerror needs a second failure before re-showing
+			// the overlay — producing the "overlay → empty UI → overlay"
+			// flicker users see during a flapping deploy. Hold all the
+			// connected-state side effects until the server's `connected`
+			// sentinel event actually arrives, which only happens when the
+			// stream is genuinely being served by us.
+			eventSource.addEventListener('connected', () => {
 				clearTimers();
 				if (wasConnected && disconnectToastShown) {
 					toasts.success('Reconnected to server');
@@ -222,7 +232,7 @@ export function createRealtimeConnection({
 					focused: typeof document !== 'undefined' && document.hasFocus() && !document.hidden,
 					activeChatId: getActiveChatId()
 				});
-			};
+			});
 
 			eventSource.onmessage = (e) => {
 				try {
