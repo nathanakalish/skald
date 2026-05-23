@@ -3037,7 +3037,8 @@
 					{@const isLast = i === messageList.length - 1}
 					{@const swipeMsgImages = (messageImages[message.id] ?? []).filter((im) => (im.swipeIndex ?? 0) === (message.swipeIndex ?? 0))}
 					{@const activeMsgImage = swipeMsgImages.find((im) => im.isActive) ?? swipeMsgImages[swipeMsgImages.length - 1] ?? null}
-					{@const activeMsgImageUrl = activeMsgImage ? `/api/images/cache/${activeMsgImage.filePath}` : null}
+					{@const isRegenStreamTarget = streamIsRegenerate && streamingAssistantIdx === i}
+					{@const activeMsgImageUrl = (isRegenStreamTarget || !activeMsgImage) ? null : `/api/images/cache/${activeMsgImage.filePath}`}
 					<MessageBubble
 						{message}
 						generatedImageUrl={activeMsgImageUrl}

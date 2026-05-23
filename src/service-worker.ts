@@ -12,12 +12,30 @@ const CACHE_NAME = `skald-cache-${version}`;
 // Build artefacts + static files
 const ASSETS = [...build, ...files];
 
+// Cache key for the most recent successful navigation HTML. Used as the
+// offline fallback so a refresh / cold-load during a deploy or proxy outage
+// keeps showing the app shell (and its disconnect overlay) instead of the
+// reverse proxy's error page. Refreshed on every successful navigation.
+const NAV_FALLBACK_URL = '/__skald-nav-fallback__';
+
 self.addEventListener('install', (event) => {
 	event.waitUntil(
-		caches
-			.open(CACHE_NAME)
-			.then((cache) => cache.addAll(ASSETS))
-			.then(() => self.skipWaiting())
+		(async () => {
+			const cache = await caches.open(CACHE_NAME);
+			await cache.addAll(ASSETS);
+			// Prime the offline navigation fallback with the current shell.
+			// `credentials: 'include'` is needed because the SvelteKit shell
+			// is server-rendered against the user's session. A failure here
+			// just leaves the fallback unprimed — the next successful
+			// navigation will populate it.
+			try {
+				const response = await fetch('/', { credentials: 'include' });
+				if (response.ok) {
+					await cache.put(NAV_FALLBACK_URL, response.clone());
+				}
+			} catch { /* best-effort; not worth blocking install */ }
+			await self.skipWaiting();
+		})()
 	);
 });
 
@@ -89,10 +107,49 @@ self.addEventListener('fetch', (event) => {
 		event.request.mode === 'navigate' ||
 		(event.request.destination === '' && event.request.headers.get('accept')?.includes('text/html'));
 
-	// Never cache navigation HTML — it embeds hashed chunk URLs that only exist
-	// for the current deployment. Serving stale HTML after a redeploy breaks
-	// the page (chunks 404). Let the browser fetch fresh.
-	if (isNavigation) return;
+	// Navigation HTML: network-first with an offline fallback to the last
+	// good shell. Cached shells live under the version-stamped CACHE_NAME so
+	// their embedded hashed-chunk URLs stay consistent with whatever build
+	// artefacts the install handler pre-cached — a new deploy bumps the
+	// cache name, the activate handler drops the old one, and the next
+	// successful navigation re-populates the fallback with the new HTML.
+	//
+	// Without this, a reload during a deploy (or any moment the reverse
+	// proxy can't reach upstream) lands on the proxy's "Bad Gateway" page
+	// and the user is stuck until they manually refresh post-deploy. With
+	// it, they keep seeing the Skald shell + disconnect overlay, which
+	// auto-reconnects in the background.
+	if (isNavigation) {
+		event.respondWith(
+			(async () => {
+				const cache = await caches.open(CACHE_NAME);
+				try {
+					const response = await fetch(event.request);
+					if (response.ok) {
+						// Refresh the fallback on every successful load so it
+						// stays up to date — including after the user has been
+						// browsing for a while and we want any newly-deployed
+						// shell quirks (CSP, meta, etc) reflected in the
+						// offline copy too.
+						cache.put(NAV_FALLBACK_URL, response.clone()).catch(() => {});
+						return response;
+					}
+					// Bad upstream (5xx from the proxy, etc): prefer the
+					// cached shell when we have one. Only surface the real
+					// error response when we genuinely have nothing better
+					// to show.
+					const cached = await cache.match(NAV_FALLBACK_URL);
+					return cached ?? response;
+				} catch {
+					// Network unreachable (DNS, offline, proxy fully down).
+					const cached = await cache.match(NAV_FALLBACK_URL);
+					if (cached) return cached;
+					return new Response('Offline', { status: 503 });
+				}
+			})()
+		);
+		return;
+	}
 
 	event.respondWith(
 		(async () => {
