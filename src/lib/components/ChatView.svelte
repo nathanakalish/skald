@@ -1359,6 +1359,10 @@
 			bootstrappedStartedAt = null;
 			didHydrateGen = false;
 			knownMessageIds = new Set(incoming.map(m => m.id));
+			// Reset messageImages from the new chat's initial payload. Without
+			// this the previous chat's image metadata stayed in memory and the
+			// Record grew across chat switches.
+			messageImages = initialMessageImages ?? {};
 			const savedScroll = loadScroll(chatId);
 			if (savedScroll != null && savedScroll > 0) {
 				tick().then(() => {
@@ -1894,6 +1898,21 @@
 		return linkValidator.cleanup;
 	});
 
+	// Prune messageImages so entries for messages that are no longer in the
+	// list (deleted, regen'd into nothing, etc.) don't accumulate. Otherwise
+	// the Record grows for the whole session — over many edits + deletes it
+	// becomes a noticeable leak.
+	$effect(() => {
+		const liveIds = new Set(messageList.map(m => m.id));
+		let pruned = false;
+		const next: typeof messageImages = {};
+		for (const [id, list] of Object.entries(messageImages)) {
+			if (liveIds.has(Number(id))) next[Number(id)] = list;
+			else pruned = true;
+		}
+		if (pruned) messageImages = next;
+	});
+
 	// Track whether user has manually scrolled away during streaming
 	let userScrolledAway = $state(false);
 
@@ -1905,12 +1924,19 @@
 		return Math.abs(messagesContainer.scrollTop) < px;
 	}
 
-	// Preserve scroll position when content changes and user is scrolled away.
-	// In column-reverse, content growth pushes everything above the growth point upward.
-	// We compensate by adjusting scrollTop by the height delta.
+	// Preserve scroll position when content changes and the user is scrolled
+	// up. In column-reverse, content growth pushes everything above the growth
+	// point upward by the height delta, so we subtract that delta from scrollTop
+	// (which is negative when scrolled up) to keep the user pinned to the same
+	// content. Gating on the LIVE scroll position rather than the sticky
+	// `userScrolledAway` flag matters: that flag never resets mid-stream, so if
+	// the user scrolled up and then back to the bottom during generation we'd
+	// keep subtracting deltas from scrollTop=0 and shove the view away from the
+	// bottom every token. Using isNearBottom() here lets natural
+	// flex-col-reverse anchoring take over the moment they're back at the bottom.
 	async function updateMessagePreservingScroll(updateFn: () => void) {
 		const el = messagesContainer;
-		if (!el || !userScrolledAway) {
+		if (!el || isNearBottom()) {
 			updateFn();
 			return;
 		}
@@ -2972,7 +2998,11 @@
 	{/if}
 
 	<!-- Messages -->
-	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6">
+	<!-- overflow-anchor: none — the browser's scroll-anchoring is unreliable
+	     inside flex-col-reverse and double-corrects on top of our manual
+	     updateMessagePreservingScroll(), causing visible jitter during token
+	     streaming. We do the compensation ourselves; disable the browser's. -->
+	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6" style="overflow-anchor: none;">
 		<div class="mx-auto w-full max-w-5xl space-y-4">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
 			     windowed-render top-sentinel. Fixed height (not min-h) so the slot

@@ -1823,8 +1823,21 @@
 		return result;
 	}
 
-	// Clear time cache periodically (times like "3:42 PM" become stale)
-	if (browser) setInterval(() => formatTimeCache.clear(), 60_000);
+	// Clear both caches periodically. Moved into an $effect so the timer is
+	// torn down with the component instead of running for the lifetime of the
+	// SPA — a module-level setInterval here was a slow leak: every iOS Safari
+	// foreground/background cycle left the closure (and the Maps it captured)
+	// alive in the background scope. formatPreviewCache used to grow without
+	// any cap because it was keyed on `{chatId}:{lastMessage}`, so every new
+	// preview minted a permanent entry.
+	$effect(() => {
+		if (!browser) return;
+		const timer = setInterval(() => {
+			formatTimeCache.clear();
+			formatPreviewCache.clear();
+		}, 60_000);
+		return () => clearInterval(timer);
+	});
 
 	function formatPreview(chat: any): string {
 		const cacheKey = `${chat.id}:${chat.lastMessage ?? ''}`;

@@ -72,12 +72,12 @@ export function createRealtimeConnection({
 	let connectionState = $state<ConnectionState>('connecting');
 	let manualReconnectFn: (() => void) | null = null;
 
-	// Wrapper so every mutation of the state shows up in a single place when
-	// debugging overlay flicker. The trace prefix makes it grep-friendly.
-	function setState(next: ConnectionState, reason: string) {
+	// Single mutation point for connectionState. Keep it even though it's
+	// trivial — having one chokepoint made tracking down overlay flicker
+	// much easier and gives us a place to drop a console.debug if it
+	// recurs.
+	function setState(next: ConnectionState, _reason: string) {
 		if (connectionState === next) return;
-		// eslint-disable-next-line no-console
-		console.debug(`[realtime] ${connectionState} → ${next} (${reason})`);
 		connectionState = next;
 	}
 
