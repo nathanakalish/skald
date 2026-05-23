@@ -757,6 +757,16 @@
 			// 'complete' to follow, so the stop button would otherwise stay stuck.
 			finishStreaming();
 		} else if (type === 'complete') {
+			// Cross-device abort sync: the server tags aborted completions with
+			// `aborted: true`. Honour that so the receiving device runs the
+			// same cleanup branch as the device that clicked stop — restoring
+			// the original message on regen aborts, dropping empty placeholders
+			// on fresh-send aborts. Without this the other device would keep
+			// the partial stream as the final state and diverge from the
+			// canceller.
+			if (eventData?.aborted) {
+				wasAbortedManually = true;
+			}
 			if (!isNearBottom()) {
 				scrollButtonAttention = true;
 				showScrollButton = true;
