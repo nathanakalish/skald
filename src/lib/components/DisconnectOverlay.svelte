@@ -54,7 +54,7 @@
 		aria-modal="true"
 		aria-labelledby="disconnect-overlay-title"
 		aria-describedby="disconnect-overlay-body"
-		class="fixed inset-0 z-[300] flex items-center justify-center bg-background/80 backdrop-blur-md"
+		class="fixed inset-0 z-[300] flex items-center justify-center bg-background"
 	>
 		<div class="mx-4 flex w-full max-w-sm flex-col items-center gap-5 rounded-2xl border border-border bg-card p-8 text-center shadow-2xl">
 			<div class="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
