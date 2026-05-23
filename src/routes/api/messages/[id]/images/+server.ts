@@ -13,7 +13,7 @@ import { ApiError } from '$lib/server/apiError.js';
 import { providerProfiles } from '$lib/providers/profiles.js';
 import { generateImage, ImageGenError } from '$lib/server/imageGen.js';
 import { parseSwipes } from '$lib/messageJson.js';
-import { getOriginalAvatarPath } from '$lib/services/imageOptimizer.js';
+import { getOriginalAvatarPath, optimizeCachedImage } from '$lib/services/imageOptimizer.js';
 
 const CACHE_DIR = join(process.cwd(), 'data', 'image-cache');
 
@@ -21,6 +21,7 @@ function publicImage(row: typeof messageImages.$inferSelect) {
 	return {
 		id: row.id,
 		messageId: row.messageId,
+		swipeIndex: row.swipeIndex ?? 0,
 		filePath: row.filePath,
 		prompt: row.prompt,
 		model: row.model ?? '',
@@ -257,17 +258,40 @@ export const POST: RequestHandler = async (event) => {
 		return ApiError.badRequest(msg);
 	}
 
-	// Persist file.
+	// Persist file. Mirror the inline-image cache pattern: keep the original
+	// bytes and, when sharp can re-encode them, write an optimized .webp
+	// sibling that the bubble can use as a thumbnail. The lightbox keeps
+	// requesting ?original=1 to get the full-quality version.
 	await mkdir(CACHE_DIR, { recursive: true });
-	const filename = `genimg_${randomUUID()}${result.ext}`;
-	await writeFile(join(CACHE_DIR, filename), result.buffer);
+	const uuid = randomUUID();
+	const originalFilename = `genimg_${uuid}${result.ext}`;
+	await writeFile(join(CACHE_DIR, originalFilename), result.buffer);
 
-	// Insert row + flip prior actives off (single transaction).
+	let storedFilename = originalFilename;
+	try {
+		const optimized = await optimizeCachedImage(result.buffer, result.ext);
+		if (optimized) {
+			const webpFilename = `genimg_${uuid}${optimized.ext}`;
+			await writeFile(join(CACHE_DIR, webpFilename), optimized.buffer);
+			storedFilename = webpFilename;
+		}
+	} catch (err) {
+		event.locals.logger?.warn('image gen: optimize failed; serving original', { err: (err as Error).message });
+	}
+
+	const swipeIndex = message.swipeIndex ?? 0;
+
+	// Insert row + flip prior actives off within the same (message, swipe).
+	// Other swipes keep their own active selection.
 	const inserted = db.transaction((tx) => {
-		tx.update(messageImages).set({ isActive: false }).where(eq(messageImages.messageId, id)).run();
+		tx.update(messageImages)
+			.set({ isActive: false })
+			.where(and(eq(messageImages.messageId, id), eq(messageImages.swipeIndex, swipeIndex)))
+			.run();
 		const row = tx.insert(messageImages).values({
 			messageId: id,
-			filePath: filename,
+			swipeIndex,
+			filePath: storedFilename,
 			prompt: finalPrompt,
 			model,
 			providerId,

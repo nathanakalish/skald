@@ -126,7 +126,7 @@ export const GET: RequestHandler = async (event) => {
 		? db.select().from(messageImages).where(inArray(messageImages.messageId, messageIds)).orderBy(asc(messageImages.createdAt)).all()
 		: [];
 	const imagesByMessage: Record<number, Array<{
-		id: number; messageId: number; filePath: string; prompt: string;
+		id: number; messageId: number; swipeIndex: number; filePath: string; prompt: string;
 		model: string; providerId: number | null; isActive: boolean; createdAt: string | null;
 	}>> = {};
 	for (const row of imageRows) {
@@ -134,6 +134,7 @@ export const GET: RequestHandler = async (event) => {
 		imagesByMessage[row.messageId].push({
 			id: row.id,
 			messageId: row.messageId,
+			swipeIndex: row.swipeIndex ?? 0,
 			filePath: row.filePath,
 			prompt: row.prompt,
 			model: row.model ?? '',

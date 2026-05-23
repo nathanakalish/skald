@@ -36,7 +36,16 @@ export const PATCH: RequestHandler = async (event) => {
 	const { user, image } = loaded;
 
 	db.transaction((tx) => {
-		tx.update(messageImages).set({ isActive: false }).where(eq(messageImages.messageId, image.messageId)).run();
+		// Only deactivate siblings within the same swipe — each swipe owns
+		// its own active image, so activating swipe 1's image must not
+		// touch swipe 0's selection.
+		tx.update(messageImages)
+			.set({ isActive: false })
+			.where(and(
+				eq(messageImages.messageId, image.messageId),
+				eq(messageImages.swipeIndex, image.swipeIndex ?? 0)
+			))
+			.run();
 		tx.update(messageImages).set({ isActive: true }).where(eq(messageImages.id, image.id)).run();
 	});
 
@@ -61,13 +70,27 @@ export const DELETE: RequestHandler = async (event) => {
 	const wasActive = !!image.isActive;
 	db.delete(messageImages).where(eq(messageImages.id, image.id)).run();
 
-	// Best-effort file removal; absence isn't fatal.
+	// Best-effort file removal; absence isn't fatal. Also drop the sibling
+	// original (e.g. genimg_<uuid>.png next to the stored .webp) so generated
+	// images don't accumulate as orphans on disk.
 	try { await unlink(join(CACHE_DIR, image.filePath)); } catch { /* already gone */ }
+	if (image.filePath.endsWith('.webp')) {
+		const base = image.filePath.replace(/\.webp$/, '');
+		for (const ext of ['.png', '.jpg', '.jpeg', '.gif']) {
+			try { await unlink(join(CACHE_DIR, base + ext)); break; } catch { /* try next */ }
+		}
+	}
 
 	let newlyActiveId: number | null = null;
 	if (wasActive) {
+		// Promote the most recent remaining swipe within the same parent swipe;
+		// other swipes' selections are independent.
 		const next = db.select().from(messageImages)
-			.where(and(eq(messageImages.messageId, image.messageId), ne(messageImages.id, image.id)))
+			.where(and(
+				eq(messageImages.messageId, image.messageId),
+				eq(messageImages.swipeIndex, image.swipeIndex ?? 0),
+				ne(messageImages.id, image.id)
+			))
 			.orderBy(desc(messageImages.createdAt))
 			.get();
 		if (next) {

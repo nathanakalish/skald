@@ -77,6 +77,7 @@ export type RealtimeEvent =
 export interface MessageImage {
 	id: number;
 	messageId: number;
+	swipeIndex: number;
 	filePath: string;
 	prompt: string;
 	model: string;

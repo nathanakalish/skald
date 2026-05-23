@@ -191,6 +191,10 @@ export const messageImages = sqliteTable('message_images', {
 	messageId: integer('message_id')
 		.notNull()
 		.references(() => messages.id, { onDelete: 'cascade' }),
+	// Which message swipe this image belongs to. Generated images are tied to
+	// the swipe that was active when they were requested, so swapping the
+	// parent message's swipe also swaps the image set.
+	swipeIndex: integer('swipe_index').default(0).notNull(),
 	filePath: text('file_path').notNull(),
 	prompt: text('prompt').notNull(),
 	model: text('model').default(''),

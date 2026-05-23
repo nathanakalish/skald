@@ -217,6 +217,7 @@
 	interface MessageImageRow {
 		id: number;
 		messageId: number;
+		swipeIndex: number;
 		filePath: string;
 		prompt: string;
 		model: string;
@@ -834,7 +835,12 @@
 			}
 		} else if (type === 'messageImage:created' && eventData?.image) {
 			const img = eventData.image as MessageImageRow;
-			const list = (messageImages[img.messageId] ?? []).map((it) => ({ ...it, isActive: false }));
+			const swipeIdx = img.swipeIndex ?? 0;
+			// Only deactivate siblings within the same swipe so other swipes'
+			// active selections survive a fresh generation.
+			const list = (messageImages[img.messageId] ?? []).map((it) =>
+				(it.swipeIndex ?? 0) === swipeIdx ? { ...it, isActive: false } : it
+			);
 			list.push(img);
 			messageImages = { ...messageImages, [img.messageId]: list };
 			imageGenInFlight.delete(img.messageId);
@@ -843,20 +849,33 @@
 			const { messageId, imageId } = eventData as { messageId: number; imageId: number };
 			const list = messageImages[messageId];
 			if (list) {
+				// Scope the deactivation to the same swipe; other swipes
+				// keep their own active selection.
+				const target = list.find((it) => it.id === imageId);
+				const swipeIdx = target?.swipeIndex ?? 0;
 				messageImages = {
 					...messageImages,
-					[messageId]: list.map((it) => ({ ...it, isActive: it.id === imageId }))
+					[messageId]: list.map((it) => {
+						if ((it.swipeIndex ?? 0) !== swipeIdx) return it;
+						return { ...it, isActive: it.id === imageId };
+					})
 				};
 			}
 		} else if (type === 'messageImage:deleted' && eventData) {
 			const { messageId, imageId } = eventData as { messageId: number; imageId: number };
 			const list = messageImages[messageId];
 			if (list) {
+				const removed = list.find((it) => it.id === imageId);
+				const swipeIdx = removed?.swipeIndex ?? 0;
 				const next = list.filter((it) => it.id !== imageId);
-				// If we just removed the active one and there's anything left,
-				// flag the most-recent as active (mirrors the server's policy).
-				if (next.length && !next.some((it) => it.isActive)) {
-					next[next.length - 1] = { ...next[next.length - 1], isActive: true };
+				// If the removed image was the active one for its swipe and
+				// there are still images in that swipe, promote the most
+				// recent remaining one (mirrors the server's policy).
+				const swipeRemaining = next.filter((it) => (it.swipeIndex ?? 0) === swipeIdx);
+				if (removed?.isActive && swipeRemaining.length && !swipeRemaining.some((it) => it.isActive)) {
+					const lastInSwipe = swipeRemaining[swipeRemaining.length - 1];
+					const idx = next.findIndex((it) => it.id === lastInSwipe.id);
+					if (idx !== -1) next[idx] = { ...next[idx], isActive: true };
 				}
 				messageImages = { ...messageImages, [messageId]: next };
 			}
@@ -2969,7 +2988,8 @@
 					{@const groupEnd = !nextMsg || nextMsg.role === 'system' || nextMsg.role !== message.role}
 					{@const isCompacted = isMessageCompacted(message.id)}
 					{@const isLast = i === messageList.length - 1}
-					{@const activeMsgImage = (messageImages[message.id] ?? []).find((im) => im.isActive) ?? null}
+					{@const swipeMsgImages = (messageImages[message.id] ?? []).filter((im) => (im.swipeIndex ?? 0) === (message.swipeIndex ?? 0))}
+					{@const activeMsgImage = swipeMsgImages.find((im) => im.isActive) ?? swipeMsgImages[swipeMsgImages.length - 1] ?? null}
 					{@const activeMsgImageUrl = activeMsgImage ? `/api/images/cache/${activeMsgImage.filePath}` : null}
 					<MessageBubble
 						{message}
@@ -3359,7 +3379,13 @@
 
 <MessageImageLightbox
 	messageId={lightboxMessageId}
-	images={lightboxMessageId !== null ? (messageImages[lightboxMessageId] ?? []) : []}
+	images={(() => {
+		if (lightboxMessageId === null) return [];
+		const list = messageImages[lightboxMessageId] ?? [];
+		const msg = messageList.find((m) => m.id === lightboxMessageId);
+		const swipeIdx = msg?.swipeIndex ?? 0;
+		return list.filter((im) => (im.swipeIndex ?? 0) === swipeIdx);
+	})()}
 	regenerating={lightboxMessageId !== null && imageGenInFlight.has(lightboxMessageId)}
 	onclose={() => (lightboxMessageId = null)}
 	onactivate={(imageId) => lightboxMessageId !== null && activateMessageImage(lightboxMessageId, imageId)}

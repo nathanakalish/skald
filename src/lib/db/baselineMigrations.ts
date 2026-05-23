@@ -1042,4 +1042,11 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		);
 		CREATE INDEX IF NOT EXISTS idx_message_images_message_id ON message_images(message_id);
 	`);
+
+	// Tie each image to a specific swipe of its parent message. Pre-existing
+	// rows default to swipe 0, which is the only swipe most messages have.
+	const miCols = sqlite.prepare("PRAGMA table_info('message_images')").all() as { name: string }[];
+	if (!miCols.some((c) => c.name === 'swipe_index')) {
+		sqlite.exec('ALTER TABLE message_images ADD COLUMN swipe_index INTEGER NOT NULL DEFAULT 0');
+	}
 }

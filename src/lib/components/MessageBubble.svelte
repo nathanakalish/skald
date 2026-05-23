@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bot, Check, X, Brain, RefreshCw } from 'lucide-svelte';
+	import { Bot, Check, X, Brain, RefreshCw, Loader2 } from 'lucide-svelte';
 	import { tooltip } from '$lib/tooltip.js';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
@@ -218,21 +218,34 @@
 			</div>
 			{#if generatedImageUrl || generatedImageLoading}
 				<!-- Image gen output: clicking opens the lightbox where the user
-				     can swipe between regens, download, delete, etc. -->
-				<button
-					type="button"
-					onclick={ongeneratedImageClick}
-					class="mt-2 block overflow-hidden rounded-lg border border-border/50 bg-muted/40 transition-opacity hover:opacity-90"
-					aria-label="View generated image"
-				>
-					{#if generatedImageUrl}
-						<img src={generatedImageUrl} alt="Generated illustration" class="max-h-80 w-auto object-contain" />
-					{:else}
-						<div class="flex h-40 w-64 items-center justify-center text-xs text-muted-foreground">
-							Generating image…
-						</div>
-					{/if}
-				</button>
+				     can swipe between regens, download, delete, etc. The bubble
+				     image is the optimized webp; the lightbox requests the
+				     original via ?original=1. -->
+				<div class="mt-2 flex justify-center">
+					<button
+						type="button"
+						onclick={ongeneratedImageClick}
+						class="relative block w-[80%] overflow-hidden rounded-lg border border-border/50 bg-muted/40 transition-opacity hover:opacity-90"
+						aria-label="View generated image"
+					>
+						{#if generatedImageUrl}
+							<img src={generatedImageUrl} alt="Generated illustration" class="block max-h-80 w-full object-contain" />
+							{#if generatedImageLoading}
+								<div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55">
+									<div class="flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
+										<Loader2 class="h-4 w-4 animate-spin" />
+										<span>Generating…</span>
+									</div>
+								</div>
+							{/if}
+						{:else}
+							<div class="flex h-40 w-full items-center justify-center gap-2 text-xs text-muted-foreground">
+								<Loader2 class="h-4 w-4 animate-spin" />
+								Generating image…
+							</div>
+						{/if}
+					</button>
+				</div>
 			{/if}
 			{#if message.content.startsWith('Error:') && isLast && !isStreaming}
 				<button
