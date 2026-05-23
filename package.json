@@ -35,12 +35,12 @@
 	"dependencies": {
 		"better-sqlite3": "^12.10.0",
 		"drizzle-orm": "^0.45.2",
-		"isomorphic-dompurify": "^3.13.0",
+		"isomorphic-dompurify": "^3.14.0",
 		"jose": "^6.2.3",
 		"js-tiktoken": "^1.0.21",
 		"jszip": "^3.10.1",
 		"lucide-svelte": "^1.0.1",
-		"marked": "^18.0.3",
+		"marked": "^18.0.4",
 		"sharp": "^0.34.5",
 		"web-push": "^3.6.7"
 	}
