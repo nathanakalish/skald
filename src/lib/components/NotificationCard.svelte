@@ -131,7 +131,7 @@
 </script>
 
 <div
-	class="notif-enter pointer-events-auto relative flex w-72 items-stretch gap-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg backdrop-blur-md"
+	class="notif-enter pointer-events-auto relative flex w-max min-w-[16rem] max-w-sm items-stretch gap-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg backdrop-blur-md"
 	style={cardStyle}
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
@@ -157,9 +157,9 @@
 				</div>
 			{/if}
 			<div class="min-w-0 flex-1">
-				<p class="truncate text-sm font-medium">{title}</p>
+				<p class="break-words text-sm font-medium">{title}</p>
 				{#if body}
-					<p class="truncate text-xs text-muted-foreground">{body}</p>
+					<p class="break-words text-xs text-muted-foreground">{body}</p>
 				{/if}
 			</div>
 		</button>
@@ -173,9 +173,9 @@
 				</div>
 			{/if}
 			<div class="min-w-0 flex-1 text-left">
-				<p class="truncate text-sm font-medium">{title}</p>
+				<p class="break-words text-sm font-medium">{title}</p>
 				{#if body}
-					<p class="truncate text-xs text-muted-foreground">{body}</p>
+					<p class="break-words text-xs text-muted-foreground">{body}</p>
 				{/if}
 			</div>
 		</div>
