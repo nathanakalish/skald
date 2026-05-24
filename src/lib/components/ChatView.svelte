@@ -28,7 +28,7 @@
 	import { checkFieldLimits } from '$lib/limitCheck.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
-	let { chat, character, initialMessages, initialMessageImages = {}, initialPendingImageGens = [], messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, connectionState = 'connected' }: {
+	let { chat, character, initialMessages, initialMessageImages = {}, initialPendingImageGens = [], messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, dismissKeyboardOnScroll = true, connectionState = 'connected' }: {
 		chat: any;
 		character: any;
 		initialMessages: any[];
@@ -55,6 +55,7 @@
 		reduceMotion?: boolean;
 		blockExternalContent?: boolean;
 		nestedEmphasisInSpeech?: boolean;
+		dismissKeyboardOnScroll?: boolean;
 		connectionState?: 'connecting' | 'connected' | 'reconnecting' | 'failed';
 	} = $props();
 
@@ -1164,9 +1165,10 @@
 		return () => observer.disconnect();
 	});
 
-	// Dismiss keyboard on scroll (mobile only)
+	// Dismiss keyboard on scroll (mobile only, opt-out via setting).
 	$effect(() => {
 		if (!isMobile) return;
+		if (!dismissKeyboardOnScroll) return;
 		const el = messagesContainer;
 		if (!el) return;
 		let startY = 0;

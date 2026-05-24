@@ -198,6 +198,12 @@
 				checked={s.reduceMotion}
 				onchange={() => toggle('reduceMotion')}
 			/>
+			<ToggleSwitch
+				label="Dismiss keyboard on scroll (Mobile)"
+				description="Scrolling the message list blurs the textarea so the soft keyboard slides away. Only applies on mobile."
+				checked={s.dismissKeyboardOnScroll}
+				onchange={() => toggle('dismissKeyboardOnScroll')}
+			/>
 		</div>
 	</div>
 

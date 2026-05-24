@@ -86,6 +86,9 @@ export interface Settings {
 	 * persona override if set, otherwise the default persona. Per-chat
 	 * override lives on chats.overrideImageIncludePersonaDesc. */
 	imageIncludePersonaDesc: boolean;
+	/** Mobile: blur the textarea (dismissing the soft keyboard) when the user
+	 * scrolls the message list. iOS-style. Default on. */
+	dismissKeyboardOnScroll: boolean;
 	[k: string]: unknown;
 }
 
@@ -151,7 +154,8 @@ const defaults: Settings = {
 	imagePromptTemplate: 'Generate a single illustration that best depicts the scene described in this message. Capture the setting, mood, characters, and key actions:\n\n{{message}}',
 	imageIncludeAvatar: false,
 	imageIncludeCharacterDesc: false,
-	imageIncludePersonaDesc: false
+	imageIncludePersonaDesc: false,
+	dismissKeyboardOnScroll: true
 };
 
 let _settings = $state<Settings>({ ...defaults });

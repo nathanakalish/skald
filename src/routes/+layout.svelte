@@ -398,6 +398,7 @@
 			imageIncludeAvatar: (data as any).imageIncludeAvatar ?? false,
 			imageIncludeCharacterDesc: (data as any).imageIncludeCharacterDesc ?? false,
 			imageIncludePersonaDesc: (data as any).imageIncludePersonaDesc ?? false,
+			dismissKeyboardOnScroll: (data as any).dismissKeyboardOnScroll ?? true,
 			systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 			systemLightThemeId: (data as any).systemLightThemeId ?? null
 		})),
@@ -478,6 +479,7 @@
 				imagePromptTemplate: (data as any).imagePromptTemplate ?? '',
 				imageIncludeAvatar: (data as any).imageIncludeAvatar ?? false,
 				imageIncludeCharacterDesc: (data as any).imageIncludeCharacterDesc ?? false,
+				dismissKeyboardOnScroll: (data as any).dismissKeyboardOnScroll ?? true,
 				systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
 				systemLightThemeId: (data as any).systemLightThemeId ?? null
 			},
@@ -2994,6 +2996,7 @@
 					reduceMotion={settings.reduceMotion ?? false}
 					blockExternalContent={!(settings.allowExternalCreatorNotes ?? false)}
 					nestedEmphasisInSpeech={settings.nestedEmphasisInSpeech ?? true}
+					dismissKeyboardOnScroll={settings.dismissKeyboardOnScroll ?? true}
 					connectionState={realtime.connectionState}
 				/>
 			{/key}
