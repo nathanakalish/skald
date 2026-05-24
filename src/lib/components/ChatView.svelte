@@ -307,11 +307,18 @@
 				// visible result. flex-col-reverse + overflow-anchor:none keeps
 				// the viewport anchored to whatever the user was reading; the
 				// newly loaded rows appear above their current scroll position
-				// without moving the visible content.
-				messageList = [...earlier, ...messageList];
-				Object.assign(messageSiblings, data.messageSiblings ?? {});
-				if (data.totalMessages) totalMsgCount = data.totalMessages;
-				await tick();
+				// without moving the visible content. suppressCompensation is
+				// set so the ResizeObserver doesn't mistake the top-growth for
+				// the bubble-growing-below-viewport case it normally corrects.
+				suppressCompensation = true;
+				try {
+					messageList = [...earlier, ...messageList];
+					Object.assign(messageSiblings, data.messageSiblings ?? {});
+					if (data.totalMessages) totalMsgCount = data.totalMessages;
+					await tick();
+				} finally {
+					requestAnimationFrame(() => { suppressCompensation = false; });
+				}
 			}
 		} finally {
 			loadingMore = false;
@@ -358,6 +365,7 @@
 			if (!entries[0]?.isIntersecting) return;
 			if (expandingWindow || renderedStart === 0) return;
 			expandingWindow = true;
+			suppressCompensation = true;
 			try {
 				// In flex-col-reverse the bottom is the scroll anchor — prepending
 				// rows to the DOM doesn't shift anything already in the viewport, so
@@ -369,6 +377,7 @@
 				await tick();
 			} finally {
 				expandingWindow = false;
+				requestAnimationFrame(() => { suppressCompensation = false; });
 			}
 		}, { rootMargin: '600px 0px 0px 0px' });
 		observer.observe(sentinel);
@@ -430,6 +439,12 @@
 	// Set true while we programmatically move scrollTop so the resulting scroll
 	// event doesn't get misinterpreted as the user un-anchoring.
 	let suppressScrollHandler = false;
+	// Set true around mutations that grow the wrapper at the TOP (prepending
+	// older messages, revealing the next windowed batch). In col-reverse with
+	// a bottom-anchored wrapper, top-growth doesn't shift content relative to
+	// the wrapper bottom — but the ResizeObserver compensator can't tell where
+	// the growth happened, so we mute it for those known top-growth paths.
+	let suppressCompensation = false;
 	const showScrollButton = $derived(!isAnchored);
 	let scrollButtonAttention = $state(false);
 	let isMobile = $state(false);
@@ -1116,6 +1131,37 @@
 		};
 		el.addEventListener('scroll', onScroll, { passive: true });
 		return () => el.removeEventListener('scroll', onScroll);
+	});
+
+	// Scroll compensation. col-reverse anchors the wrapper's BOTTOM edge to
+	// the container, not the user's content — so when content grows below
+	// the user's viewport (streaming bubble growing, image loading inside a
+	// bubble, etc.) the wrapper bottom stays pinned and everything above
+	// drifts upward by the growth delta. For an anchored user that's fine
+	// (they want to follow new content). For a scrolled-up user it means
+	// what they were reading crawls out of view. Counter it by subtracting
+	// the delta from scrollTop (negative when scrolled up) so the same
+	// content stays put. Skipped while `suppressCompensation` is set so
+	// top-growth mutations (Load Earlier, sentinel-driven window expand)
+	// don't trigger an unwanted scroll shift.
+	$effect(() => {
+		const container = messagesContainer;
+		if (!container) return;
+		const wrapper = container.firstElementChild as HTMLElement | null;
+		if (!wrapper) return;
+		let prevHeight = wrapper.offsetHeight;
+		const observer = new ResizeObserver(() => {
+			const newHeight = wrapper.offsetHeight;
+			const delta = newHeight - prevHeight;
+			prevHeight = newHeight;
+			if (delta === 0) return;
+			if (suppressCompensation || isAnchored) return;
+			suppressScrollHandler = true;
+			container.scrollTop = container.scrollTop - delta;
+			requestAnimationFrame(() => { suppressScrollHandler = false; });
+		});
+		observer.observe(wrapper);
+		return () => observer.disconnect();
 	});
 
 	// Dismiss keyboard on scroll (mobile only)
