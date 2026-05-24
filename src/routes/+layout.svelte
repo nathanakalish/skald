@@ -12,6 +12,7 @@
 	import { renderRoleplayPreview } from '$lib/utils/rp-format.js';
 	import { staggerOnMount } from '$lib/utils/staggerOnMount';
 	import { layoutTransitionState } from '$lib/utils/layoutTransition';
+	import { playMessageBeep } from '$lib/utils/notificationSound.js';
 	import { applyRealtimeEvent } from '$lib/realtime/client.js';
 	import { applyTheme } from '$lib/theme/apply.js';
 	import { createOidcPopup } from '$lib/auth/oidcPopup.svelte.js';
@@ -903,21 +904,7 @@
 				} else if (tabFocused && !viewedElsewhere) {
 					// App is focused but on a different chat (and no other
 					// device is viewing this chat) → in-app toast.
-					if (settings.notificationSound && !deviceSilent) {
-						try {
-							const ctx = new AudioContext();
-							const osc = ctx.createOscillator();
-							const gain = ctx.createGain();
-							osc.connect(gain);
-							gain.connect(ctx.destination);
-							osc.frequency.value = 880;
-							osc.type = 'sine';
-							gain.gain.setValueAtTime(0.3, ctx.currentTime);
-							gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-							osc.start(ctx.currentTime);
-							osc.stop(ctx.currentTime + 0.3);
-						} catch { /* ignore */ }
-					}
+					playMessageBeep();
 					if (settings.inAppNotifications !== false) {
 						const preview = (settings.notificationStyle === 'preview' && event.data?.preview)
 							? event.data.preview

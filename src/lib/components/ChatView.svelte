@@ -26,6 +26,7 @@
 	import { pickCharacterTheme, characterHasAnyTheme } from '$lib/theme/characterTheme.js';
 	import LimitedTextarea from '$lib/components/LimitedTextarea.svelte';
 	import { checkFieldLimits } from '$lib/limitCheck.js';
+	import { playMessageBeep } from '$lib/utils/notificationSound.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
 	let { chat, character, initialMessages, initialMessageImages = {}, initialPendingImageGens = [], messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, dismissKeyboardOnScroll = true, connectionState = 'connected' }: {
@@ -798,6 +799,14 @@
 				// Flag the scroll-down button so it pulses — message they didn't
 				// see is now finalized at the bottom.
 				scrollButtonAttention = true;
+			}
+			// Beep on a real assistant completion only when the user can't
+			// already see the finished bubble (i.e. they're scrolled up). If
+			// they're anchored to the bottom the new message is literally on
+			// screen — a sound would be noise. Aborts and impersonation are
+			// always skipped (already-cancelled / user-initiated).
+			if (!eventData?.aborted && !isImpersonating && !isAnchored) {
+				playMessageBeep();
 			}
 			finishStreaming();
 		} else if (type === 'message:created' || type === 'message:patched' || type === 'message:deleted') {
@@ -3129,6 +3138,8 @@
 						{messageTimestamps}
 						characterAvatarPath={character.avatarPath}
 						characterName={character.name}
+						personaAvatarPath={activePersona?.avatarPath ?? null}
+						personaName={activePersona?.displayName || activePersona?.name || ''}
 						enterClass={msgEnterClass(message.id, message.role)}
 						{renderContent}
 						{getMessageTime}

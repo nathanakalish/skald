@@ -33,6 +33,8 @@
 		messageTimestamps,
 		characterAvatarPath,
 		characterName,
+		personaAvatarPath = null,
+		personaName = '',
 		enterClass,
 		renderContent,
 		getMessageTime,
@@ -70,6 +72,8 @@
 		messageTimestamps: string;
 		characterAvatarPath: string | null;
 		characterName: string;
+		personaAvatarPath?: string | null;
+		personaName?: string;
 		enterClass: string;
 		renderContent: (content: string, skipCache?: boolean) => string;
 		getMessageTime: (createdAt: string | null) => string;
@@ -109,8 +113,11 @@
 	class:flex-row-reverse={message.role === 'user'}
 	class:opacity-20={isSearchDimmed}
 >
-	<!-- Avatar (only at the end of a same-sender group; user messages don't show avatar — iMessage style. Hidden entirely on mobile to maximize bubble width) -->
-	<div class="hidden shrink-0 self-end md:block {message.role === 'user' ? 'md:hidden' : ''} {!groupEnd ? 'md:invisible' : ''}" use:tooltip={`Message #${msgNumber}`}>
+	<!-- Avatar slot. Assistant rows always reserve space on desktop so consecutive
+	     bubbles align cleanly (md:invisible on non-group-end). User rows show the
+	     active persona avatar on desktop — also reserved for alignment — but stay
+	     hidden on mobile to maximise bubble width. -->
+	<div class="hidden shrink-0 self-end md:block {!groupEnd ? 'md:invisible' : ''}" use:tooltip={`Message #${msgNumber}`}>
 		{#if message.role === 'assistant'}
 			{#if characterAvatarPath}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -125,6 +132,21 @@
 				<div class="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 md:h-9 md:w-9">
 					<Bot class="h-3.5 w-3.5 text-primary" />
 				</div>
+			{/if}
+		{:else if message.role === 'user'}
+			{#if personaAvatarPath}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+				<img
+					src={personaAvatarPath}
+					alt={personaName}
+					class="h-7 w-7 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-80 md:h-9 md:w-9"
+					onclick={() => onenlargeAvatar(personaAvatarPath!.replace('/avatars/', '/avatars/original/'))}
+				/>
+			{:else}
+				<!-- No persona avatar set: keep the slot but render nothing visible so
+				     bubble alignment stays consistent with rows that do have one. -->
+				<div class="h-7 w-7 md:h-9 md:w-9"></div>
 			{/if}
 		{/if}
 	</div>
