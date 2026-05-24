@@ -301,14 +301,14 @@
 			const data = await res.json();
 			const earlier = (data.messages ?? []).map(parseMessage);
 			if (earlier.length > 0) {
-				// The fetched messages go into the un-rendered head (renderedStart
-				// is bumped by the same amount) so the live DOM doesn't change.
-				// The button/sentinel slot is a constant-height wrapper, so there
-				// is no layout shift. In flex-col-reverse the browser already pins
-				// the bottom, so we don't touch scrollTop — touching it here would
-				// fight the natural anchoring and snap the viewport.
+				// Prepend the new messages and reveal them immediately. We
+				// deliberately don't bump renderedStart by earlier.length any
+				// more — the button is a user action and should produce a
+				// visible result. flex-col-reverse + overflow-anchor:none keeps
+				// the viewport anchored to whatever the user was reading; the
+				// newly loaded rows appear above their current scroll position
+				// without moving the visible content.
 				messageList = [...earlier, ...messageList];
-				renderedStart += earlier.length;
 				Object.assign(messageSiblings, data.messageSiblings ?? {});
 				if (data.totalMessages) totalMsgCount = data.totalMessages;
 				await tick();
@@ -419,7 +419,18 @@
 		new Set((String(settingsStore.settings.pinnedMessageActions || '')).split(',').map((s) => s.trim()).filter(Boolean))
 	);
 	let keyboardVisible = $state(false);
-	let showScrollButton = $state(false);
+	// === Scroll/anchor model ===
+	// `isAnchored` is the single source of truth for whether the viewport is
+	// pinned to the bottom of the chat. It only changes in response to a USER
+	// scroll (or an explicit programmatic anchor via scrollToBottom). The
+	// browser handles the actual viewport stability for both states natively
+	// because the messages container is flex-col-reverse + overflow-anchor:none.
+	// We never compute scroll deltas or move scrollTop ourselves during streaming.
+	let isAnchored = $state(true);
+	// Set true while we programmatically move scrollTop so the resulting scroll
+	// event doesn't get misinterpreted as the user un-anchoring.
+	let suppressScrollHandler = false;
+	const showScrollButton = $derived(!isAnchored);
 	let scrollButtonAttention = $state(false);
 	let isMobile = $state(false);
 
@@ -767,9 +778,10 @@
 			if (eventData?.aborted) {
 				wasAbortedManually = true;
 			}
-			if (!isNearBottom()) {
+			if (!isAnchored) {
+				// Flag the scroll-down button so it pulses — message they didn't
+				// see is now finalized at the bottom.
 				scrollButtonAttention = true;
-				showScrollButton = true;
 			}
 			finishStreaming();
 		} else if (type === 'message:created' || type === 'message:patched' || type === 'message:deleted') {
@@ -941,9 +953,7 @@
 			if (wasAbortedManually && !streamAccumulated) {
 				if (streamIsRegenerate && streamOriginalMessage) {
 					const restored = streamOriginalMessage;
-					updateMessagePreservingScroll(() => {
-						messageList[streamingAssistantIdx] = restored;
-					});
+					messageList[streamingAssistantIdx] = restored;
 					streamingAssistantIdx = -1;
 				} else {
 					const idx = streamingAssistantIdx;
@@ -965,74 +975,68 @@
 			// In texting mode, reveal the full message after a typing delay
 			if (isTexting && (streamAccumulated || streamAccumulatedReasoning)) {
 				if (streamAccumulated) await typingDelay(streamAccumulated, !!streamAccumulatedReasoning);
-				await updateMessagePreservingScroll(() => {
-					if (streamIsRegenerate && streamOriginalMessage) {
-						const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
-						const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
-						messageList[streamingAssistantIdx] = {
-							...streamOriginalMessage,
-							content: streamAccumulated,
-							swipes: newSwipes,
-							swipeIndex: newSwipes.length - 1,
-							reasoning: newReasoning
-						};
-					} else {
-						messageList[streamingAssistantIdx] = {
-							...messageList[streamingAssistantIdx],
-							content: streamAccumulated,
-							swipes: [streamAccumulated],
-							reasoning: [streamAccumulatedReasoning]
-						};
-					}
-				});
+				if (streamIsRegenerate && streamOriginalMessage) {
+					const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
+					const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
+					messageList[streamingAssistantIdx] = {
+						...streamOriginalMessage,
+						content: streamAccumulated,
+						swipes: newSwipes,
+						swipeIndex: newSwipes.length - 1,
+						reasoning: newReasoning
+					};
+				} else {
+					messageList[streamingAssistantIdx] = {
+						...messageList[streamingAssistantIdx],
+						content: streamAccumulated,
+						swipes: [streamAccumulated],
+						reasoning: [streamAccumulatedReasoning]
+					};
+				}
 			}
 
 			// In reduce-motion mode (non-texting), reveal content all at once
 			if (reduceMotion && !isTexting && (streamAccumulated || streamAccumulatedReasoning)) {
-				updateMessagePreservingScroll(() => {
-					if (streamIsRegenerate && streamOriginalMessage) {
-						const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
-						const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
-						messageList[streamingAssistantIdx] = {
-							...streamOriginalMessage,
-							content: streamAccumulated,
-							swipes: newSwipes,
-							swipeIndex: newSwipes.length - 1,
-							reasoning: newReasoning
-						};
-					} else {
-						messageList[streamingAssistantIdx] = {
-							...messageList[streamingAssistantIdx],
-							content: streamAccumulated,
-							swipes: [streamAccumulated],
-							reasoning: [streamAccumulatedReasoning]
-						};
-					}
-				});
+				if (streamIsRegenerate && streamOriginalMessage) {
+					const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
+					const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
+					messageList[streamingAssistantIdx] = {
+						...streamOriginalMessage,
+						content: streamAccumulated,
+						swipes: newSwipes,
+						swipeIndex: newSwipes.length - 1,
+						reasoning: newReasoning
+					};
+				} else {
+					messageList[streamingAssistantIdx] = {
+						...messageList[streamingAssistantIdx],
+						content: streamAccumulated,
+						swipes: [streamAccumulated],
+						reasoning: [streamAccumulatedReasoning]
+					};
+				}
 			}
 
 			// Normal streaming mode: token handler updates live, but if no tokens arrived
 			// (e.g. reasoning-only), write the final state
 			if (!isTexting && !reduceMotion && streamAccumulated) {
-				updateMessagePreservingScroll(() => {
-					if (streamIsRegenerate && streamOriginalMessage) {
-						const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
-						const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
-						messageList[streamingAssistantIdx] = {
-							...streamOriginalMessage,
-							content: streamAccumulated,
-							swipes: newSwipes,
-							swipeIndex: newSwipes.length - 1,
-							reasoning: newReasoning
-						};
-					} else {
-						messageList[streamingAssistantIdx] = {
-							...messageList[streamingAssistantIdx],
-							content: streamAccumulated,
-							reasoning: [streamAccumulatedReasoning]
-						};
-					}
-				});
+				if (streamIsRegenerate && streamOriginalMessage) {
+					const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
+					const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
+					messageList[streamingAssistantIdx] = {
+						...streamOriginalMessage,
+						content: streamAccumulated,
+						swipes: newSwipes,
+						swipeIndex: newSwipes.length - 1,
+						reasoning: newReasoning
+					};
+				} else {
+					messageList[streamingAssistantIdx] = {
+						...messageList[streamingAssistantIdx],
+						content: streamAccumulated,
+						reasoning: [streamAccumulatedReasoning]
+					};
+				}
 			}
 		}
 
@@ -1058,8 +1062,9 @@
 		streamAccumulatedReasoning = '';
 		generationsStore.clear(chat.id);
 		wasAbortedManually = false;
-		userScrolledAway = false;
-		await scrollToBottom();
+		// Only re-anchor if the user was already at the bottom. Reading older
+		// messages mid-stream should stay put when generation finishes.
+		if (isAnchored) await scrollToBottom();
 		// Defer refresh to break out of $effect reactive scope (avoids SvelteKit SSR fetch warning)
 		setTimeout(async () => {
 			try {
@@ -1098,19 +1103,16 @@
 		return () => vv.removeEventListener('resize', onResize);
 	});
 
-	// Track scroll position for button visibility and user-scrolled-away detection
+	// User-driven anchor tracking. Programmatic scrolls bypass this via
+	// `suppressScrollHandler` so they don't flip the anchored state themselves.
 	$effect(() => {
 		const el = messagesContainer;
 		if (!el) return;
 		const onScroll = () => {
-			const nearBottom = isNearBottom();
-			showScrollButton = !nearBottom;
-			if (nearBottom) {
-				scrollButtonAttention = false;
-			}
-			if (isStreaming && !nearBottom) {
-				userScrolledAway = true;
-			}
+			if (suppressScrollHandler) return;
+			const atBottom = isNearBottom();
+			if (atBottom !== isAnchored) isAnchored = atBottom;
+			if (atBottom) scrollButtonAttention = false;
 		};
 		el.addEventListener('scroll', onScroll, { passive: true });
 		return () => el.removeEventListener('scroll', onScroll);
@@ -1367,7 +1369,12 @@
 			const savedScroll = loadScroll(chatId);
 			if (savedScroll != null && savedScroll > 0) {
 				tick().then(() => {
-					if (messagesContainer) messagesContainer.scrollTop = savedScroll;
+					if (messagesContainer) {
+						suppressScrollHandler = true;
+						messagesContainer.scrollTop = savedScroll;
+						isAnchored = isNearBottom();
+						requestAnimationFrame(() => { suppressScrollHandler = false; });
+					}
 				});
 			} else {
 				scrollToBottom(true);
@@ -1535,13 +1542,11 @@
 				const idx = untrack(() => streamingAssistantIdx);
 				if (!isTexting && !reduceMotion && idx >= 0) {
 					untrack(() => {
-						updateMessagePreservingScroll(() => {
-							messageList[idx] = {
-								...messageList[idx],
-								content: streamAccumulated,
-								reasoning: [streamAccumulatedReasoning]
-							};
-						});
+						messageList[idx] = {
+							...messageList[idx],
+							content: streamAccumulated,
+							reasoning: [streamAccumulatedReasoning]
+						};
 					});
 				}
 				resetStreamTimeout();
@@ -1914,19 +1919,19 @@
 		if (pruned) messageImages = next;
 	});
 
-	// Track whether user has manually scrolled away during streaming
-	let userScrolledAway = $state(false);
-
 	// Single delegated listener for image loads inside the messages container.
 	// Replaces a per-image `load` attach loop that piled up closures whenever
 	// scrollToBottom(force) ran against already-complete images. `load` doesn't
-	// bubble, so we use capture.
+	// bubble, so we use capture. Only re-anchor if the user is already at the
+	// bottom — otherwise late image layout shouldn't drag them down.
 	$effect(() => {
 		const el = messagesContainer;
 		if (!el) return;
 		const onLoad = (e: Event) => {
-			if (e.target instanceof HTMLImageElement && isNearBottom()) {
+			if (e.target instanceof HTMLImageElement && isAnchored) {
+				suppressScrollHandler = true;
 				el.scrollTop = 0;
+				requestAnimationFrame(() => { suppressScrollHandler = false; });
 			}
 		};
 		el.addEventListener('load', onLoad, { capture: true });
@@ -1941,29 +1946,19 @@
 		return Math.abs(messagesContainer.scrollTop) < px;
 	}
 
-	// Apply a message update. We used to do manual scroll compensation here
-	// for users scrolled up during streaming, but in flex-col-reverse the
-	// browser already keeps the visible content stable when content grows at
-	// the bottom (scrollTop is preserved relative to the bottom edge). Our
-	// manual `scrollTop = prev - delta` was fighting the native behavior and
-	// produced the jitter that showed up while reading older messages mid-
-	// stream. Just run the update and let col-reverse anchor it.
-	async function updateMessagePreservingScroll(updateFn: () => void) {
-		updateFn();
-	}
-
-	async function scrollToBottom(force = false) {
-		if (force) userScrolledAway = false;
-		const shouldScroll = force || (!userScrolledAway && isNearBottom());
+	// Jump to bottom and re-anchor. The `force` arg is vestigial (kept for
+	// callsite compatibility) — every programmatic call should anchor.
+	async function scrollToBottom(_force = true) {
+		void _force;
 		await tick();
-		if (messagesContainer && shouldScroll) {
-			// column-reverse: scrollTop = 0 is the bottom
-			messagesContainer.scrollTop = 0;
-			// Image-load-driven re-anchor lives in a single delegated listener
-			// set up by an effect below — we used to attach per-image `load`
-			// listeners here on every scrollToBottom(force) call, which piled
-			// up closures on images that never fired `load` (already cached).
-		}
+		const el = messagesContainer;
+		if (!el) return;
+		suppressScrollHandler = true;
+		el.scrollTop = 0;
+		isAnchored = true;
+		scrollButtonAttention = false;
+		// Release after the resulting scroll event has fired.
+		requestAnimationFrame(() => { suppressScrollHandler = false; });
 	}
 
 	async function sendMessage(guidance?: string) {
@@ -2990,10 +2985,12 @@
 	{/if}
 
 	<!-- Messages -->
-	<!-- overflow-anchor: none — the browser's scroll-anchoring is unreliable
-	     inside flex-col-reverse and double-corrects on top of our manual
-	     updateMessagePreservingScroll(), causing visible jitter during token
-	     streaming. We do the compensation ourselves; disable the browser's. -->
+	<!-- overflow-anchor: none — the browser's CSS scroll-anchoring is unreliable
+	     inside flex-col-reverse and produced visible jitter on top of the
+	     native bottom-anchoring this container relies on. We do no manual
+	     scroll compensation now; col-reverse handles both the anchored and
+	     scrolled-up cases correctly as long as the browser's own anchor
+	     heuristic is out of the way. -->
 	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6" style="overflow-anchor: none;">
 		<div class="mx-auto w-full max-w-5xl space-y-4">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
