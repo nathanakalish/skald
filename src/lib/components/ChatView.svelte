@@ -1344,6 +1344,7 @@
 			isReasoning = false;
 			streamingReasoning = '';
 			clearStreamBubbleTarget();
+			clearStreamTimeout();
 			streamAccumulated = '';
 			streamAccumulatedReasoning = '';
 			isImpersonating = false;
@@ -1916,6 +1917,22 @@
 	// Track whether user has manually scrolled away during streaming
 	let userScrolledAway = $state(false);
 
+	// Single delegated listener for image loads inside the messages container.
+	// Replaces a per-image `load` attach loop that piled up closures whenever
+	// scrollToBottom(force) ran against already-complete images. `load` doesn't
+	// bubble, so we use capture.
+	$effect(() => {
+		const el = messagesContainer;
+		if (!el) return;
+		const onLoad = (e: Event) => {
+			if (e.target instanceof HTMLImageElement && isNearBottom()) {
+				el.scrollTop = 0;
+			}
+		};
+		el.addEventListener('load', onLoad, { capture: true });
+		return () => el.removeEventListener('load', onLoad, { capture: true });
+	});
+
 	function isNearBottom(): boolean {
 		if (!messagesContainer) return true;
 		const thresholdMap: Record<string, number> = { tight: 20, normal: 50, relaxed: 150 };
@@ -1924,30 +1941,15 @@
 		return Math.abs(messagesContainer.scrollTop) < px;
 	}
 
-	// Preserve scroll position when content changes and the user is scrolled
-	// up. In column-reverse, content growth pushes everything above the growth
-	// point upward by the height delta, so we subtract that delta from scrollTop
-	// (which is negative when scrolled up) to keep the user pinned to the same
-	// content. Gating on the LIVE scroll position rather than the sticky
-	// `userScrolledAway` flag matters: that flag never resets mid-stream, so if
-	// the user scrolled up and then back to the bottom during generation we'd
-	// keep subtracting deltas from scrollTop=0 and shove the view away from the
-	// bottom every token. Using isNearBottom() here lets natural
-	// flex-col-reverse anchoring take over the moment they're back at the bottom.
+	// Apply a message update. We used to do manual scroll compensation here
+	// for users scrolled up during streaming, but in flex-col-reverse the
+	// browser already keeps the visible content stable when content grows at
+	// the bottom (scrollTop is preserved relative to the bottom edge). Our
+	// manual `scrollTop = prev - delta` was fighting the native behavior and
+	// produced the jitter that showed up while reading older messages mid-
+	// stream. Just run the update and let col-reverse anchor it.
 	async function updateMessagePreservingScroll(updateFn: () => void) {
-		const el = messagesContainer;
-		if (!el || isNearBottom()) {
-			updateFn();
-			return;
-		}
-		const prevHeight = el.scrollHeight;
-		const prevScroll = el.scrollTop;
 		updateFn();
-		await tick();
-		const delta = el.scrollHeight - prevHeight;
-		if (delta !== 0) {
-			el.scrollTop = prevScroll - delta;
-		}
 	}
 
 	async function scrollToBottom(force = false) {
@@ -1957,20 +1959,10 @@
 		if (messagesContainer && shouldScroll) {
 			// column-reverse: scrollTop = 0 is the bottom
 			messagesContainer.scrollTop = 0;
-
-			// Also scroll after images load (they change layout)
-			if (force) {
-				const images = messagesContainer.querySelectorAll('img');
-				for (const img of images) {
-					if (!img.complete) {
-						img.addEventListener('load', () => {
-							if (messagesContainer && isNearBottom()) {
-								messagesContainer.scrollTop = 0;
-							}
-						}, { once: true });
-					}
-				}
-			}
+			// Image-load-driven re-anchor lives in a single delegated listener
+			// set up by an effect below — we used to attach per-image `load`
+			// listeners here on every scrollToBottom(force) call, which piled
+			// up closures on images that never fired `load` (already cached).
 		}
 	}
 

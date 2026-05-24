@@ -95,6 +95,13 @@
 	const showStreamingAffordance = $derived(
 		isStreaming && !isImpersonating && isLast && message.role === 'assistant' && (!message.content || isReasoning)
 	);
+
+	// True for the currently-streaming assistant bubble. Used to skip the
+	// renderCache for in-flight content — caching every token snapshot churns
+	// the LRU with throwaway entries and adds GC pressure.
+	const isLiveStreamingBubble = $derived(
+		isStreaming && !isImpersonating && isLast && message.role === 'assistant'
+	);
 </script>
 
 <div
@@ -214,7 +221,7 @@
 					if (e.target instanceof HTMLImageElement) onimageClick(e.target.src);
 				}}
 			>
-				{@html renderContent(message.content)}
+				{@html renderContent(message.content, isLiveStreamingBubble)}
 			</div>
 			{#if generatedImageUrl || generatedImageLoading}
 				<!-- Image gen output: clicking opens the lightbox where the user
