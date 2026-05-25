@@ -2919,24 +2919,32 @@
 	}
 </script>
 
-<div class="relative flex min-h-0 flex-1 flex-col md:gap-2 {characterThemeStyle ? 'bg-background text-foreground md:bg-transparent' : ''}" style={characterThemeStyle}>
+<div class="relative flex min-h-0 flex-1 flex-col {characterThemeStyle ? 'bg-background text-foreground md:bg-transparent' : ''}" style={characterThemeStyle}>
 	{#if chat.useCharacterTheme && character.backgroundPath}
+		<!-- Single bg-image layer on the outermost container so it extends
+		     behind the messages, the fade, AND the floating compose row.
+		     Previously there were two copies (mobile + desktop) nested inside
+		     the messages card; that meant the opaque compose bar covered it. -->
 		<div
-			class="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.06] md:hidden"
+			class="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.06]"
 			style="background-image: url({character.backgroundPath})"
 		></div>
 	{/if}
-	<!-- Messages card (desktop: rounded card) -->
-	<div class="relative flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-2xl md:bg-background">
-	{#if chat.useCharacterTheme && character.backgroundPath}
-		<div
-			class="pointer-events-none absolute inset-0 z-0 hidden bg-cover bg-center bg-no-repeat opacity-[0.06] md:block"
-			style="background-image: url({character.backgroundPath})"
-		></div>
-	{/if}
-	<!-- Chat header (Messenger desktop / iMessage mobile) -->
-	<header class="relative z-[2] flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background px-2 md:border-b-0 md:px-5">
-		<!-- Mobile back/menu button -->
+	<!-- Messages card. No bg-background here anymore so the outer bg-image
+	     shows through. Desktop still gets rounded corners for the card look. -->
+	<div class="relative flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-2xl">
+	<!-- Chat header. Transparent background so the chat bg-image shows through.
+	     The character avatar is oversized and intentionally overhangs the
+	     bottom of the bar (~60% in, ~40% below) — gives the chat a strong
+	     visual identity anchor in the upper-left. The story/text-mode icon
+	     became a small badge in the avatar's bottom-right. Mobile and desktop
+	     now share this layout (used to be split: centered on mobile, left on
+	     desktop). The messages container compensates for the overhang via
+	     extra top padding so the first message and "Load earlier" button
+	     never sit under the avatar. -->
+	<header class="relative z-[2] flex h-14 shrink-0 items-center gap-3 px-2 md:px-5">
+		<!-- Mobile back button stays at the far left so navigation is reachable;
+		     the avatar slots in just after it. -->
 		{#if ontogglemobile}
 			<button
 				onclick={ontogglemobile}
@@ -2950,64 +2958,60 @@
 			</button>
 		{/if}
 
-		<!-- iMessage mobile: centered avatar + name. Desktop: avatar+name on left -->
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="flex flex-1 cursor-pointer items-center gap-3 md:cursor-default"
-			onclick={() => { if (isMobile) showCharacterInfo = true; }}
-		>
-			<!-- Mobile: stacked avatar+name centered. Desktop: side-by-side -->
-			<div class="flex w-full items-center justify-center gap-2 md:w-auto md:justify-start md:gap-3">
-				<div class="group relative md:order-first">
-					{#if lastTokenStats}
-						{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
-						{@const ringCircumference = 2 * Math.PI * 20}
-						{@const ringOffset = ringCircumference - (ringPct / 100) * ringCircumference}
-						<svg class="absolute -inset-[3px] h-[42px] w-[42px] md:h-[46px] md:w-[46px]" viewBox="0 0 42 42"
-							role="img" aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
-						>
-							<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
-							<circle cx="21" cy="21" r="20" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
-							<circle cx="21" cy="21" r="20" fill="none" stroke-width="2"
-								class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
-								stroke="currentColor"
-								stroke-dasharray={ringCircumference}
-								stroke-dashoffset={ringOffset}
-								stroke-linecap="round"
-								transform="rotate(-90 21 21)"
-							/>
-						</svg>
-					{/if}
-					{#if character.avatarPath}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-						<img
-							src={character.avatarPath}
-							alt={character.name}
-							class="h-9 w-9 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-80 md:h-10 md:w-10"
-							onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
-						/>
-					{:else}
-						<div
-							class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-sm font-medium text-primary md:h-10 md:w-10"
-						>
-							{character.name[0]}
-						</div>
-					{/if}
+		<!-- Overhung avatar. Wrapper reserves only the in-bar width
+		     (w-[3.5rem]) so the name sits next to it cleanly; the img
+		     itself extends below the bar via top-1 + h-[5.5rem] inside the
+		     wrapper. Stacking-wise the header has z-[2] so the overhang
+		     paints over the messages container (z-[1]) without clipping. -->
+		<div class="relative h-14 w-[3.5rem] shrink-0">
+			{#if lastTokenStats}
+				{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
+				{@const ringCircumference = 2 * Math.PI * 41}
+				{@const ringOffset = ringCircumference - (ringPct / 100) * ringCircumference}
+				<svg class="pointer-events-none absolute left-[-2px] top-[2px] h-[5.75rem] w-[5.75rem]" viewBox="0 0 84 84"
+					role="img" aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
+				>
+					<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
+					<circle cx="42" cy="42" r="41" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
+					<circle cx="42" cy="42" r="41" fill="none" stroke-width="2"
+						class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
+						stroke="currentColor"
+						stroke-dasharray={ringCircumference}
+						stroke-dashoffset={ringOffset}
+						stroke-linecap="round"
+						transform="rotate(-90 42 42)"
+					/>
+				</svg>
+			{/if}
+			{#if character.avatarPath}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+				<img
+					src={character.avatarPath}
+					alt={character.name}
+					class="absolute left-0 top-1 h-[5.5rem] w-[5.5rem] cursor-pointer rounded-full object-cover ring-2 ring-background transition-opacity hover:opacity-80"
+					onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
+				/>
+			{:else}
+				<div class="absolute left-0 top-1 flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full bg-primary/20 text-2xl font-medium text-primary ring-2 ring-background">
+					{character.name[0]}
 				</div>
-				<div class="flex min-w-0 flex-col items-center md:items-start">
-					<div class="flex items-center gap-1.5">
-						{#if isTexting}
-							<Smartphone class="h-3.5 w-3.5 text-muted-foreground" />
-						{:else}
-							<BookOpen class="h-3.5 w-3.5 text-muted-foreground" />
-						{/if}
-						<h2 class="truncate text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
-					</div>
-				</div>
-			</div>
+			{/if}
+			<!-- Story/text-mode badge tucked into the avatar's bottom-right.
+			     pointer-events-none so taps fall through to the avatar (lightbox)
+			     per the user's preference. -->
+			<span class="pointer-events-none absolute bottom-[-2px] right-[-2px] flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm">
+				{#if isTexting}
+					<Smartphone class="h-3 w-3" />
+				{:else}
+					<BookOpen class="h-3 w-3" />
+				{/if}
+			</span>
 		</div>
+
+		<!-- Character name. Vertically centred in the bar regardless of avatar
+		     overhang. Tap is a no-op per spec — info pane stays on the kebab. -->
+		<h2 class="flex-1 truncate text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
 
 		<!-- Right side: overflow menu -->
 		<div class="flex shrink-0 items-center">
@@ -3053,9 +3057,12 @@
 	     native bottom-anchoring this container relies on. We do no manual
 	     scroll compensation now; col-reverse handles both the anchored and
 	     scrolled-up cases correctly as long as the browser's own anchor
-	     heuristic is out of the way. -->
-	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 py-3 md:p-6" style="overflow-anchor: none;">
-		<div class="mx-auto w-full max-w-5xl space-y-4">
+	     heuristic is out of the way.
+	     pt-12 / md:pt-14 leaves room for the avatar's ~36px bottom overhang
+	     plus a comfortable buffer so the "Load earlier" button and the
+	     oldest visible bubble never collide with the avatar. -->
+	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pt-12 pb-3 md:px-6 md:pt-14 md:pb-6" style="overflow-anchor: none;">
+		<div class="mx-auto w-full max-w-5xl space-y-4 pb-24 md:pb-28">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
 			     windowed-render top-sentinel. Fixed height (not min-h) so the slot
 			     occupies the EXACT same pixels with the button or the 1px sentinel
@@ -3390,25 +3397,34 @@
 		<div bind:this={bottomSentinel} class="h-px"></div>
 	</div>
 
-	<!-- Scroll to bottom button -->
-	{#if showScrollButton}
-		<div class="relative">
-			<button
-				onclick={() => { scrollButtonAttention = false; scrollToBottom(true); }}
-				class="scroll-btn-enter absolute -top-14 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-all hover:bg-accent hover:shadow-xl hover:scale-110 active:scale-95 md:left-1/2 md:right-auto md:-translate-x-1/2 {scrollButtonAttention ? 'scroll-btn-attention' : ''}"
-			>
-				<ArrowDown class="h-4 w-4 text-foreground" />
-				{#if scrollButtonAttention}
-					<span class="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-primary ring-2 ring-background"></span>
-				{/if}
-			</button>
-		</div>
-	{/if}
-	</div>
+	<!-- Theme-matched fade behind the floating compose row. Pure visual
+	     element so bubbles scrolling past the compose region don't slam into
+	     it abruptly. pointer-events-none keeps the controls click-through.
+	     Gradient stops shaped so the top half is mostly transparent (subtle
+	     hint) and the bottom 50% is firmly background. -->
+	<div class="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-24 bg-gradient-to-t from-background via-background/85 to-transparent"></div>
 
-	<!-- Input -->
+	<!-- Scroll to bottom button. Sits above the compose row, inside the card
+	     so it shares the rounded clip. bottom offset roughly matches the
+	     compose row height + breathing room. -->
+	{#if showScrollButton}
+		<button
+			onclick={() => { scrollButtonAttention = false; scrollToBottom(true); }}
+			class="scroll-btn-enter absolute bottom-20 right-4 z-[3] flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-all hover:bg-accent hover:shadow-xl hover:scale-110 active:scale-95 md:bottom-24 md:left-1/2 md:right-auto md:-translate-x-1/2 {scrollButtonAttention ? 'scroll-btn-attention' : ''}"
+		>
+			<ArrowDown class="h-4 w-4 text-foreground" />
+			{#if scrollButtonAttention}
+				<span class="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-primary ring-2 ring-background"></span>
+			{/if}
+		</button>
+	{/if}
+
+	<!-- Compose row. Floats absolutely at the bottom of the messages card with
+	     no surrounding container background; the textarea and buttons are each
+	     individually opaque (bg-card / bg-primary / bg-destructive) so they
+	     read as discrete floating controls over the fade and the chat bg. -->
 	<div
-		class="relative z-[1] shrink-0 border-t border-border/50 bg-background px-3 md:rounded-2xl md:border-t-0 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
+		class="absolute bottom-0 left-0 right-0 z-[2] px-3 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
 	>
 
 		<div class="mx-auto flex max-w-5xl items-stretch gap-2">
@@ -3505,6 +3521,7 @@
 			{/if}
 		</div>
 	</div>
+	</div><!-- /messages card -->
 </div>
 
 <ImageLightbox src={enlargedImage} onclose={() => (enlargedImage = null)} />
