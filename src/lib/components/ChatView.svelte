@@ -2958,55 +2958,59 @@
 			</button>
 		{/if}
 
-		<!-- Overhung avatar. Wrapper reserves only the in-bar width
-		     (w-[3.5rem]) so the name sits next to it cleanly; the img
-		     itself extends below the bar via top-1 + h-[5.5rem] inside the
-		     wrapper. Stacking-wise the header has z-[2] so the overhang
-		     paints over the messages container (z-[1]) without clipping. -->
-		<div class="relative h-14 w-[3.5rem] shrink-0">
-			{#if lastTokenStats}
-				{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
-				{@const ringCircumference = 2 * Math.PI * 41}
-				{@const ringOffset = ringCircumference - (ringPct / 100) * ringCircumference}
-				<svg class="pointer-events-none absolute left-[-2px] top-[2px] h-[5.75rem] w-[5.75rem]" viewBox="0 0 84 84"
-					role="img" aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
-				>
-					<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
-					<circle cx="42" cy="42" r="41" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
-					<circle cx="42" cy="42" r="41" fill="none" stroke-width="2"
-						class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
-						stroke="currentColor"
-						stroke-dasharray={ringCircumference}
-						stroke-dashoffset={ringOffset}
-						stroke-linecap="round"
-						transform="rotate(-90 42 42)"
-					/>
-				</svg>
-			{/if}
-			{#if character.avatarPath}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-				<img
-					src={character.avatarPath}
-					alt={character.name}
-					class="absolute left-0 top-1 h-[5.5rem] w-[5.5rem] cursor-pointer rounded-full object-cover ring-2 ring-background transition-opacity hover:opacity-80"
-					onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
-				/>
-			{:else}
-				<div class="absolute left-0 top-1 flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full bg-primary/20 text-2xl font-medium text-primary ring-2 ring-background">
-					{character.name[0]}
-				</div>
-			{/if}
-			<!-- Story/text-mode badge tucked into the avatar's bottom-right.
-			     pointer-events-none so taps fall through to the avatar (lightbox)
-			     per the user's preference. -->
-			<span class="pointer-events-none absolute bottom-[-2px] right-[-2px] flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm">
-				{#if isTexting}
-					<Smartphone class="h-3 w-3" />
-				{:else}
-					<BookOpen class="h-3 w-3" />
+		<!-- Overhung avatar. Outer wrapper reserves the in-bar footprint
+		     (h-14 w-24); the inner group is positioned absolutely and sized to
+		     the full 96px avatar so the ring and corner badge align to the
+		     avatar's bounds rather than the wrapper's. z-10 keeps the avatar
+		     overhang above message bubbles which sometimes paint their own
+		     stacking context. -->
+		<div class="relative z-10 h-14 w-24 shrink-0">
+			<div class="absolute left-0 top-0 h-24 w-24">
+				{#if lastTokenStats}
+					{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
+					{@const ringCircumference = 2 * Math.PI * 46}
+					{@const ringOffset = ringCircumference - (ringPct / 100) * ringCircumference}
+					<svg class="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 96 96"
+						role="img" aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
+					>
+						<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
+						<circle cx="48" cy="48" r="46" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
+						<circle cx="48" cy="48" r="46" fill="none" stroke-width="2"
+							class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
+							stroke="currentColor"
+							stroke-dasharray={ringCircumference}
+							stroke-dashoffset={ringOffset}
+							stroke-linecap="round"
+							transform="rotate(-90 48 48)"
+						/>
+					</svg>
 				{/if}
-			</span>
+				{#if character.avatarPath}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+					<img
+						src={character.avatarPath}
+						alt={character.name}
+						class="absolute inset-0 h-full w-full cursor-pointer rounded-full object-cover ring-2 ring-background transition-opacity hover:opacity-80"
+						onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
+					/>
+				{:else}
+					<div class="absolute inset-0 flex items-center justify-center rounded-full bg-primary/20 text-2xl font-medium text-primary ring-2 ring-background">
+						{character.name[0]}
+					</div>
+				{/if}
+				<!-- Story/text-mode badge tucked into the avatar's actual
+				     bottom-right corner (inner container matches the avatar
+				     bounds so -bottom/-right lands there). pointer-events-none
+				     so taps fall through to the avatar (lightbox). -->
+				<span class="pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm">
+					{#if isTexting}
+						<Smartphone class="h-3 w-3" />
+					{:else}
+						<BookOpen class="h-3 w-3" />
+					{/if}
+				</span>
+			</div>
 		</div>
 
 		<!-- Character name. Vertically centred in the bar regardless of avatar
