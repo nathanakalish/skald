@@ -1144,16 +1144,21 @@
 	});
 
 	// Scroll compensation. col-reverse anchors the wrapper's BOTTOM edge to
-	// the container, not the user's content — so when content grows below
-	// the user's viewport (streaming bubble growing, image loading inside a
-	// bubble, etc.) the wrapper bottom stays pinned and everything above
-	// drifts upward by the growth delta. For an anchored user that's fine
-	// (they want to follow new content). For a scrolled-up user it means
-	// what they were reading crawls out of view. Counter it by subtracting
-	// the delta from scrollTop (negative when scrolled up) so the same
-	// content stays put. Skipped while `suppressCompensation` is set so
-	// top-growth mutations (Load Earlier, sentinel-driven window expand)
-	// don't trigger an unwanted scroll shift.
+	// the container, not the user's content — so when the streaming bubble
+	// grows the wrapper bottom stays pinned and everything above drifts up
+	// by the growth delta. For an anchored user that's fine (they're
+	// following new content). For a scrolled-up user it means what they
+	// were reading crawls out of view. Counter it by subtracting the delta
+	// from scrollTop so the same content stays put.
+	//
+	// IMPORTANT: gated on `streamingAssistantIdx >= 0`. Earlier we tried
+	// running this for any wrapper resize, but image decodes, theme
+	// transitions, and font swaps would all trigger small deltas while the
+	// user was actively scrolling — the scrollTop writes fought their
+	// gesture and read as "snapping" on both desktop and mobile. Streaming
+	// growth is the only resize source worth compensating; everything else
+	// is short-lived and lives well enough with col-reverse's natural
+	// behaviour.
 	$effect(() => {
 		const container = messagesContainer;
 		if (!container) return;
@@ -1166,6 +1171,7 @@
 			prevHeight = newHeight;
 			if (delta === 0) return;
 			if (suppressCompensation || isAnchored) return;
+			if (streamingAssistantIdx < 0) return;
 			suppressScrollHandler = true;
 			container.scrollTop = container.scrollTop - delta;
 			requestAnimationFrame(() => { suppressScrollHandler = false; });
