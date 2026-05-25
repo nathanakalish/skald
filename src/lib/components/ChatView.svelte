@@ -2943,13 +2943,14 @@
 	     extra top padding so the first message and "Load earlier" button
 	     never sit under the avatar. -->
 	<header class="relative z-[2] flex h-14 shrink-0 items-center gap-3 px-2 md:px-5">
-		<!-- Back button is for non-touch devices only. Touch users have the
-		     swipe-from-left gesture to open the drawer, so the button is hidden
-		     on coarse-pointer devices via the (hover: none) media query. -->
+		<!-- Back button only appears in the mobile layout (under md, where the
+		     left tab bar is hidden) AND on hover-capable devices (mouse). Touch
+		     mobile users have swipe-from-left for the drawer; desktop users
+		     have the tab bar; only mouse-on-narrow needs this affordance. -->
 		{#if ontogglemobile}
 			<button
 				onclick={ontogglemobile}
-				class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary [@media(hover:none)]:hidden"
+				class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary md:hidden [@media(hover:none)]:hidden"
 				aria-label="Back to chats"
 			>
 				<ChevronLeft class="h-6 w-6" />
@@ -3060,7 +3061,7 @@
 	     plus a comfortable buffer so the "Load earlier" button and the
 	     oldest visible bubble never collide with the avatar. -->
 	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pt-3 pb-3 md:px-6 md:pt-4 md:pb-6" style="overflow-anchor: none;">
-		<div class="mx-auto w-full max-w-5xl space-y-4 pb-16 md:pb-20">
+		<div class="mx-auto w-full max-w-5xl space-y-4 pb-16">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
 			     windowed-render top-sentinel. Fixed height (not min-h) so the slot
 			     occupies the EXACT same pixels with the button or the 1px sentinel
@@ -3415,10 +3416,16 @@
 	<!-- Compose row. Floats absolutely at the bottom of the messages card.
 	     The row's own background fades from transparent at its top edge to
 	     full background at the bottom, so messages scrolling past appear to
-	     dissolve into the compose area. Inner controls are individually
-	     opaque (bg-card / bg-primary / bg-destructive) so they stay crisp. -->
+	     dissolve into the compose area. `from-background/0` (not
+	     from-transparent) keeps the gradient interpolation in the same
+	     color space — transparent decays through rgba(0,0,0,0) which
+	     creates a visible dark band. Using --background at 0 alpha also
+	     means the gradient automatically picks up the character theme's
+	     tint when a photo background is set. Inner controls are
+	     individually opaque (bg-card / bg-primary / bg-destructive) so they
+	     stay crisp. -->
 	<div
-		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-transparent to-background px-3 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
+		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background px-3 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
 	>
 
 		<div class="pointer-events-auto mx-auto flex max-w-5xl items-stretch gap-2">
