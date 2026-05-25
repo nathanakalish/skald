@@ -22,7 +22,7 @@
 -->
 {#if toasts.all.length > 0}
 	<div
-		class="fixed right-4 top-4 z-[200] flex flex-col gap-2 md:right-6 md:top-6"
+		class="fixed right-4 top-4 z-[200] flex flex-col items-end gap-2 md:right-6 md:top-6"
 		role="region"
 		aria-label="Notifications"
 	>

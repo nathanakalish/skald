@@ -2005,8 +2005,12 @@
 		if (!messagesContainer) return true;
 		const thresholdMap: Record<string, number> = { tight: 20, normal: 50, relaxed: 150 };
 		const px = thresholdMap[autoScrollThreshold] ?? 50;
-		// column-reverse: scrollTop = 0 at bottom, negative when scrolled up
-		return Math.abs(messagesContainer.scrollTop) < px;
+		// col-reverse: scrollTop = 0 at bottom, negative when scrolled up to
+		// older messages, positive only during below-anchor rubber-band /
+		// overscroll. Only the negative side counts as scrolled away — any
+		// positive overscroll past the latest message is still "at bottom"
+		// so the scroll-to-bottom button stays hidden during spring-back.
+		return messagesContainer.scrollTop >= -px;
 	}
 
 	// Jump to bottom and re-anchor. The `force` arg is vestigial (kept for
@@ -2919,7 +2923,7 @@
 	}
 </script>
 
-<div class="relative flex min-h-0 flex-1 flex-col {characterThemeStyle ? 'bg-background text-foreground md:bg-transparent' : ''}" style={characterThemeStyle}>
+<div class="relative flex min-h-0 flex-1 flex-col {characterThemeStyle ? 'bg-background text-foreground' : ''}" style={characterThemeStyle}>
 	{#if chat.useCharacterTheme && character.backgroundPath}
 		<!-- Single bg-image layer on the outermost container so it extends
 		     behind the messages, the fade, AND the floating compose row.
@@ -3179,7 +3183,7 @@
 						edit: pinnedActions.has('edit') && !isCompacted && editingId !== message.id,
 						copy: pinnedActions.has('copy'),
 						del: pinnedActions.has('delete') && i > 0 && !isCompacted,
-						swipes: pinnedActions.has('swipes') && message.swipes.length > 1,
+						swipes: pinnedActions.has('swipes') && message.swipes.length > 1 && !(i === 0 && messageList.length > 1),
 						guideReplyUser: pinnedActions.has('guideReply') && message.role === 'user' && isLast && !isCompacted,
 						guideReplyAssistant: pinnedActions.has('guideReply') && message.role === 'assistant' && isLast && !isCompacted && parentMsgForPin?.role === 'user',
 						guideImpersonation: pinnedActions.has('guideImpersonation') && message.role === 'user' && isLast && !isCompacted,
@@ -3703,8 +3707,9 @@
 		{@const menuIsCompacted = isMessageCompacted(menuMsg.id)}
 		{@const menuParentMsg = menuMsgObj.parentId != null ? messageList.find((mm) => mm.id === menuMsgObj.parentId) : null}
 		{@const menuAssistantGuidance = menuMsg.role === 'assistant' ? (menuMsgObj.guidance ?? null) : null}
+		{@const menuGreetingLocked = menuIsFirst && messageList.length > 1}
 		{@const menuVisibleCount =
-			((menuMsg.swipes.length > 1 && !pinnedActions.has('swipes')) ? 1 : 0)
+			((menuMsg.swipes.length > 1 && !pinnedActions.has('swipes') && !menuGreetingLocked) ? 1 : 0)
 			+ (menuHasBranches ? 1 : 0)
 			+ ((menuMsg.reasoning[menuMsg.swipeIndex] && !pinnedActions.has('viewReasoning')) ? 1 : 0)
 			+ ((menuShowRegen && !menuIsCompacted && !pinnedActions.has('regenerate')) ? 1 : 0)
@@ -3725,7 +3730,7 @@
 			class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border bg-popover py-1 shadow-2xl"
 			style="--popup-origin: {msgMenuPosition.flipUp ? 'bottom' : 'top'} left; left: {msgMenuPosition.x}px; {msgMenuPosition.flipUp ? 'bottom' : 'top'}: {msgMenuPosition.flipUp ? (msgMenuPosition.viewportH - msgMenuPosition.y) + 'px' : msgMenuPosition.y + 'px'}"
 		>
-			{#if menuMsg.swipes.length > 1 && !pinnedActions.has('swipes')}
+			{#if menuMsg.swipes.length > 1 && !pinnedActions.has('swipes') && !menuGreetingLocked}
 				<div class="flex items-center justify-center gap-1 px-3 py-1.5">
 					<button
 						type="button"
