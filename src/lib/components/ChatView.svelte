@@ -2943,12 +2943,13 @@
 	     extra top padding so the first message and "Load earlier" button
 	     never sit under the avatar. -->
 	<header class="relative z-[2] flex h-14 shrink-0 items-center gap-3 px-2 md:px-5">
-		<!-- Mobile back button stays at the far left so navigation is reachable;
-		     the avatar slots in just after it. -->
+		<!-- Back button is for non-touch devices only. Touch users have the
+		     swipe-from-left gesture to open the drawer, so the button is hidden
+		     on coarse-pointer devices via the (hover: none) media query. -->
 		{#if ontogglemobile}
 			<button
 				onclick={ontogglemobile}
-				class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary md:hidden"
+				class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary [@media(hover:none)]:hidden"
 				aria-label="Back to chats"
 			>
 				<ChevronLeft class="h-6 w-6" />
@@ -2958,59 +2959,52 @@
 			</button>
 		{/if}
 
-		<!-- Overhung avatar. Outer wrapper reserves the in-bar footprint
-		     (h-14 w-24); the inner group is positioned absolutely and sized to
-		     the full 96px avatar so the ring and corner badge align to the
-		     avatar's bounds rather than the wrapper's. z-10 keeps the avatar
-		     overhang above message bubbles which sometimes paint their own
-		     stacking context. -->
-		<div class="relative z-10 h-14 w-24 shrink-0">
-			<div class="absolute left-0 top-0 h-24 w-24">
-				{#if lastTokenStats}
-					{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
-					{@const ringCircumference = 2 * Math.PI * 46}
-					{@const ringOffset = ringCircumference - (ringPct / 100) * ringCircumference}
-					<svg class="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 96 96"
-						role="img" aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
-					>
-						<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
-						<circle cx="48" cy="48" r="46" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
-						<circle cx="48" cy="48" r="46" fill="none" stroke-width="2"
-							class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
-							stroke="currentColor"
-							stroke-dasharray={ringCircumference}
-							stroke-dashoffset={ringOffset}
-							stroke-linecap="round"
-							transform="rotate(-90 48 48)"
-						/>
-					</svg>
-				{/if}
-				{#if character.avatarPath}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-					<img
-						src={character.avatarPath}
-						alt={character.name}
-						class="absolute inset-0 h-full w-full cursor-pointer rounded-full object-cover ring-2 ring-background transition-opacity hover:opacity-80"
-						onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
+		<!-- In-bar avatar. Sized to h-12 so it sits comfortably inside the
+		     h-14 bar with a small breathing margin. Ring SVG and corner badge
+		     align directly to the avatar bounds. -->
+		<div class="relative h-12 w-12 shrink-0">
+			{#if lastTokenStats}
+				{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
+				{@const ringCircumference = 2 * Math.PI * 22}
+				{@const ringOffset = ringCircumference - (ringPct / 100) * ringCircumference}
+				<svg class="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 48 48"
+					role="img" aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
+				>
+					<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
+					<circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
+					<circle cx="24" cy="24" r="22" fill="none" stroke-width="2"
+						class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
+						stroke="currentColor"
+						stroke-dasharray={ringCircumference}
+						stroke-dashoffset={ringOffset}
+						stroke-linecap="round"
+						transform="rotate(-90 24 24)"
 					/>
+				</svg>
+			{/if}
+			{#if character.avatarPath}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+				<img
+					src={character.avatarPath}
+					alt={character.name}
+					class="absolute inset-0 h-full w-full cursor-pointer rounded-full object-cover ring-2 ring-background transition-opacity hover:opacity-80"
+					onclick={(e) => { e.stopPropagation(); enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
+				/>
+			{:else}
+				<div class="absolute inset-0 flex items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground ring-2 ring-background">
+					{character.name[0]}
+				</div>
+			{/if}
+			<!-- Story/text-mode badge in the avatar's bottom-right corner.
+			     pointer-events-none so taps fall through to the avatar. -->
+			<span class="pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm">
+				{#if isTexting}
+					<Smartphone class="h-2.5 w-2.5" />
 				{:else}
-					<div class="absolute inset-0 flex items-center justify-center rounded-full bg-primary/20 text-2xl font-medium text-primary ring-2 ring-background">
-						{character.name[0]}
-					</div>
+					<BookOpen class="h-2.5 w-2.5" />
 				{/if}
-				<!-- Story/text-mode badge tucked into the avatar's actual
-				     bottom-right corner (inner container matches the avatar
-				     bounds so -bottom/-right lands there). pointer-events-none
-				     so taps fall through to the avatar (lightbox). -->
-				<span class="pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm">
-					{#if isTexting}
-						<Smartphone class="h-3 w-3" />
-					{:else}
-						<BookOpen class="h-3 w-3" />
-					{/if}
-				</span>
-			</div>
+			</span>
 		</div>
 
 		<!-- Character name. Vertically centred in the bar regardless of avatar
@@ -3065,8 +3059,8 @@
 	     pt-12 / md:pt-14 leaves room for the avatar's ~36px bottom overhang
 	     plus a comfortable buffer so the "Load earlier" button and the
 	     oldest visible bubble never collide with the avatar. -->
-	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pt-12 pb-3 md:px-6 md:pt-14 md:pb-6" style="overflow-anchor: none;">
-		<div class="mx-auto w-full max-w-5xl space-y-4 pb-24 md:pb-28">
+	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pt-3 pb-3 md:px-6 md:pt-4 md:pb-6" style="overflow-anchor: none;">
+		<div class="mx-auto w-full max-w-5xl space-y-4 pb-16 md:pb-20">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
 			     windowed-render top-sentinel. Fixed height (not min-h) so the slot
 			     occupies the EXACT same pixels with the button or the 1px sentinel
@@ -3401,12 +3395,7 @@
 		<div bind:this={bottomSentinel} class="h-px"></div>
 	</div>
 
-	<!-- Theme-matched fade behind the floating compose row. Pure visual
-	     element so bubbles scrolling past the compose region don't slam into
-	     it abruptly. pointer-events-none keeps the controls click-through.
-	     Gradient stops shaped so the top half is mostly transparent (subtle
-	     hint) and the bottom 50% is firmly background. -->
-	<div class="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-24 bg-gradient-to-t from-background via-background/85 to-transparent"></div>
+
 
 	<!-- Scroll to bottom button. Sits above the compose row, inside the card
 	     so it shares the rounded clip. bottom offset roughly matches the
@@ -3423,15 +3412,16 @@
 		</button>
 	{/if}
 
-	<!-- Compose row. Floats absolutely at the bottom of the messages card with
-	     no surrounding container background; the textarea and buttons are each
-	     individually opaque (bg-card / bg-primary / bg-destructive) so they
-	     read as discrete floating controls over the fade and the chat bg. -->
+	<!-- Compose row. Floats absolutely at the bottom of the messages card.
+	     The row's own background fades from transparent at its top edge to
+	     full background at the bottom, so messages scrolling past appear to
+	     dissolve into the compose area. Inner controls are individually
+	     opaque (bg-card / bg-primary / bg-destructive) so they stay crisp. -->
 	<div
-		class="absolute bottom-0 left-0 right-0 z-[2] px-3 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
+		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-transparent to-background px-3 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
 	>
 
-		<div class="mx-auto flex max-w-5xl items-stretch gap-2">
+		<div class="pointer-events-auto mx-auto flex max-w-5xl items-stretch gap-2">
 			<div class="relative flex-1">
 				<LimitedTextarea
 					bind:element={textareaEl}
