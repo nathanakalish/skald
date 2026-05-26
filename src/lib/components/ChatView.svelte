@@ -430,6 +430,13 @@
 		new Set((String(settingsStore.settings.pinnedMessageActions || '')).split(',').map((s) => s.trim()).filter(Boolean))
 	);
 	let keyboardVisible = $state(false);
+	// Live-tracked height of the floating compose row. Drives:
+	//   - the messages spacer's bottom padding (so anchored-to-bottom view
+	//     stays anchored above the compose pill when the textarea grows)
+	//   - the scroll-to-bottom button's bottom offset (so it never collides
+	//     with the send button on iOS PWA where safe-area inflates things).
+	let composeRowEl: HTMLDivElement | undefined = $state();
+	let composeRowHeight = $state(0);
 	// === Scroll/anchor model ===
 	// `isAnchored` is the single source of truth for whether the viewport is
 	// pinned to the bottom of the chat. It only changes in response to a USER
@@ -2956,7 +2963,10 @@
 	     dissolve so messages don't read as a hard edge against the status
 	     bar. Safe-area insets evaluate to 0 on desktop, so the header
 	     looks identical there. -->
-	<header class="pointer-events-none absolute left-0 right-0 top-0 z-[3] flex h-14 items-center gap-3 px-2 pt-safe pl-safe pr-safe md:px-5">
+	<header
+		class="pointer-events-none absolute left-0 right-0 top-0 z-[3] flex min-h-16 items-center gap-2 md:gap-3"
+		style="padding-top: max(0.5rem, var(--safe-area-top)); padding-bottom: 0.5rem; padding-left: max(0.75rem, var(--safe-area-left)); padding-right: max(0.75rem, var(--safe-area-right));"
+	>
 		<!-- Back button only appears in the mobile layout (under md, where the
 		     left tab bar is hidden) AND on hover-capable devices (mouse). Touch
 		     mobile users have swipe-from-left for the drawer; desktop users
@@ -2974,6 +2984,13 @@
 			</button>
 		{/if}
 
+		<!-- Avatar + name pill. Mirrors the compose row's translucent slab so
+		     the two anchors visually balance, top and bottom. Picks up
+		     --background / --card from the active character theme so themed
+		     chats get a tinted pill automatically. min-w-0 lets the name
+		     truncate inside the flex-1 pill instead of pushing the kebab
+		     off-screen on narrow viewports. -->
+		<div class="pointer-events-auto flex min-w-0 flex-1 items-center gap-2.5 rounded-full border border-border/40 bg-card/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4">
 		<!-- In-bar avatar. Sized to h-12 so it sits comfortably inside the
 		     h-14 bar with a small breathing margin. Ring SVG and corner badge
 		     align directly to the avatar bounds. pointer-events-auto so taps
@@ -3024,11 +3041,10 @@
 			</span>
 		</div>
 
-		<!-- Character name. Vertically centred in the bar regardless of avatar
-		     overhang. Tap is a no-op per spec — info pane stays on the kebab.
-		     Stays pointer-events-none so finger-scrolls over the empty middle
-		     of the bar scroll the messages behind. -->
-		<h2 class="flex-1 truncate text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
+		<!-- Character name. Vertically centred in the pill. Tap is a no-op
+		     per spec — info pane stays on the kebab. -->
+		<h2 class="min-w-0 flex-1 truncate text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
+		</div>
 
 		<!-- Right side: overflow menu -->
 		<div class="pointer-events-auto flex shrink-0 items-center">
@@ -3057,7 +3073,7 @@
 	     scrolls + taps pass through to the messages and header above. -->
 	<div
 		class="pointer-events-none absolute left-0 right-0 top-0 z-[2] bg-gradient-to-b from-background to-background/0"
-		style="height: calc(var(--safe-area-top) + 3.5rem + 0.75rem);"
+		style="height: calc(max(0.5rem, var(--safe-area-top)) + 4rem + 0.75rem);"
 	></div>
 
 	{#if messageSearchOpen}
@@ -3066,7 +3082,7 @@
 		     (3.5rem). Has its own bg-background/95 so it isn't see-through. -->
 		<div
 			class="pointer-events-auto absolute left-0 right-0 z-[2] flex items-center gap-2 border-b border-border/50 bg-background/95 px-3 py-2 pl-safe pr-safe backdrop-blur-sm md:px-6"
-			style="top: calc(var(--safe-area-top) + 3.5rem);"
+			style="top: calc(max(0.5rem, var(--safe-area-top)) + 4rem);"
 		>
 			<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 			<input
@@ -3099,9 +3115,12 @@
 	     compose env() with rem in one utility. -->
 	<div bind:this={messagesContainer}
 		class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pb-3 pl-safe pr-safe md:px-6 md:pb-6"
-		style="overflow-anchor: none; padding-top: calc(var(--safe-area-top) + 3.5rem);"
+		style="overflow-anchor: none; padding-top: calc(max(0.5rem, var(--safe-area-top)) + 4rem);"
 	>
-		<div class="mx-auto w-full max-w-5xl space-y-4 pb-16">
+		<div
+			class="mx-auto w-full max-w-5xl space-y-4"
+			style="padding-bottom: max(4rem, {composeRowHeight}px);"
+		>
 			<!-- Constant-height slot housing either the "Load earlier" button or the
 			     windowed-render top-sentinel. Fixed height (not min-h) so the slot
 			     occupies the EXACT same pixels with the button or the 1px sentinel
@@ -3439,12 +3458,15 @@
 
 
 	<!-- Scroll to bottom button. Sits above the compose row, inside the card
-	     so it shares the rounded clip. bottom offset roughly matches the
-	     compose row height + breathing room. -->
+	     so it shares the rounded clip. The bottom offset is driven by the
+	     measured compose-row height so it always clears the send button —
+	     previous hard-coded bottom-20 broke on iOS PWA where the safe-area
+	     inset made the compose row taller than the offset. -->
 	{#if showScrollButton}
 		<button
 			onclick={() => { scrollButtonAttention = false; scrollToBottom(true); }}
-			class="scroll-btn-enter absolute bottom-20 right-4 z-[3] flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-all hover:bg-accent hover:shadow-xl hover:scale-110 active:scale-95 md:bottom-24 md:left-1/2 md:right-auto md:-translate-x-1/2 {scrollButtonAttention ? 'scroll-btn-attention' : ''}"
+			style="bottom: calc({composeRowHeight}px + 0.5rem);"
+			class="scroll-btn-enter absolute right-4 z-[3] flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-all hover:bg-accent hover:shadow-xl hover:scale-110 active:scale-95 md:left-1/2 md:right-auto md:-translate-x-1/2 {scrollButtonAttention ? 'scroll-btn-attention' : ''}"
 		>
 			<ArrowDown class="h-4 w-4 text-foreground" />
 			{#if scrollButtonAttention}
@@ -3458,24 +3480,30 @@
 	     pass-through (chat bg + character image keep showing behind the
 	     home indicator) instead of an opaque strip of bg-background:
 	       • Outer: anchored to bottom-0, offsets its inner content UP by
-	         env(safe-area-inset-bottom). The outer itself has no bg, so
-	         the safe-area zone reveals whatever's behind it.
+	         env(safe-area-inset-bottom). The outer has bg-background here
+	         so the bottom-fade actually reaches the bottom of the screen
+	         (previously the safe-area zone left a visible see-through gap
+	         and the fade looked like it stopped mid-screen). When the
+	         keyboard is up we collapse that padding to 0 so the gap
+	         between the textarea and the bottom edge shrinks visibly
+	         instead of relying on iOS to zero out safe-area for us (which
+	         it doesn't always do in PWAs).
 	       • Inner: the actual gradient + textarea row. `from-background/0`
 	         (not from-transparent) keeps the gradient in the same colour
 	         space — transparent decays through rgba(0,0,0,0) and creates
 	         a visible dark band. Inner controls (textarea, send, etc.)
 	         are individually opaque so they stay crisp.
-	     When the keyboard is up, env(safe-area-inset-bottom) collapses to
-	     0 on iOS, so the inner snaps to the very bottom — exactly where
-	     the keyboard expects to meet it. No visible jump from extra padding
-	     "going off-screen" because the gap was always pass-through, not
-	     opaque padding. -->
+	     We bind clientHeight so the messages spacer and scroll-to-bottom
+	     button can move up with the textarea as it grows. -->
 	<div
-		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2]"
-		style="padding-bottom: env(safe-area-inset-bottom, 0px);"
+		bind:this={composeRowEl}
+		bind:clientHeight={composeRowHeight}
+		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-background"
+		style="padding-bottom: {keyboardVisible ? '0.25rem' : 'env(safe-area-inset-bottom, 0px)'};"
 	>
 	<div
-		class="bg-gradient-to-b from-background/0 to-background px-3 pl-safe pr-safe md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
+		class="bg-gradient-to-b from-background/0 to-background {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
+		style="padding-left: max(0.75rem, var(--safe-area-left)); padding-right: max(0.75rem, var(--safe-area-right));"
 	>
 
 		<div class="pointer-events-auto mx-auto flex max-w-5xl items-stretch gap-2">
