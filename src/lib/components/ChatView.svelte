@@ -3454,22 +3454,28 @@
 	{/if}
 
 	<!-- Compose row. Floats absolutely at the bottom of the messages card.
-	     The row's own background fades from transparent at its top edge to
-	     full background at the bottom, so messages scrolling past appear to
-	     dissolve into the compose area. `from-background/0` (not
-	     from-transparent) keeps the gradient interpolation in the same
-	     color space — transparent decays through rgba(0,0,0,0) which
-	     creates a visible dark band. Using --background at 0 alpha also
-	     means the gradient automatically picks up the character theme's
-	     tint when a photo background is set. Inner controls are
-	     individually opaque (bg-card / bg-primary / bg-destructive) so they
-	     stay crisp.
-	     bottom-padding picks up the device safe-area-inset-bottom (PWA home
-	     indicator) so the textarea + send button never sit under the
-	     indicator. With the keyboard up, the OS already pushes us above the
-	     indicator — collapse to a smaller gutter. -->
+	     Two-layer structure so the safe-area-inset-bottom gap is a true
+	     pass-through (chat bg + character image keep showing behind the
+	     home indicator) instead of an opaque strip of bg-background:
+	       • Outer: anchored to bottom-0, offsets its inner content UP by
+	         env(safe-area-inset-bottom). The outer itself has no bg, so
+	         the safe-area zone reveals whatever's behind it.
+	       • Inner: the actual gradient + textarea row. `from-background/0`
+	         (not from-transparent) keeps the gradient in the same colour
+	         space — transparent decays through rgba(0,0,0,0) and creates
+	         a visible dark band. Inner controls (textarea, send, etc.)
+	         are individually opaque so they stay crisp.
+	     When the keyboard is up, env(safe-area-inset-bottom) collapses to
+	     0 on iOS, so the inner snaps to the very bottom — exactly where
+	     the keyboard expects to meet it. No visible jump from extra padding
+	     "going off-screen" because the gap was always pass-through, not
+	     opaque padding. -->
 	<div
-		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background px-3 pl-safe pr-safe md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-safe-or-5 md:pt-3 md:pb-4'}"
+		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2]"
+		style="padding-bottom: env(safe-area-inset-bottom, 0px);"
+	>
+	<div
+		class="bg-gradient-to-b from-background/0 to-background px-3 pl-safe pr-safe md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
 	>
 
 		<div class="pointer-events-auto mx-auto flex max-w-5xl items-stretch gap-2">
@@ -3566,6 +3572,7 @@
 			{/if}
 		</div>
 	</div>
+	</div><!-- /compose row outer (safe-area passthrough) -->
 	</div><!-- /messages card -->
 </div>
 
