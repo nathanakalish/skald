@@ -143,7 +143,8 @@
 			type="button"
 			onclick={(e) => { e.stopPropagation(); onclose(); }}
 			aria-label="Close"
-			class="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white/90 backdrop-blur-sm transition hover:bg-black/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+			class="absolute z-10 rounded-full bg-black/50 p-2 text-white/90 backdrop-blur-sm transition hover:bg-black/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+			style="top: max(1rem, calc(var(--safe-area-top) + 0.25rem)); right: max(1rem, calc(var(--safe-area-right) + 0.25rem));"
 		>
 			<X class="h-5 w-5" />
 		</button>

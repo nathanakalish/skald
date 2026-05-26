@@ -932,7 +932,10 @@
 {#if embedded && open && character}
 	<div class="flex h-full flex-col md:rounded-2xl md:bg-background">
 		<!-- Header -->
-		<div class="flex items-center justify-between border-b border-border px-4 py-3">
+		<div
+			class="flex items-center justify-between border-b border-border pb-3"
+			style="padding-top: max(0.75rem, var(--safe-area-top)); padding-left: max(1rem, var(--safe-area-left)); padding-right: max(1rem, var(--safe-area-right));"
+		>
 			<div class="flex items-center gap-3 min-w-0">
 				{#if character.avatarPath}
 					<img src={character.avatarPath} alt={character.name} loading="lazy" decoding="async" class="h-10 w-10 rounded-full object-cover" />

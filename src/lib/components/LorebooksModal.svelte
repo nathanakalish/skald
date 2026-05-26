@@ -183,7 +183,7 @@
 
 {#if embedded && open}
 	<!-- Embedded mode: sidebar list for desktop two-card layout -->
-	<div class="flex h-14 items-center justify-between px-5">
+	<div class="flex h-12 items-center justify-between px-5">
 		<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Lorebooks</h1>
 		<div class="flex items-center gap-1">
 			<input bind:this={fileInput} type="file" accept=".json" class="hidden" onchange={handleImportFile} />

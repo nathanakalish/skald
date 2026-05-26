@@ -141,7 +141,10 @@
 	<!-- Embedded mode: content-only for desktop two-card layout -->
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-2xl md:bg-background">
 		<!-- Header -->
-		<div class="flex h-14 shrink-0 items-center justify-between border-b border-border/50 px-4">
+		<div
+			class="flex shrink-0 items-center justify-between border-b border-border/50 pb-3"
+			style="padding-top: max(0.75rem, var(--safe-area-top)); padding-left: max(1rem, var(--safe-area-left)); padding-right: max(1rem, var(--safe-area-right));"
+		>
 			<div class="flex items-center gap-2 min-w-0">
 				<h2 class="truncate text-base font-semibold">
 					{lorebookName.toLowerCase().includes('lorebook') ? lorebookName : `${lorebookName} Lorebook`}

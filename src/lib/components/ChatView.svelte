@@ -430,6 +430,12 @@
 		new Set((String(settingsStore.settings.pinnedMessageActions || '')).split(',').map((s) => s.trim()).filter(Boolean))
 	);
 	let keyboardVisible = $state(false);
+	// Height of the on-screen keyboard, in CSS pixels. Layout viewport doesn't
+	// shrink when iOS shows the keyboard — only visualViewport does — so an
+	// absolute bottom-anchored element stays glued to the layout bottom (i.e.
+	// hidden behind the keyboard). We translate the compose row up by this
+	// amount so it sits flush against the keyboard's top edge.
+	let keyboardInset = $state(0);
 	// Live-tracked height of the floating compose row. Drives:
 	//   - the messages spacer's bottom padding (so anchored-to-bottom view
 	//     stays anchored above the compose pill when the textarea grows)
@@ -1130,9 +1136,19 @@
 		if (!vv) return;
 		const onResize = () => {
 			keyboardVisible = vv.height < window.innerHeight * 0.75;
+			// Layout-viewport bottom minus visual-viewport bottom = keyboard height.
+			// Clamp at 0 so non-keyboard viewport shrinks (URL bar collapse, etc.)
+			// don't shift the compose row.
+			const inset = window.innerHeight - vv.height - vv.offsetTop;
+			keyboardInset = Math.max(0, inset);
 		};
+		onResize();
 		vv.addEventListener('resize', onResize);
-		return () => vv.removeEventListener('resize', onResize);
+		vv.addEventListener('scroll', onResize);
+		return () => {
+			vv.removeEventListener('resize', onResize);
+			vv.removeEventListener('scroll', onResize);
+		};
 	});
 
 	// User-driven anchor tracking. Programmatic scrolls bypass this via
@@ -3491,8 +3507,8 @@
 	<div
 		bind:this={composeRowEl}
 		bind:clientHeight={composeRowHeight}
-		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background"
-		style="padding-bottom: {keyboardVisible ? '0.25rem' : 'env(safe-area-inset-bottom, 0px)'};"
+		class="pointer-events-none absolute left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background"
+		style="bottom: {keyboardInset}px; padding-bottom: {keyboardVisible ? '0.25rem' : 'env(safe-area-inset-bottom, 0px)'};"
 	>
 	<div
 		class="{keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"

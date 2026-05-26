@@ -156,7 +156,10 @@
 {:else if mode === 'page' && open}
 	<!-- Page mode: content only (mobile) — tab selection handled by drawer -->
 	<div class="flex h-full flex-col overflow-hidden bg-background">
-		<div class="@container flex-1 overflow-y-auto p-4">
+		<div
+			class="@container flex-1 overflow-y-auto pb-4"
+			style="padding-top: max(1rem, var(--safe-area-top)); padding-left: max(1rem, var(--safe-area-left)); padding-right: max(1rem, var(--safe-area-right));"
+		>
 			{@render settingsTabContent()}
 		</div>
 	</div>

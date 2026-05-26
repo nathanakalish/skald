@@ -2296,7 +2296,7 @@
 			<div class="relative flex flex-1 flex-col min-h-0 pt-safe">
 			{#if showSettings && !isMobile && !narrowDesktop}
 			<!-- Settings tab nav (desktop only) -->
-			<div class="flex h-14 items-center px-5">
+			<div class="flex h-12 items-center px-5">
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Settings</h1>
 			</div>
 			<nav class="flex-1 overflow-y-auto px-3 py-2" style="overscroll-behavior: contain;">
@@ -2421,7 +2421,7 @@
 			</div>
 			{:else if (isMobile || narrowDesktop) && mobileDrawerTab === 'settings'}
 			<!-- Mobile settings category nav -->
-			<div class="flex h-14 items-center px-5">
+			<div class="flex h-12 items-center px-5">
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Settings</h1>
 			</div>
 			<nav class="flex-1 overflow-y-auto px-3 py-2" style="overscroll-behavior: contain;">
@@ -2448,7 +2448,7 @@
 			</nav>
 			{:else}
 			<!-- Logo / header bar -->
-			<div class="flex h-14 items-center justify-between px-5">
+			<div class="flex h-12 items-center justify-between px-5">
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">
 					<span class="md:hidden">Skald</span>
 					<span class="hidden md:inline">Chats</span>
