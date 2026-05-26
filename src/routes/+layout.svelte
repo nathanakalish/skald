@@ -2299,7 +2299,7 @@
 			<!-- Settings tab nav (desktop only) -->
 			<div
 				class="flex items-center px-5 pb-1"
-				style="padding-top: max(0.25rem, calc(var(--safe-area-top) - 0.5rem));"
+				style="padding-top: max(0.5rem, calc(var(--safe-area-top) - 0.25rem));"
 			>
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Settings</h1>
 			</div>
@@ -2427,7 +2427,7 @@
 			<!-- Mobile settings category nav -->
 			<div
 				class="flex items-center px-5 pb-1"
-				style="padding-top: max(0.25rem, calc(var(--safe-area-top) - 0.5rem));"
+				style="padding-top: max(0.5rem, calc(var(--safe-area-top) - 0.25rem));"
 			>
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Settings</h1>
 			</div>
@@ -2458,7 +2458,7 @@
 			     drawer top compact in PWA mode. -->
 			<div
 				class="flex items-center gap-3 px-5 pb-2"
-				style="padding-top: max(0.25rem, calc(var(--safe-area-top) - 0.5rem));"
+				style="padding-top: max(0.5rem, calc(var(--safe-area-top) - 0.25rem));"
 			>
 				<h1 class="shrink-0 text-2xl font-extrabold tracking-tight text-primary md:text-foreground">
 					<span class="md:hidden">Skald</span>

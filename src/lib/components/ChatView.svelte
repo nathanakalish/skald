@@ -2963,10 +2963,10 @@
 		{#if ontogglemobile}
 			<button
 				onclick={ontogglemobile}
-				class="pointer-events-auto relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary md:hidden [@media(hover:none)]:hidden"
+				class="pointer-events-auto relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/40 bg-card/70 text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground active:scale-90 md:hidden [@media(hover:none)]:hidden"
 				aria-label="Back to chats"
 			>
-				<ChevronLeft class="h-6 w-6" />
+				<ChevronLeft class="h-5 w-5" />
 				{#if totalUnread && totalUnread > 0}
 					<span class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">{totalUnread}</span>
 				{/if}
