@@ -669,7 +669,7 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={onclose}></div>
 		<div
-			class="relative z-10 flex h-[90dvh] w-full max-w-5xl flex-col rounded-t-2xl border border-border bg-card shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl {modal.closing ? 'modal-exit' : 'modal-enter'}"
+			class="relative z-10 flex h-[90dvh] w-full max-w-5xl flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
 			ontouchend={gestures.handlers.onTouchEnd}
@@ -883,7 +883,7 @@
 			>
 				<div class="absolute inset-0" onclick={closePreview}></div>
 				<div
-					class="relative z-10 flex h-[90dvh] w-full max-w-3xl flex-col rounded-t-2xl border border-border bg-card shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl {previewModal.closing ? 'modal-exit' : 'modal-enter'}"
+					class="relative z-10 flex h-[90dvh] w-full max-w-3xl flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:pb-0 {previewModal.closing ? 'modal-exit' : 'modal-enter'}"
 					ontouchstart={previewGestures.handlers.onTouchStart}
 					ontouchmove={previewGestures.handlers.onTouchMove}
 					ontouchend={previewGestures.handlers.onTouchEnd}

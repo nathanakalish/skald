@@ -2946,7 +2946,17 @@
 	     desktop). The messages container compensates for the overhang via
 	     extra top padding so the first message and "Load earlier" button
 	     never sit under the avatar. -->
-	<header class="relative z-[2] flex h-14 shrink-0 items-center gap-3 px-2 md:px-5">
+	<!-- Fullscreen-mobile layout: the chat header floats over the messages
+	     so the message stream extends edge-to-edge behind the device status
+	     bar (PWA + viewport-fit=cover from app.html). pt-safe / pl-safe
+	     pushes the interactive elements into the device's safe area;
+	     pointer-events-none on the wrapper lets scroll gestures pass
+	     through the gaps between the buttons (each button itself is
+	     pointer-events-auto). The top fade below provides the visual
+	     dissolve so messages don't read as a hard edge against the status
+	     bar. Safe-area insets evaluate to 0 on desktop, so the header
+	     looks identical there. -->
+	<header class="pointer-events-none absolute left-0 right-0 top-0 z-[3] flex h-14 items-center gap-3 px-2 pt-safe pl-safe pr-safe md:px-5">
 		<!-- Back button only appears in the mobile layout (under md, where the
 		     left tab bar is hidden) AND on hover-capable devices (mouse). Touch
 		     mobile users have swipe-from-left for the drawer; desktop users
@@ -2954,7 +2964,7 @@
 		{#if ontogglemobile}
 			<button
 				onclick={ontogglemobile}
-				class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary md:hidden [@media(hover:none)]:hidden"
+				class="pointer-events-auto relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-secondary md:hidden [@media(hover:none)]:hidden"
 				aria-label="Back to chats"
 			>
 				<ChevronLeft class="h-6 w-6" />
@@ -2966,8 +2976,10 @@
 
 		<!-- In-bar avatar. Sized to h-12 so it sits comfortably inside the
 		     h-14 bar with a small breathing margin. Ring SVG and corner badge
-		     align directly to the avatar bounds. -->
-		<div class="relative h-12 w-12 shrink-0">
+		     align directly to the avatar bounds. pointer-events-auto so taps
+		     on the avatar open the lightbox even though the parent header is
+		     pointer-events-none for scroll-through. -->
+		<div class="pointer-events-auto relative h-12 w-12 shrink-0">
 			{#if lastTokenStats}
 				{@const ringPct = Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)}
 				{@const ringCircumference = 2 * Math.PI * 22}
@@ -3013,11 +3025,13 @@
 		</div>
 
 		<!-- Character name. Vertically centred in the bar regardless of avatar
-		     overhang. Tap is a no-op per spec — info pane stays on the kebab. -->
+		     overhang. Tap is a no-op per spec — info pane stays on the kebab.
+		     Stays pointer-events-none so finger-scrolls over the empty middle
+		     of the bar scroll the messages behind. -->
 		<h2 class="flex-1 truncate text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
 
 		<!-- Right side: overflow menu -->
-		<div class="flex shrink-0 items-center">
+		<div class="pointer-events-auto flex shrink-0 items-center">
 			<ChatHeaderMenu
 				open={showHeaderMenu}
 				{hasOverrides}
@@ -3035,8 +3049,25 @@
 		</div>
 	</header>
 
+	<!-- Top fade. Mirrors the bottom-fade pattern: gradient runs from the
+	     --background colour at the top down to --background/0 at the bottom
+	     so messages dissolve into the device status bar / chat header band
+	     as they scroll up. Height = safe-area-inset-top + header height +
+	     small visual buffer for the fade tail. pointer-events-none lets
+	     scrolls + taps pass through to the messages and header above. -->
+	<div
+		class="pointer-events-none absolute left-0 right-0 top-0 z-[2] bg-gradient-to-b from-background to-background/0"
+		style="height: calc(var(--safe-area-top) + 3.5rem + 0.75rem);"
+	></div>
+
 	{#if messageSearchOpen}
-		<div class="z-[2] flex items-center gap-2 border-b border-border/50 bg-background/95 px-3 py-2 backdrop-blur-sm md:px-6">
+		<!-- Search bar floats below the absolute chat header so messages can
+		     keep scrolling underneath. Top offset = safe-area + header height
+		     (3.5rem). Has its own bg-background/95 so it isn't see-through. -->
+		<div
+			class="pointer-events-auto absolute left-0 right-0 z-[2] flex items-center gap-2 border-b border-border/50 bg-background/95 px-3 py-2 pl-safe pr-safe backdrop-blur-sm md:px-6"
+			style="top: calc(var(--safe-area-top) + 3.5rem);"
+		>
 			<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 			<input
 				bind:this={messageSearchInputEl}
@@ -3061,10 +3092,15 @@
 	     scroll compensation now; col-reverse handles both the anchored and
 	     scrolled-up cases correctly as long as the browser's own anchor
 	     heuristic is out of the way.
-	     pt-12 / md:pt-14 leaves room for the avatar's ~36px bottom overhang
-	     plus a comfortable buffer so the "Load earlier" button and the
-	     oldest visible bubble never collide with the avatar. -->
-	<div bind:this={messagesContainer} class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pt-3 pb-3 md:px-6 md:pt-4 md:pb-6" style="overflow-anchor: none;">
+	     Top padding clears the absolute-positioned chat header (h-14) PLUS
+	     the device's status-bar safe-area inset so the first message and
+	     the "Load earlier" button never sit under the avatar. The inline
+	     style uses calc(safe-area-inset + 3.5rem) since Tailwind can't
+	     compose env() with rem in one utility. -->
+	<div bind:this={messagesContainer}
+		class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pb-3 pl-safe pr-safe md:px-6 md:pb-6"
+		style="overflow-anchor: none; padding-top: calc(var(--safe-area-top) + 3.5rem);"
+	>
 		<div class="mx-auto w-full max-w-5xl space-y-4 pb-16">
 			<!-- Constant-height slot housing either the "Load earlier" button or the
 			     windowed-render top-sentinel. Fixed height (not min-h) so the slot
@@ -3427,9 +3463,13 @@
 	     means the gradient automatically picks up the character theme's
 	     tint when a photo background is set. Inner controls are
 	     individually opaque (bg-card / bg-primary / bg-destructive) so they
-	     stay crisp. -->
+	     stay crisp.
+	     bottom-padding picks up the device safe-area-inset-bottom (PWA home
+	     indicator) so the textarea + send button never sit under the
+	     indicator. With the keyboard up, the OS already pushes us above the
+	     indicator — collapse to a smaller gutter. -->
 	<div
-		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background px-3 md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-5 md:pt-3 md:pb-4'}"
+		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background px-3 pl-safe pr-safe md:px-4 {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-safe-or-5 md:pt-3 md:pb-4'}"
 	>
 
 		<div class="pointer-events-auto mx-auto flex max-w-5xl items-stretch gap-2">

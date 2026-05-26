@@ -2290,7 +2290,10 @@
 				{displayCollapsed && !isMobile ? 'md:overflow-hidden' : ''}"
 			style="{isMobile ? (sidebarGestures.dragging && sidebarGestures.touchX !== null ? `transform: translateX(${sidebarGestures.touchX}px)` : mobileOpen ? 'transform: translateX(0)' : 'transform: translateX(-100%)') : `width: ${displayCollapsed ? 0 : sidebarWidth}px; min-width: ${displayCollapsed ? 0 : sidebarWidth}px; opacity: ${displayCollapsed ? 0 : 1}`}"
 		>
-			<div class="relative flex flex-1 flex-col min-h-0">
+			<!-- pt-safe pushes the drawer's top content (logo bar / settings header /
+			     etc.) below the device status bar in PWA mode. The drawer itself
+			     extends edge-to-edge so the bg-card colour fills the safe area. -->
+			<div class="relative flex flex-1 flex-col min-h-0 pt-safe">
 			{#if showSettings && !isMobile && !narrowDesktop}
 			<!-- Settings tab nav (desktop only) -->
 			<div class="flex h-14 items-center px-5">
@@ -2382,8 +2385,10 @@
 					onclose={() => { showOnlyPanel('chats'); }}
 				/>
 			{/await}
-			<!-- User info + logout -->
-			<div class="shrink-0 border-t border-sidebar-border/50 px-4 py-3">
+			<!-- User info + logout. pb-safe-or-3 picks up the device home-indicator
+			     inset when the sidebar drawer fills the viewport in PWA mode,
+			     so the logout button stays tappable. -->
+			<div class="shrink-0 border-t border-sidebar-border/50 px-4 py-3 pb-safe-or-3">
 				<div class="flex items-center gap-3">
 					<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary">
 						{#if data.user?.pictureUrl}

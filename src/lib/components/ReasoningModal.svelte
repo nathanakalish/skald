@@ -66,7 +66,7 @@
 		<!-- Modal -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="{modal.closing ? 'modal-exit' : 'modal-enter'} relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-xl"
+			class="{modal.closing ? 'modal-exit' : 'modal-enter'} relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-2xl sm:rounded-xl sm:pb-0"
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
 			ontouchend={gestures.handlers.onTouchEnd}

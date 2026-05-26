@@ -150,6 +150,35 @@ body {
 	transition-duration: 0.01ms !important;
 }
 
+/* iOS PWA / Android edge-to-edge: surface the device safe-area insets as
+ * CSS variables so utilities below (and one-off styles) can reference them
+ * without re-writing the env() fallback every time. Works in conjunction
+ * with viewport-fit=cover in app.html. */
+:root {
+	--safe-area-top: env(safe-area-inset-top, 0px);
+	--safe-area-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-area-left: env(safe-area-inset-left, 0px);
+	--safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Utility classes for safe-area padding. Tailwind 4 still doesn't have
+ * first-class env() shorthands, so these wrap them. Each `-safe` utility
+ * is additive on top of any other padding the element already has. */
+.pt-safe { padding-top: var(--safe-area-top); }
+.pr-safe { padding-right: var(--safe-area-right); }
+.pb-safe { padding-bottom: var(--safe-area-bottom); }
+.pl-safe { padding-left: var(--safe-area-left); }
+.px-safe { padding-left: var(--safe-area-left); padding-right: var(--safe-area-right); }
+.py-safe { padding-top: var(--safe-area-top); padding-bottom: var(--safe-area-bottom); }
+/* "Or" variant: takes the larger of the existing padding or the inset.
+ * Useful for compose rows / modal footers that already have padding for
+ * desktop but need to grow into the home-indicator zone on PWA iOS. */
+.pb-safe-or-3 { padding-bottom: max(0.75rem, var(--safe-area-bottom)); }
+.pb-safe-or-4 { padding-bottom: max(1rem, var(--safe-area-bottom)); }
+.pb-safe-or-5 { padding-bottom: max(1.25rem, var(--safe-area-bottom)); }
+.pt-safe-or-3 { padding-top: max(0.75rem, var(--safe-area-top)); }
+.pt-safe-or-4 { padding-top: max(1rem, var(--safe-area-top)); }
+
 /* Modal entrance animation */
 @keyframes modal-enter {
 	from {

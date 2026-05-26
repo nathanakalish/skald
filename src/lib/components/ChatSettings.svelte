@@ -358,7 +358,7 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={onclose}></div>
 		<div
-			class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col rounded-t-2xl bg-card shadow-xl sm:rounded-2xl {modal.closing ? 'modal-exit' : 'modal-enter'}"
+			class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col rounded-t-2xl bg-card pb-safe shadow-xl sm:rounded-2xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			style={gestures.panelStyle}
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
