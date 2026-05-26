@@ -2063,7 +2063,7 @@
 	class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg"
 >Skip to main content</a>
 <div
-	class="flex h-dvh overflow-hidden bg-sidebar md:gap-2 md:bg-sidebar md:p-2"
+	class="fixed inset-0 flex overflow-hidden bg-sidebar md:gap-2 md:bg-sidebar md:p-2"
 	data-font-size={settings.fontSize ?? 'medium'}
 	data-compact={settings.compactMode ? '' : undefined}
 	data-reduce-motion={settings.reduceMotion ? '' : undefined}
