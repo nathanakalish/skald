@@ -107,30 +107,6 @@
 	let isMobile = $state(initMobile);
 	let hydrated = $state(false);
 
-	// iOS PWA viewport-height shim. On iOS PWA with viewport-fit=cover +
-	// black-translucent status bar, `100vh` / `100dvh` / even `fixed inset-0`
-	// keep reporting the safe-area-inset-adjusted height rather than the full
-	// screen — so the outer layout container ends up shorter than the actual
-	// WebView and the body's background colour shows through as a strip at
-	// the bottom of every view. We bypass that by measuring the real
-	// viewport height in JS and exposing it as `--app-h`; the outer
-	// container then uses `height: var(--app-h, 100vh)` and we sync on every
-	// resize/orientationchange.
-	$effect(() => {
-		if (!browser) return;
-		function sync() {
-			const h = window.innerHeight || document.documentElement.clientHeight;
-			document.documentElement.style.setProperty('--app-h', `${h}px`);
-		}
-		sync();
-		window.addEventListener('resize', sync);
-		window.addEventListener('orientationchange', sync);
-		return () => {
-			window.removeEventListener('resize', sync);
-			window.removeEventListener('orientationchange', sync);
-		};
-	});
-
 	// Briefly disables CSS keyframes / SvelteKit transitions whenever the
 	// viewport crosses a layout breakpoint, so panels resize smoothly
 	// instead of replaying entrance animations as components mount/unmount.
@@ -2087,8 +2063,7 @@
 	class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg"
 >Skip to main content</a>
 <div
-	class="flex overflow-hidden bg-sidebar md:gap-2 md:bg-sidebar md:p-2"
-	style:height="var(--app-h, 100vh)"
+	class="flex h-screen overflow-hidden bg-sidebar md:gap-2 md:bg-sidebar md:p-2"
 	data-font-size={settings.fontSize ?? 'medium'}
 	data-compact={settings.compactMode ? '' : undefined}
 	data-reduce-motion={settings.reduceMotion ? '' : undefined}

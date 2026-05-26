@@ -83,9 +83,18 @@
 }
 
 html, body {
+	margin: 0;
+	padding: 0;
 	overflow: hidden;
 	overscroll-behavior: none;
-	height: 100%;
+	/* `100vh` — NOT `100%` and NOT `100dvh` — is the only height that works
+	 * correctly with `viewport-fit=cover` + `apple-mobile-web-app-status-
+	 * bar-style=black-translucent` on iOS PWAs from cold start. `100%`
+	 * letterboxes the safe-area zones (and content never extends behind
+	 * the notch / home indicator), and `100dvh` reports a stale shorter
+	 * value on first paint, only correcting itself after a portrait→
+	 * landscape→portrait rotation. */
+	height: 100vh;
 	background-color: var(--background);
 }
 
