@@ -36,7 +36,7 @@
 <div class="relative" data-header-menu>
 	<button
 		onclick={onToggle}
-		class="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground {hasOverrides ? 'text-primary' : ''}"
+		class="flex h-11 w-11 items-center justify-center rounded-full border border-border/40 bg-card/70 text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground active:scale-90 {hasOverrides ? 'text-primary' : ''}"
 		use:tooltip={'More'}
 		aria-label="More actions"
 	>

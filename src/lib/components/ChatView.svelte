@@ -2987,10 +2987,10 @@
 		<!-- Avatar + name pill. Mirrors the compose row's translucent slab so
 		     the two anchors visually balance, top and bottom. Picks up
 		     --background / --card from the active character theme so themed
-		     chats get a tinted pill automatically. min-w-0 lets the name
-		     truncate inside the flex-1 pill instead of pushing the kebab
-		     off-screen on narrow viewports. -->
-		<div class="pointer-events-auto flex min-w-0 flex-1 items-center gap-2.5 rounded-full border border-border/40 bg-card/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4">
+		     chats get a tinted pill automatically. Sizes to the name (mr-auto
+		     pushes the kebab to the right) but min-w-0 + max-w-full let long
+		     names truncate instead of pushing the kebab off-screen. -->
+		<div class="pointer-events-auto mr-auto flex min-w-0 max-w-full items-center gap-2.5 rounded-full border border-border/40 bg-card/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4">
 		<!-- In-bar avatar. Sized to h-12 so it sits comfortably inside the
 		     h-14 bar with a small breathing margin. Ring SVG and corner badge
 		     align directly to the avatar bounds. pointer-events-auto so taps
@@ -3114,8 +3114,8 @@
 	     style uses calc(safe-area-inset + 3.5rem) since Tailwind can't
 	     compose env() with rem in one utility. -->
 	<div bind:this={messagesContainer}
-		class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain px-2 pb-3 pl-safe pr-safe md:px-6 md:pb-6"
-		style="overflow-anchor: none; padding-top: calc(max(0.5rem, var(--safe-area-top)) + 4rem);"
+		class="relative z-[1] flex flex-1 flex-col-reverse overflow-y-auto overscroll-contain pb-3 md:pb-6"
+		style="overflow-anchor: none; padding-top: calc(max(0.5rem, var(--safe-area-top)) + 4rem); padding-left: max(0.75rem, var(--safe-area-left)); padding-right: max(0.75rem, var(--safe-area-right));"
 	>
 		<div
 			class="mx-auto w-full max-w-5xl space-y-4"
@@ -3476,33 +3476,26 @@
 	{/if}
 
 	<!-- Compose row. Floats absolutely at the bottom of the messages card.
-	     Two-layer structure so the safe-area-inset-bottom gap is a true
-	     pass-through (chat bg + character image keep showing behind the
-	     home indicator) instead of an opaque strip of bg-background:
-	       • Outer: anchored to bottom-0, offsets its inner content UP by
-	         env(safe-area-inset-bottom). The outer has bg-background here
-	         so the bottom-fade actually reaches the bottom of the screen
-	         (previously the safe-area zone left a visible see-through gap
-	         and the fade looked like it stopped mid-screen). When the
-	         keyboard is up we collapse that padding to 0 so the gap
-	         between the textarea and the bottom edge shrinks visibly
-	         instead of relying on iOS to zero out safe-area for us (which
-	         it doesn't always do in PWAs).
-	       • Inner: the actual gradient + textarea row. `from-background/0`
-	         (not from-transparent) keeps the gradient in the same colour
-	         space — transparent decays through rgba(0,0,0,0) and creates
-	         a visible dark band. Inner controls (textarea, send, etc.)
-	         are individually opaque so they stay crisp.
+	     The fade gradient lives on the OUTER wrapper so it spans the full
+	     height of the compose region — from the top of the textarea band
+	     down through the safe-area-inset-bottom zone — and bottoms out at
+	     solid --background. Earlier the gradient was on the inner row only
+	     and the outer had bg-background, which read as a hard solid band
+	     when a character theme was active. Inner controls (textarea, send,
+	     etc.) are each individually opaque so they stay crisp on top of the
+	     gradient. When the keyboard is up we collapse the bottom pad so the
+	     row meets the keyboard with a small gap instead of riding the full
+	     safe-area inset (which iOS doesn't always zero out in PWAs).
 	     We bind clientHeight so the messages spacer and scroll-to-bottom
 	     button can move up with the textarea as it grows. -->
 	<div
 		bind:this={composeRowEl}
 		bind:clientHeight={composeRowHeight}
-		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-background"
+		class="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background"
 		style="padding-bottom: {keyboardVisible ? '0.25rem' : 'env(safe-area-inset-bottom, 0px)'};"
 	>
 	<div
-		class="bg-gradient-to-b from-background/0 to-background {keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
+		class="{keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
 		style="padding-left: max(0.75rem, var(--safe-area-left)); padding-right: max(0.75rem, var(--safe-area-right));"
 	>
 
