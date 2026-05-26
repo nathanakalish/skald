@@ -339,6 +339,19 @@
 	let imageGenInFlight = $state(new Map<number, number>(
 		untrack(() => (initialPendingImageGens ?? []).map((p) => [p.messageId, p.swipeIndex] as [number, number]))
 	));
+	// Map-set-state requires immutable swaps, so wrap the boilerplate.
+	function setImageGenFlight(messageId: number, swipeIdx: number) {
+		if (imageGenInFlight.get(messageId) === swipeIdx) return;
+		const next = new Map(imageGenInFlight);
+		next.set(messageId, swipeIdx);
+		imageGenInFlight = next;
+	}
+	function clearImageGenFlight(messageId: number) {
+		if (!imageGenInFlight.has(messageId)) return;
+		const next = new Map(imageGenInFlight);
+		next.delete(messageId);
+		imageGenInFlight = next;
+	}
 	// Lightbox state — null hides; otherwise contains all gen rows for that message
 	let lightboxMessageId = $state<number | null>(null);
 	let hiddenBranchCount = $derived(hiddenBranchData ?? 0);
@@ -894,11 +907,7 @@
 			}
 		} else if (type === 'messageImage:started' && eventData) {
 			const { messageId, swipeIndex } = eventData as { messageId: number; swipeIndex: number };
-			if (imageGenInFlight.get(messageId) !== swipeIndex) {
-				const next = new Map(imageGenInFlight);
-				next.set(messageId, swipeIndex ?? 0);
-				imageGenInFlight = next;
-			}
+			setImageGenFlight(messageId, swipeIndex ?? 0);
 		} else if (type === 'messageImage:created' && eventData?.image) {
 			const img = eventData.image as MessageImageRow;
 			const swipeIdx = img.swipeIndex ?? 0;
@@ -909,18 +918,10 @@
 			);
 			list.push(img);
 			messageImages = { ...messageImages, [img.messageId]: list };
-			if (imageGenInFlight.has(img.messageId)) {
-				const next = new Map(imageGenInFlight);
-				next.delete(img.messageId);
-				imageGenInFlight = next;
-			}
+			clearImageGenFlight(img.messageId);
 		} else if (type === 'messageImage:error' && eventData) {
 			const { messageId, error } = eventData as { messageId: number; error: string };
-			if (imageGenInFlight.has(messageId)) {
-				const next = new Map(imageGenInFlight);
-				next.delete(messageId);
-				imageGenInFlight = next;
-			}
+			clearImageGenFlight(messageId);
 			toasts.error(error || 'Image generation failed');
 		} else if (type === 'messageImage:activated' && eventData) {
 			const { messageId, imageId } = eventData as { messageId: number; imageId: number };
@@ -1002,72 +1003,22 @@
 		}
 
 		if (streamingAssistantIdx >= 0) {
-
-			// In texting mode, reveal the full message after a typing delay
-			if (isTexting && (streamAccumulated || streamAccumulatedReasoning)) {
-				if (streamAccumulated) await typingDelay(streamAccumulated, !!streamAccumulatedReasoning);
-				if (streamIsRegenerate && streamOriginalMessage) {
-					const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
-					const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
-					messageList[streamingAssistantIdx] = {
-						...streamOriginalMessage,
-						content: streamAccumulated,
-						swipes: newSwipes,
-						swipeIndex: newSwipes.length - 1,
-						reasoning: newReasoning
-					};
-				} else {
-					messageList[streamingAssistantIdx] = {
-						...messageList[streamingAssistantIdx],
-						content: streamAccumulated,
-						swipes: [streamAccumulated],
-						reasoning: [streamAccumulatedReasoning]
-					};
+			// Three reveal modes converge on the same final-write. The diffs:
+			//   • texting   — wait out a fake typing delay first, then write.
+			//   • reduce-motion — write immediately on stream end.
+			//   • normal    — live token mirror already wrote .content as
+			//     tokens arrived; we only need to settle the final state.
+			// `seedSwipes` is false in normal mode because the live mirror
+			// didn't touch swipes (placeholder still has ['']) and the
+			// upcoming server refresh will provide the real swipes array.
+			const shouldFinalize = (isTexting || reduceMotion)
+				? (streamAccumulated || streamAccumulatedReasoning)
+				: streamAccumulated;
+			if (shouldFinalize) {
+				if (isTexting && streamAccumulated) {
+					await typingDelay(streamAccumulated, !!streamAccumulatedReasoning);
 				}
-			}
-
-			// In reduce-motion mode (non-texting), reveal content all at once
-			if (reduceMotion && !isTexting && (streamAccumulated || streamAccumulatedReasoning)) {
-				if (streamIsRegenerate && streamOriginalMessage) {
-					const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
-					const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
-					messageList[streamingAssistantIdx] = {
-						...streamOriginalMessage,
-						content: streamAccumulated,
-						swipes: newSwipes,
-						swipeIndex: newSwipes.length - 1,
-						reasoning: newReasoning
-					};
-				} else {
-					messageList[streamingAssistantIdx] = {
-						...messageList[streamingAssistantIdx],
-						content: streamAccumulated,
-						swipes: [streamAccumulated],
-						reasoning: [streamAccumulatedReasoning]
-					};
-				}
-			}
-
-			// Normal streaming mode: token handler updates live, but if no tokens arrived
-			// (e.g. reasoning-only), write the final state
-			if (!isTexting && !reduceMotion && streamAccumulated) {
-				if (streamIsRegenerate && streamOriginalMessage) {
-					const newSwipes = [...streamOriginalMessage.swipes, streamAccumulated];
-					const newReasoning = [...streamOriginalMessage.reasoning, streamAccumulatedReasoning];
-					messageList[streamingAssistantIdx] = {
-						...streamOriginalMessage,
-						content: streamAccumulated,
-						swipes: newSwipes,
-						swipeIndex: newSwipes.length - 1,
-						reasoning: newReasoning
-					};
-				} else {
-					messageList[streamingAssistantIdx] = {
-						...messageList[streamingAssistantIdx],
-						content: streamAccumulated,
-						reasoning: [streamAccumulatedReasoning]
-					};
-				}
+				finalizeAssistantMessage(isTexting || reduceMotion);
 			}
 		}
 
@@ -1451,6 +1402,26 @@
 			const oldById = new Map(currentList.map(m => [m.id, m]));
 			const incomingIds = new Set(incoming.map(m => m.id));
 
+			// Placeholder→real id reconciliation. When a stream (or optimistic
+			// user send) finishes, the trailing messages in currentList have
+			// negative placeholder ids; the server refresh returns the same
+			// messages with real positive ids. Without this, the keyed {#each}
+			// sees a "new" id, unmounts the old bubble, and mounts a new one
+			// that re-runs msg-enter-story — a visible 14px upward jump right
+			// after generation completes. Pre-register the real ids as
+			// already-known so the enter animation is skipped.
+			let tailPh = 0;
+			for (let j = currentList.length - 1; j >= 0; j--) {
+				if (currentList[j].id < 0) tailPh++;
+				else break;
+			}
+			if (tailPh > 0) {
+				const tail = incoming.slice(-tailPh);
+				for (const m of tail) {
+					if (m.id > 0 && !oldById.has(m.id)) knownMessageIds.add(m.id);
+				}
+			}
+
 			// If the user has scrolled back to load earlier pages, preserve
 			// them when the server refresh only returns the tail window.
 			// We do this only when the chains connect: the oldest incoming
@@ -1675,6 +1646,77 @@
 		streamOriginalMessage = null;
 	}
 
+	// Shared "kicking off a new generation" setup. Used by greeting, send,
+	// and generate-next-reply paths — anything that's about to push an
+	// assistant placeholder and start streaming into it.
+	function beginGeneration() {
+		isStreaming = true;
+		isReasoning = false;
+		streamingReasoning = '';
+		streamAccumulated = '';
+		streamAccumulatedReasoning = '';
+		streamIsRegenerate = false;
+		streamOriginalMessage = null;
+		impersonateReasoning = '';
+		resetStreamTimeout();
+	}
+
+	// Compose the final assistant message at the end of a stream. Two shapes:
+	//   • regenerate: append the new content as a new swipe on the original
+	//     message and select it.
+	//   • fresh: replace the placeholder's content (and, in
+	//     texting/reduceMotion modes where no live token mirror ran, also
+	//     seed the swipes array).
+	function finalizeAssistantMessage(seedSwipes: boolean) {
+		const idx = streamingAssistantIdx;
+		if (idx < 0) return;
+		if (streamIsRegenerate && streamOriginalMessage) {
+			const orig = streamOriginalMessage;
+			const newSwipes = [...orig.swipes, streamAccumulated];
+			messageList[idx] = {
+				...orig,
+				content: streamAccumulated,
+				swipes: newSwipes,
+				swipeIndex: newSwipes.length - 1,
+				reasoning: [...orig.reasoning, streamAccumulatedReasoning]
+			};
+		} else {
+			const existing = messageList[idx];
+			messageList[idx] = {
+				...existing,
+				content: streamAccumulated,
+				...(seedSwipes ? { swipes: [streamAccumulated] } : {}),
+				reasoning: [streamAccumulatedReasoning]
+			};
+		}
+	}
+
+	// Optimistic PATCH /api/messages/:id helper. Applies `optimistic` to
+	// messageList[idx] immediately; reverts on network/HTTP failure. Returns
+	// the server's parsed JSON on success (so callers can reconcile derived
+	// fields like swipes), or null on failure.
+	async function patchMessage(idx: number, optimistic: Partial<Message>, body: any): Promise<any | null> {
+		const msg = messageList[idx];
+		if (!msg) return null;
+		const saved = msg;
+		messageList[idx] = { ...msg, ...optimistic };
+		try {
+			const res = await fetch(`/api/messages/${msg.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!res.ok) {
+				messageList[idx] = saved;
+				return null;
+			}
+			return await res.json();
+		} catch {
+			messageList[idx] = saved;
+			return null;
+		}
+	}
+
 	// Persist input draft per conversation. Two stores layered:
 	//   - localStorage  → offline survival; works even when SSE is dead
 	//   - chat.pendingDraft (server) → cross-device sync; debounced PATCH below
@@ -1842,14 +1884,7 @@
 	});
 
 	async function generateGreeting() {
-		isStreaming = true;
-		isReasoning = false;
-		streamingReasoning = '';
-		streamAccumulated = '';
-		streamAccumulatedReasoning = '';
-		streamIsRegenerate = false;
-		streamOriginalMessage = null;
-		resetStreamTimeout();
+		beginGeneration();
 
 		// Wait before showing typing indicator
 		if (isTexting) await initialTypingDelay();
@@ -2047,15 +2082,7 @@
 		}
 
 		input = '';
-		isStreaming = true;
-		isReasoning = false;
-		streamingReasoning = '';
-		streamAccumulated = '';
-		streamAccumulatedReasoning = '';
-		streamIsRegenerate = false;
-		streamOriginalMessage = null;
-		impersonateReasoning = '';
-		resetStreamTimeout();
+		beginGeneration();
 
 		// Text mode: keep keyboard if it was already up; Story mode: always dismiss
 		if (textareaEl) {
@@ -2418,15 +2445,7 @@
 	// whatever the chat's active leaf currently is.
 	async function generateNextReply(guidance?: string) {
 		if (isStreaming || isImpersonating) return;
-		isStreaming = true;
-		isReasoning = false;
-		streamingReasoning = '';
-		streamAccumulated = '';
-		streamAccumulatedReasoning = '';
-		streamIsRegenerate = false;
-		streamOriginalMessage = null;
-		impersonateReasoning = '';
-		resetStreamTimeout();
+		beginGeneration();
 
 		if (isTexting) await initialTypingDelay();
 
@@ -2524,28 +2543,13 @@
 		]);
 		if (!ok) return;
 
-		// Optimistic: apply edit immediately
-		const savedContent = msg.content;
 		const newContent = editContent;
-		messageList[msgIdx] = { ...msg, content: newContent };
 		cancelEdit();
 
-		try {
-			const res = await fetch(`/api/messages/${msg.id}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content: newContent })
-			});
-
-			if (res.ok) {
-				const updated = await res.json();
-				const swipes = Array.isArray(updated.swipes) ? updated.swipes : msg.swipes;
-				messageList[msgIdx] = { ...msg, content: updated.content, swipes, swipeIndex: updated.swipeIndex };
-			} else {
-				messageList[msgIdx] = { ...msg, content: savedContent };
-			}
-		} catch {
-			messageList[msgIdx] = { ...msg, content: savedContent };
+		const updated = await patchMessage(msgIdx, { content: newContent }, { content: newContent });
+		if (updated) {
+			const swipes = Array.isArray(updated.swipes) ? updated.swipes : msg.swipes;
+			messageList[msgIdx] = { ...messageList[msgIdx], content: updated.content, swipes, swipeIndex: updated.swipeIndex };
 		}
 	}
 
@@ -2557,22 +2561,14 @@
 		const savedReasoning = [...msg.reasoning];
 		const updatedReasoning = [...msg.reasoning];
 		updatedReasoning[msg.swipeIndex] = newReasoning;
-		messageList[msgIdx] = { ...msg, reasoning: updatedReasoning };
 		reasoningModalText = newReasoning;
 
-		try {
-			const res = await fetch(`/api/messages/${messageId}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ reasoning: newReasoning })
-			});
-
-			if (!res.ok) {
-				messageList[msgIdx] = { ...msg, reasoning: savedReasoning };
-				reasoningModalText = savedReasoning[msg.swipeIndex] || '';
-			}
-		} catch {
-			messageList[msgIdx] = { ...msg, reasoning: savedReasoning };
+		const result = await patchMessage(
+			msgIdx,
+			{ reasoning: updatedReasoning },
+			{ reasoning: newReasoning }
+		);
+		if (!result) {
 			reasoningModalText = savedReasoning[msg.swipeIndex] || '';
 		}
 	}
@@ -2785,30 +2781,12 @@
 		if (newIndex === msg.swipeIndex) return;
 		haptic('light');
 
-		// Optimistic: show the swipe content immediately
-		const savedIndex = msg.swipeIndex;
-		const savedContent = msg.content;
-		messageList[messageIdx] = {
-			...msg,
-			content: msg.swipes[newIndex],
-			swipeIndex: newIndex
-		};
+		await patchMessage(
+			messageIdx,
+			{ content: msg.swipes[newIndex], swipeIndex: newIndex },
+			{ swipeIndex: newIndex }
+		);
 		await scrollToBottom(true);
-
-		try {
-			const res = await fetch(`/api/messages/${msg.id}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ swipeIndex: newIndex })
-			});
-
-			if (!res.ok) {
-				// Revert
-				messageList[messageIdx] = { ...msg, content: savedContent, swipeIndex: savedIndex };
-			}
-		} catch {
-			messageList[messageIdx] = { ...msg, content: savedContent, swipeIndex: savedIndex };
-		}
 	}
 
 	// Trigger an image gen for an assistant message. The server resolves the
@@ -2821,9 +2799,7 @@
 		// Optimistic: drop the spinner in right away. The SSE
 		// `messageImage:started` event confirms it; `messageImage:created`
 		// / `messageImage:error` clear it.
-		const optimistic = new Map(imageGenInFlight);
-		optimistic.set(messageId, swipeIdx);
-		imageGenInFlight = optimistic;
+		setImageGenFlight(messageId, swipeIdx);
 		try {
 			const res = await fetch(`/api/messages/${messageId}/images`, { method: 'POST' });
 			if (!res.ok) {
@@ -2831,19 +2807,11 @@
 				const errMsg = body?.error || body?.message
 					|| 'No image provider configured. Set an image model in the provider profile or in this chat\u2019s settings.';
 				toasts.error(errMsg);
-				if (imageGenInFlight.has(messageId)) {
-					const next = new Map(imageGenInFlight);
-					next.delete(messageId);
-					imageGenInFlight = next;
-				}
+				clearImageGenFlight(messageId);
 			}
 		} catch {
 			toasts.error('Failed to start image generation');
-			if (imageGenInFlight.has(messageId)) {
-				const next = new Map(imageGenInFlight);
-				next.delete(messageId);
-				imageGenInFlight = next;
-			}
+			clearImageGenFlight(messageId);
 		}
 	}
 

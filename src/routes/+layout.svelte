@@ -36,7 +36,6 @@
 		User,
 		Pin,
 		PinOff,
-		Menu,
 		Bell,
 		BellOff,
 		X,
@@ -337,72 +336,76 @@
 	// Hydrate the global settings store (keys + active theme). This stays
 	// in SSR so html attributes (data-font-size etc.) and root CSS variables
 	// are correct on first paint.
+	function buildSettingsFromData(d: typeof data) {
+		const dx = d as any;
+		return {
+			colorMode: d.colorMode,
+			alwaysUseCharacterThemes: d.alwaysUseCharacterThemes,
+			allowExternalCreatorNotes: d.allowExternalCreatorNotes,
+			colorCharacterCards: d.colorCharacterCards ?? false,
+			sidebarWidth: d.sidebarWidth ?? 320,
+			sidebarCollapsed: d.sidebarCollapsed ?? false,
+			fontSize: d.fontSize ?? 'medium',
+			compactMode: d.compactMode ?? false,
+			reduceMotion: d.reduceMotion ?? false,
+			sendWithEnterDesktop: d.sendWithEnterDesktop ?? true,
+			sendWithEnterMobile: d.sendWithEnterMobile ?? true,
+			autoScrollThreshold: d.autoScrollThreshold ?? 'normal',
+			confirmDeletions: d.confirmDeletions ?? true,
+			messageTimestamps: d.messageTimestamps ?? 'relative',
+			showReasoning: d.showReasoning ?? false,
+			chatPageSize: d.chatPageSize ?? 50,
+			autoLoadEarlierMessages: dx.autoLoadEarlierMessages ?? false,
+			notificationSound: d.notificationSound ?? false,
+			notificationStyle: d.notificationStyle ?? 'generic',
+			notificationAvatar: d.notificationAvatar ?? true,
+			inAppNotifications: d.inAppNotifications ?? true,
+			notificationDuration: dx.notificationDuration ?? 5,
+			quietHoursEnabled: d.quietHoursEnabled ?? false,
+			quietHoursStart: d.quietHoursStart ?? '22:00',
+			quietHoursEnd: d.quietHoursEnd ?? '07:00',
+			userTimezone: dx.userTimezone ?? '',
+			renderMode: d.renderMode ?? 'roleplay',
+			promptSlotOrder: d.promptSlotOrder ?? '',
+			reformatterProviderId: d.reformatterProviderId ?? '',
+			reformatterModel: d.reformatterModel ?? '',
+			reformatterPrompt: d.reformatterPrompt ?? '',
+			characterCreatorProviderId: dx.characterCreatorProviderId ?? '',
+			characterCreatorModel: dx.characterCreatorModel ?? '',
+			characterCreatorPrompt: dx.characterCreatorPrompt ?? '',
+			compactionEnabled: dx.compactionEnabled ?? false,
+			compactionThreshold: dx.compactionThreshold ?? 80,
+			compactionMode: dx.compactionMode ?? 'window',
+			compactionWindowPercent: dx.compactionWindowPercent ?? 30,
+			compactionFixedCount: dx.compactionFixedCount ?? 20,
+			compactionProviderId: dx.compactionProviderId ?? '',
+			compactionModel: dx.compactionModel ?? '',
+			compactionPrompt: dx.compactionPrompt ?? '',
+			speechOpacity: dx.speechOpacity ?? 100,
+			speechBold: dx.speechBold ?? true,
+			speechItalic: dx.speechItalic ?? false,
+			thoughtOpacity: dx.thoughtOpacity ?? 75,
+			thoughtBold: dx.thoughtBold ?? false,
+			thoughtItalic: dx.thoughtItalic ?? true,
+			linkOpacity: dx.linkOpacity ?? 100,
+			linkBold: dx.linkBold ?? false,
+			linkItalic: dx.linkItalic ?? false,
+			narrationOpacity: dx.narrationOpacity ?? 100,
+			narrationBold: dx.narrationBold ?? false,
+			narrationItalic: dx.narrationItalic ?? false,
+			nestedEmphasisInSpeech: dx.nestedEmphasisInSpeech ?? true,
+			pinnedMessageActions: dx.pinnedMessageActions ?? '',
+			imagePromptTemplate: dx.imagePromptTemplate ?? '',
+			imageIncludeAvatar: dx.imageIncludeAvatar ?? false,
+			imageIncludeCharacterDesc: dx.imageIncludeCharacterDesc ?? false,
+			imageIncludePersonaDesc: dx.imageIncludePersonaDesc ?? false,
+			dismissKeyboardOnScroll: dx.dismissKeyboardOnScroll ?? true,
+			systemDarkThemeId: dx.systemDarkThemeId ?? null,
+			systemLightThemeId: dx.systemLightThemeId ?? null,
+		};
+	}
 	settingsStore.hydrate(
-		untrack(() => ({
-			colorMode: data.colorMode,
-			alwaysUseCharacterThemes: data.alwaysUseCharacterThemes,
-			allowExternalCreatorNotes: data.allowExternalCreatorNotes,
-			colorCharacterCards: data.colorCharacterCards ?? false,
-			sidebarWidth: data.sidebarWidth ?? 320,
-			sidebarCollapsed: data.sidebarCollapsed ?? false,
-			fontSize: data.fontSize ?? 'medium',
-			compactMode: data.compactMode ?? false,
-			reduceMotion: data.reduceMotion ?? false,
-			sendWithEnterDesktop: data.sendWithEnterDesktop ?? true,
-			sendWithEnterMobile: data.sendWithEnterMobile ?? true,
-			autoScrollThreshold: data.autoScrollThreshold ?? 'normal',
-			confirmDeletions: data.confirmDeletions ?? true,
-			messageTimestamps: data.messageTimestamps ?? 'relative',
-			showReasoning: data.showReasoning ?? false,
-			chatPageSize: data.chatPageSize ?? 50,
-			autoLoadEarlierMessages: (data as any).autoLoadEarlierMessages ?? false,
-			notificationSound: data.notificationSound ?? false,
-			notificationStyle: data.notificationStyle ?? 'generic',
-			notificationAvatar: data.notificationAvatar ?? true,
-			inAppNotifications: data.inAppNotifications ?? true,
-			notificationDuration: (data as any).notificationDuration ?? 5,
-			quietHoursEnabled: data.quietHoursEnabled ?? false,
-			quietHoursStart: data.quietHoursStart ?? '22:00',
-			quietHoursEnd: data.quietHoursEnd ?? '07:00',
-			userTimezone: (data as any).userTimezone ?? '',
-			renderMode: data.renderMode ?? 'roleplay',
-			promptSlotOrder: data.promptSlotOrder ?? '',
-			reformatterProviderId: data.reformatterProviderId ?? '',
-			reformatterModel: data.reformatterModel ?? '',
-			reformatterPrompt: data.reformatterPrompt ?? '',
-			characterCreatorProviderId: (data as any).characterCreatorProviderId ?? '',
-			characterCreatorModel: (data as any).characterCreatorModel ?? '',
-			characterCreatorPrompt: (data as any).characterCreatorPrompt ?? '',
-			compactionEnabled: (data as any).compactionEnabled ?? false,
-			compactionThreshold: (data as any).compactionThreshold ?? 80,
-			compactionMode: (data as any).compactionMode ?? 'window',
-			compactionWindowPercent: (data as any).compactionWindowPercent ?? 30,
-			compactionFixedCount: (data as any).compactionFixedCount ?? 20,
-			compactionProviderId: (data as any).compactionProviderId ?? '',
-			compactionModel: (data as any).compactionModel ?? '',
-			compactionPrompt: (data as any).compactionPrompt ?? '',
-			speechOpacity: (data as any).speechOpacity ?? 100,
-			speechBold: (data as any).speechBold ?? true,
-			speechItalic: (data as any).speechItalic ?? false,
-			thoughtOpacity: (data as any).thoughtOpacity ?? 75,
-			thoughtBold: (data as any).thoughtBold ?? false,
-			thoughtItalic: (data as any).thoughtItalic ?? true,
-			linkOpacity: (data as any).linkOpacity ?? 100,
-			linkBold: (data as any).linkBold ?? false,
-			linkItalic: (data as any).linkItalic ?? false,
-			narrationOpacity: (data as any).narrationOpacity ?? 100,
-			narrationBold: (data as any).narrationBold ?? false,
-			narrationItalic: (data as any).narrationItalic ?? false,
-			nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
-			pinnedMessageActions: (data as any).pinnedMessageActions ?? '',
-			imagePromptTemplate: (data as any).imagePromptTemplate ?? '',
-			imageIncludeAvatar: (data as any).imageIncludeAvatar ?? false,
-			imageIncludeCharacterDesc: (data as any).imageIncludeCharacterDesc ?? false,
-			imageIncludePersonaDesc: (data as any).imageIncludePersonaDesc ?? false,
-			dismissKeyboardOnScroll: (data as any).dismissKeyboardOnScroll ?? true,
-			systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
-			systemLightThemeId: (data as any).systemLightThemeId ?? null
-		})),
+		untrack(() => buildSettingsFromData(data)),
 		{
 			systemDarkTheme: untrack(() => (data as any).systemDarkTheme ?? null),
 			systemLightTheme: untrack(() => (data as any).systemLightTheme ?? null)
@@ -420,70 +423,7 @@
 	$effect(() => {
 		if (!data.user) return;
 		settingsStore.hydrate(
-			{
-				colorMode: data.colorMode,
-				alwaysUseCharacterThemes: data.alwaysUseCharacterThemes,
-				allowExternalCreatorNotes: data.allowExternalCreatorNotes,
-				colorCharacterCards: data.colorCharacterCards ?? false,
-				sidebarWidth: data.sidebarWidth ?? 320,
-				sidebarCollapsed: data.sidebarCollapsed ?? false,
-				fontSize: data.fontSize ?? 'medium',
-				compactMode: data.compactMode ?? false,
-				reduceMotion: data.reduceMotion ?? false,
-				sendWithEnterDesktop: data.sendWithEnterDesktop ?? true,
-				sendWithEnterMobile: data.sendWithEnterMobile ?? true,
-				autoScrollThreshold: data.autoScrollThreshold ?? 'normal',
-				confirmDeletions: data.confirmDeletions ?? true,
-				messageTimestamps: data.messageTimestamps ?? 'relative',
-				showReasoning: data.showReasoning ?? false,
-				chatPageSize: data.chatPageSize ?? 50,
-				autoLoadEarlierMessages: (data as any).autoLoadEarlierMessages ?? false,
-				notificationSound: data.notificationSound ?? false,
-				notificationStyle: data.notificationStyle ?? 'generic',
-				notificationAvatar: data.notificationAvatar ?? true,
-				inAppNotifications: data.inAppNotifications ?? true,
-				notificationDuration: (data as any).notificationDuration ?? 5,
-				quietHoursEnabled: data.quietHoursEnabled ?? false,
-				quietHoursStart: data.quietHoursStart ?? '22:00',
-				quietHoursEnd: data.quietHoursEnd ?? '07:00',
-				userTimezone: (data as any).userTimezone ?? '',
-				renderMode: data.renderMode ?? 'roleplay',
-				promptSlotOrder: data.promptSlotOrder ?? '',
-				reformatterProviderId: data.reformatterProviderId ?? '',
-				reformatterModel: data.reformatterModel ?? '',
-				reformatterPrompt: data.reformatterPrompt ?? '',
-				characterCreatorProviderId: (data as any).characterCreatorProviderId ?? '',
-				characterCreatorModel: (data as any).characterCreatorModel ?? '',
-				characterCreatorPrompt: (data as any).characterCreatorPrompt ?? '',
-				compactionEnabled: (data as any).compactionEnabled ?? false,
-				compactionThreshold: (data as any).compactionThreshold ?? 80,
-				compactionMode: (data as any).compactionMode ?? 'window',
-				compactionWindowPercent: (data as any).compactionWindowPercent ?? 30,
-				compactionFixedCount: (data as any).compactionFixedCount ?? 20,
-				compactionProviderId: (data as any).compactionProviderId ?? '',
-				compactionModel: (data as any).compactionModel ?? '',
-				compactionPrompt: (data as any).compactionPrompt ?? '',
-				speechOpacity: (data as any).speechOpacity ?? 100,
-				speechBold: (data as any).speechBold ?? true,
-				speechItalic: (data as any).speechItalic ?? false,
-				thoughtOpacity: (data as any).thoughtOpacity ?? 75,
-				thoughtBold: (data as any).thoughtBold ?? false,
-				thoughtItalic: (data as any).thoughtItalic ?? true,
-				linkOpacity: (data as any).linkOpacity ?? 100,
-				linkBold: (data as any).linkBold ?? false,
-				linkItalic: (data as any).linkItalic ?? false,
-				narrationOpacity: (data as any).narrationOpacity ?? 100,
-				narrationBold: (data as any).narrationBold ?? false,
-				narrationItalic: (data as any).narrationItalic ?? false,
-				nestedEmphasisInSpeech: (data as any).nestedEmphasisInSpeech ?? true,
-				pinnedMessageActions: (data as any).pinnedMessageActions ?? '',
-				imagePromptTemplate: (data as any).imagePromptTemplate ?? '',
-				imageIncludeAvatar: (data as any).imageIncludeAvatar ?? false,
-				imageIncludeCharacterDesc: (data as any).imageIncludeCharacterDesc ?? false,
-				dismissKeyboardOnScroll: (data as any).dismissKeyboardOnScroll ?? true,
-				systemDarkThemeId: (data as any).systemDarkThemeId ?? null,
-				systemLightThemeId: (data as any).systemLightThemeId ?? null
-			},
+			buildSettingsFromData(data),
 			{
 				force: true,
 				systemDarkTheme: (data as any).systemDarkTheme ?? null,
@@ -977,6 +917,36 @@
 		}
 	}
 
+	type RailPanel = 'chats' | 'characters' | 'lorebooks' | 'settings' | 'personas';
+	// 'chats' is the implicit panel — it's active when no other panel is selected.
+	function isRailPanelActive(panel: RailPanel): boolean {
+		if (panel === 'chats') return !showSettings && !showLorebooks && !showCharacters && !showPersonas;
+		if (panel === 'characters') return showCharacters;
+		if (panel === 'lorebooks') return showLorebooks;
+		if (panel === 'settings') return showSettings;
+		return showPersonas;
+	}
+	function toggleRailPanel(panel: RailPanel) {
+		if (narrowDesktop) {
+			handleNarrowDesktopRailTab(panel as MobileDrawerTab);
+			return;
+		}
+		if (isRailPanelActive(panel) && isSidebarVisible()) {
+			setSidebarVisible(false);
+			return;
+		}
+		showOnlyPanel(panel);
+		setSidebarVisible(true);
+	}
+	function railButtonClass(panel: RailPanel): string {
+		const baseInactive = 'text-muted-foreground hover:bg-accent/50 hover:text-foreground';
+		const baseActive = 'bg-primary/15 text-primary';
+		if (narrowDesktop) {
+			return sidebarOverlay && mobileDrawerTab === panel ? baseActive : baseInactive;
+		}
+		return isRailPanelActive(panel) && isSidebarVisible() ? baseActive : baseInactive;
+	}
+
 	function currentDropTarget(): 'characters' | 'lorebooks' | null {
 		if (isMobile || narrowDesktop) {
 			if (mobileOpen) {
@@ -1328,21 +1298,9 @@
 
 		// Handle PWA shortcut deeplinks: /?panel=chats|characters|lorebooks
 		const shortcutPanel = new URLSearchParams(window.location.search).get('panel');
-		if (shortcutPanel === 'chats') {
+		if (shortcutPanel === 'chats' || shortcutPanel === 'characters' || shortcutPanel === 'lorebooks') {
 			untrack(() => {
-				showOnlyPanel('chats');
-				if (isMobile) mobileOpen = true;
-				else setSidebarVisible(true);
-			});
-		} else if (shortcutPanel === 'characters') {
-			untrack(() => {
-				showOnlyPanel('characters');
-				if (isMobile) mobileOpen = true;
-				else setSidebarVisible(true);
-			});
-		} else if (shortcutPanel === 'lorebooks') {
-			untrack(() => {
-				showOnlyPanel('lorebooks');
+				showOnlyPanel(shortcutPanel);
 				if (isMobile) mobileOpen = true;
 				else setSidebarVisible(true);
 			});
@@ -2164,23 +2122,8 @@
 				</button>
 			{/if}
 			<button
-				onclick={() => {
-					if (narrowDesktop) {
-						handleNarrowDesktopRailTab('chats');
-						return;
-					}
-					const isChatsActive = !showSettings && !showLorebooks && !showCharacters && !showPersonas;
-					if (isChatsActive && isSidebarVisible()) {
-						setSidebarVisible(false);
-					} else {
-						if (showSettings) showSettings = false;
-						if (showLorebooks) { showLorebooks = false; selectedLorebookId = null; }
-						if (showCharacters) { showCharacters = false; selectedCharacterId = null; }
-						if (showPersonas) showPersonas = false;
-						setSidebarVisible(true);
-					}
-				}}
-				class="relative flex h-10 w-10 items-center justify-center rounded-xl text-foreground transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'chats' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (isSidebarVisible() && !showSettings && !showLorebooks && !showCharacters && !showPersonas ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
+				onclick={() => toggleRailPanel('chats')}
+				class="relative flex h-10 w-10 items-center justify-center rounded-xl text-foreground transition-colors {railButtonClass('chats')}"
 				use:tooltip={'Chats'}
 				aria-label="Chats"
 			>
@@ -2190,48 +2133,16 @@
 				{/if}
 			</button>
 			<button
-				onclick={() => {
-					if (narrowDesktop) {
-						handleNarrowDesktopRailTab('characters');
-						return;
-					}
-					if (showCharacters && isSidebarVisible()) {
-						setSidebarVisible(false);
-					} else {
-						showCharacters = true;
-						showSettings = false;
-						showLorebooks = false;
-						showPersonas = false;
-						selectedLorebookId = null;
-						selectedCharacterId = null;
-						setSidebarVisible(true);
-					}
-				}}
-				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'characters' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (showCharacters && isSidebarVisible() ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
+				onclick={() => toggleRailPanel('characters')}
+				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {railButtonClass('characters')}"
 				use:tooltip={'Characters'}
 				aria-label="Characters"
 			>
 				<Users class="h-5 w-5" />
 			</button>
 			<button
-				onclick={() => {
-					if (narrowDesktop) {
-						handleNarrowDesktopRailTab('lorebooks');
-						return;
-					}
-					if (showLorebooks && isSidebarVisible()) {
-						setSidebarVisible(false);
-					} else {
-						showLorebooks = true;
-						showSettings = false;
-						showCharacters = false;
-						showPersonas = false;
-						selectedCharacterId = null;
-						selectedLorebookId = null;
-						setSidebarVisible(true);
-					}
-				}}
-				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'lorebooks' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (showLorebooks && isSidebarVisible() ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
+				onclick={() => toggleRailPanel('lorebooks')}
+				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {railButtonClass('lorebooks')}"
 				use:tooltip={'Lorebooks'}
 				aria-label="Lorebooks"
 			>
@@ -2242,24 +2153,8 @@
 		<!-- Bottom: settings + user -->
 		<div class="flex w-full shrink-0 flex-col items-center gap-1 py-2">
 			<button
-				onclick={() => {
-					if (narrowDesktop) {
-						handleNarrowDesktopRailTab('settings');
-						return;
-					}
-					if (showSettings && isSidebarVisible()) {
-						setSidebarVisible(false);
-					} else {
-						showSettings = true;
-						showLorebooks = false;
-						showCharacters = false;
-						showPersonas = false;
-						selectedLorebookId = null;
-						selectedCharacterId = null;
-						setSidebarVisible(true);
-					}
-				}}
-				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {narrowDesktop ? (sidebarOverlay && mobileDrawerTab === 'settings' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground') : (showSettings && isSidebarVisible() ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}"
+				onclick={() => toggleRailPanel('settings')}
+				class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors {railButtonClass('settings')}"
 				use:tooltip={'Settings'}
 				aria-label="Settings"
 			>
@@ -2797,23 +2692,6 @@
 		<!-- In-app chat notifications now flow through the unified <Toast />
 		     overlay (toasts.chat) so they share the same top-right stack as
 		     system success/error toasts. -->
-
-		<!-- Mobile header bar (only shown when no chat or view is active) -->
-		{#if !(activeChatId && chatData) && !(isMobile && (showCharacters || showLorebooks || showSettings))}
-			<div class="flex h-14 shrink-0 items-center gap-3 border-b border-border/50 px-4 shadow-sm shadow-black/5 md:hidden {hydrated ? 'transition-[height,opacity,padding] duration-300' : ''}">
-				<button
-					onclick={() => (mobileOpen = true)}
-					class="relative rounded-lg p-3 -m-1.5 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-					aria-label="Open menu"
-				>
-					<Menu class="h-6 w-6" />
-					{#if totalUnread > 0}
-						<span class="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">{totalUnread}</span>
-					{/if}
-				</button>
-				<span class="font-bold text-primary" style="font-size: 30px">Skald</span>
-			</div>
-		{/if}
 
 		{#if showDesktopMobileBackButton}
 			<div class="flex h-12 shrink-0 items-center border-b border-border/50 px-3">
