@@ -1135,12 +1135,15 @@
 		const vv = window.visualViewport;
 		if (!vv) return;
 		const onResize = () => {
-			keyboardVisible = vv.height < window.innerHeight * 0.75;
 			// Layout-viewport bottom minus visual-viewport bottom = keyboard height.
 			// Clamp at 0 so non-keyboard viewport shrinks (URL bar collapse, etc.)
 			// don't shift the compose row.
 			const inset = window.innerHeight - vv.height - vv.offsetTop;
 			keyboardInset = Math.max(0, inset);
+			// Treat any meaningful inset as a keyboard — the 0.75 ratio heuristic
+			// missed cases on iOS PWA where the visualViewport reports keyboard
+			// height only via offset, not a dramatic height change.
+			keyboardVisible = keyboardInset > 80 || vv.height < window.innerHeight * 0.75;
 		};
 		onResize();
 		vv.addEventListener('resize', onResize);
@@ -3508,10 +3511,10 @@
 		bind:this={composeRowEl}
 		bind:clientHeight={composeRowHeight}
 		class="pointer-events-none absolute left-0 right-0 z-[2] bg-gradient-to-b from-background/0 to-background"
-		style="bottom: {keyboardInset}px; padding-bottom: {keyboardVisible ? '0.25rem' : 'env(safe-area-inset-bottom, 0px)'};"
+		style="bottom: {keyboardInset}px; padding-bottom: {keyboardVisible ? '0px' : 'env(safe-area-inset-bottom, 0px)'};"
 	>
 	<div
-		class="{keyboardVisible ? 'pt-1.5 pb-1 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
+		class="{keyboardVisible ? 'pt-1 pb-0 md:pt-3 md:pb-3' : 'pt-2 pb-2 md:pt-3 md:pb-3'}"
 		style="padding-left: max(0.75rem, var(--safe-area-left)); padding-right: max(0.75rem, var(--safe-area-right));"
 	>
 

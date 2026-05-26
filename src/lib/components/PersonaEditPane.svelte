@@ -252,7 +252,10 @@
 
 <div class="flex h-full flex-col">
 	<!-- Header -->
-	<div class="flex items-center justify-between gap-2 border-b border-border px-6 py-4">
+	<div
+		class="flex items-center justify-between gap-2 border-b border-border pb-4"
+		style="padding-top: max(1rem, var(--safe-area-top)); padding-left: max(1.5rem, var(--safe-area-left)); padding-right: max(1.5rem, var(--safe-area-right));"
+	>
 		<div class="min-w-0 flex-1">
 			<h2 class="truncate text-lg font-semibold">
 				{isCreate ? 'New Persona' : persona?.displayName || persona?.name || 'Persona'}

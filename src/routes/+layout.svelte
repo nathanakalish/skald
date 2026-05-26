@@ -2290,13 +2290,17 @@
 				{displayCollapsed && !isMobile ? 'md:overflow-hidden' : ''}"
 			style="{isMobile ? (sidebarGestures.dragging && sidebarGestures.touchX !== null ? `transform: translateX(${sidebarGestures.touchX}px)` : mobileOpen ? 'transform: translateX(0)' : 'transform: translateX(-100%)') : `width: ${displayCollapsed ? 0 : sidebarWidth}px; min-width: ${displayCollapsed ? 0 : sidebarWidth}px; opacity: ${displayCollapsed ? 0 : 1}`}"
 		>
-			<!-- pt-safe pushes the drawer's top content (logo bar / settings header /
-			     etc.) below the device status bar in PWA mode. The drawer itself
-			     extends edge-to-edge so the bg-card colour fills the safe area. -->
-			<div class="relative flex flex-1 flex-col min-h-0 pt-safe">
+			<!-- The drawer extends edge-to-edge so the bg-card colour fills the safe area;
+			     each top-of-drawer header row applies its own safe-area-top padding
+			     (slightly less than the full inset) so titles sit visually close to the
+			     status bar without disappearing behind it. -->
+			<div class="relative flex flex-1 flex-col min-h-0">
 			{#if showSettings && !isMobile && !narrowDesktop}
 			<!-- Settings tab nav (desktop only) -->
-			<div class="flex h-12 items-center px-5">
+			<div
+				class="flex items-center px-5 pb-1"
+				style="padding-top: max(0.25rem, calc(var(--safe-area-top) - 0.5rem));"
+			>
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Settings</h1>
 			</div>
 			<nav class="flex-1 overflow-y-auto px-3 py-2" style="overscroll-behavior: contain;">
@@ -2421,7 +2425,10 @@
 			</div>
 			{:else if (isMobile || narrowDesktop) && mobileDrawerTab === 'settings'}
 			<!-- Mobile settings category nav -->
-			<div class="flex h-12 items-center px-5">
+			<div
+				class="flex items-center px-5 pb-1"
+				style="padding-top: max(0.25rem, calc(var(--safe-area-top) - 0.5rem));"
+			>
 				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">Settings</h1>
 			</div>
 			<nav class="flex-1 overflow-y-auto px-3 py-2" style="overscroll-behavior: contain;">
@@ -2447,25 +2454,17 @@
 				</div>
 			</nav>
 			{:else}
-			<!-- Logo / header bar -->
-			<div class="flex h-12 items-center justify-between px-5">
-				<h1 class="text-2xl font-extrabold tracking-tight text-primary md:text-foreground">
+			<!-- Logo / header bar — title and search pill share a row to keep the
+			     drawer top compact in PWA mode. -->
+			<div
+				class="flex items-center gap-3 px-5 pb-2"
+				style="padding-top: max(0.25rem, calc(var(--safe-area-top) - 0.5rem));"
+			>
+				<h1 class="shrink-0 text-2xl font-extrabold tracking-tight text-primary md:text-foreground">
 					<span class="md:hidden">Skald</span>
 					<span class="hidden md:inline">Chats</span>
 				</h1>
-				<button
-					onclick={() => { showOnlyPanel('characters'); }}
-					class="hidden h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform hover:bg-primary/90 hover:scale-105 active:scale-95 md:flex"
-					use:tooltip={'New Chat'}
-					aria-label="New Chat"
-				>
-					<SquarePen class="h-4 w-4" />
-				</button>
-			</div>
-
-			<!-- Search (Messenger-style pill) -->
-			<div class="px-3 pt-1 pb-2">
-				<div class="relative">
+				<div class="relative min-w-0 flex-1">
 					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 					<input
 						bind:this={searchInputEl}
@@ -2486,6 +2485,14 @@
 						class="w-full rounded-full border border-transparent bg-accent/40 py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:border-primary/30 focus:bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
 					/>
 				</div>
+				<button
+					onclick={() => { showOnlyPanel('characters'); }}
+					class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform hover:bg-primary/90 hover:scale-105 active:scale-95 md:flex"
+					use:tooltip={'New Chat'}
+					aria-label="New Chat"
+				>
+					<SquarePen class="h-4 w-4" />
+				</button>
 			</div>
 
 			<!-- Pinned chats horizontal shortcut row (mobile + desktop) -->
