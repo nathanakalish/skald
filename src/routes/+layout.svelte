@@ -2090,33 +2090,11 @@
 		--rp-narration-style: {settings.narrationItalic ? 'italic' : 'normal'};
 	"
 >
-	<!-- Backdrops dim the chat *outside* the drawer's bounds. Crucially they
-	     must NOT overlap the drawer itself, otherwise the drawer's translucent
-	     bg would composite over the dark backdrop and look dark+opaque instead
-	     of revealing the chat. So each backdrop's left edge sits at the
-	     drawer's open right-edge. Mobile is also at z-20 (below the drawer's
-	     z-30) so the drawer captures clicks rather than the backdrop. -->
-	<!-- Mobile backdrop -->
-	{#if mobileOpen || sidebarGestures.dragging}
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="fixed inset-y-0 right-0 z-20 md:hidden {sidebarGestures.dragging ? '' : 'transition-opacity duration-300'}"
-			style="left: min(90vw, 28rem); background: rgba(0,0,0,{sidebarGestures.dragging && sidebarGestures.touchX !== null ? Math.max(0, 0.6 * (1 + sidebarGestures.touchX / 320)) : mobileOpen ? 0.6 : 0})"
-			onclick={() => (mobileOpen = false)}
-		></div>
-	{/if}
+	<!-- Backdrops live INSIDE the drawer wrapper below — sharing the wrapper's
+	     transform means the backdrop's left edge automatically tracks the
+	     drawer's right edge during open/close transitions and mobile drags,
+	     with zero gap and no synchronisation work. -->
 
-	<!-- Narrow-desktop (hybrid) backdrop -->
-	{#if narrowDesktop && sidebarOverlay}
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="fixed inset-y-0 right-0 z-20 hidden bg-black/45 backdrop-blur-[1px] md:block"
-			style="left: {RAIL_OPEN_OFFSET + sidebarWidth}px"
-			onclick={() => (sidebarOverlay = false)}
-		></div>
-	{/if}
 
 	{#if dragImportActive && dragImportTarget}
 		<div class="pointer-events-none fixed inset-0 z-[120] flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
@@ -2232,25 +2210,52 @@
 		</div>
 	</aside>
 
-	<!-- Sidebar drawer (unified across all three modes).
-	     Single position:fixed element that animates via translateX. Mode
-	     differences:
-	       • Mobile: rests at translateX(0), fills 90vw, no top/bottom inset.
-	       • Narrow desktop: rests at translateX(72px), inset-y-2, overlays
-	         the chat. Backdrop dims the chat.
-	       • Wide desktop: rests at translateX(72px), inset-y-2, and the
-	         main content is pushed right by margin-left (see <main>).
+	<!-- Drawer + tracking-backdrop wrapper.
+	     A single position:fixed element holds the drawer aside and (in the
+	     overlaid modes) the dim-chat backdrop. The wrapper's transform drives
+	     both — the backdrop is absolutely positioned at the drawer's right
+	     edge via left:100%, so it naturally tracks the drawer through every
+	     state: open/close transition, mobile drag, even a viewport resize.
+	     No separate left-tween needed; the backdrop is rigidly attached to
+	     the drawer in layout space.
+
+	     Mode differences:
+	       • Mobile: rests at translateX(0), wrapper at inset-y-0, fills 90vw.
+	       • Narrow desktop: rests at translateX(72px), wrapper at inset-y-2,
+	         overlays the chat (backdrop dims the rest).
+	       • Wide desktop: same wrapper geometry; no backdrop rendered, and
+	         the main content is pushed right via margin-left (see <main>).
 	     The rail (z-40) paints above us (z-30), so the drawer visibly slides
 	     out from under the rail. --translucent-base: 1.2 gives the same
-	     glassy effect everywhere; in wide mode the chat is pushed so what
-	     shows through is just the page bg-sidebar. -->
+	     glassy effect everywhere. -->
+		<div
+			class="fixed left-0 z-30 pointer-events-none inset-y-0 md:inset-y-2
+				{!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out'}"
+			style="width: {isMobile ? 'min(90vw, 28rem)' : `${sidebarWidth}px`}; transform: {drawerTransform};"
+		>
+			<!-- Tracking backdrop. left:100% pins it to the drawer's right edge;
+			     width:100vw guarantees it covers the chat all the way to the
+			     viewport's right side regardless of how far the drawer has slid.
+			     Skipped in wide desktop — there's nothing behind the drawer to
+			     dim since main has been pushed over. -->
+			{#if isMobile || narrowDesktop}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="absolute top-0 bottom-0 backdrop-blur-[1px]
+						{sidebarGestures.dragging ? '' : 'transition-opacity duration-300 ease-out'}
+						{drawerOpen || sidebarGestures.dragging ? 'pointer-events-auto' : 'pointer-events-none'}"
+					style="left: 100%; width: 100vw; background: rgba(0, 0, 0, {isMobile ? 0.6 : 0.45}); opacity: {sidebarGestures.dragging && sidebarGestures.touchX !== null ? Math.max(0, 1 + sidebarGestures.touchX / 320) : drawerOpen ? 1 : 0};"
+					onclick={() => { if (isMobile) mobileOpen = false; else if (narrowDesktop) sidebarOverlay = false; }}
+				></div>
+			{/if}
+
 		<aside
 			data-mobile-sidebar
 			data-ssr={hydrated ? undefined : ''}
-			class="bg-translucent backdrop-blur-md text-sidebar-foreground fixed left-0 z-30 flex flex-col inset-y-0 w-[90vw] max-w-md rounded-r-2xl overflow-hidden md:inset-y-2 md:max-w-none md:rounded-2xl
-				{!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out'}
+			class="absolute inset-0 bg-translucent backdrop-blur-md text-sidebar-foreground flex flex-col rounded-r-2xl overflow-hidden md:rounded-2xl
 				{drawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}"
-			style="--translucent-base: 1.2; {!isMobile ? `width: ${sidebarWidth}px;` : ''} transform: {drawerTransform}; box-shadow: 0 0 0 8px var(--sidebar), 0 25px 50px -12px rgba(0, 0, 0, 0.25);"
+			style="--translucent-base: 1.2; box-shadow: 0 0 0 8px var(--sidebar), 0 25px 50px -12px rgba(0, 0, 0, 0.25);"
 		>
 			<!-- The drawer extends edge-to-edge so the bg-card colour fills the safe area;
 			     each top-of-drawer header row applies its own safe-area-top padding
@@ -2726,6 +2731,7 @@
 			></div>
 			{/if}
 		</aside>
+		</div>
 
 	<!-- Main content -->
 	<!-- Main content. In wide desktop the drawer is position:fixed and not a
