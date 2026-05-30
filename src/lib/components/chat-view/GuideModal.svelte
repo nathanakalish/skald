@@ -47,7 +47,7 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-enter" onclick={onClose}>
-		<div class="modal-enter mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-card p-5 shadow-xl" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-enter mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-translucent backdrop-blur-md p-5 shadow-xl" style="--translucent-base: 1;" onclick={(e) => e.stopPropagation()}>
 			<h3 class="mb-1 text-sm font-semibold text-foreground">{title}</h3>
 			<p class="mb-3 text-xs text-muted-foreground">{description}</p>
 			<LimitedTextarea

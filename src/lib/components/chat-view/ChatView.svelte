@@ -2990,7 +2990,8 @@
 							bind:this={loadEarlierButton}
 							onclick={loadEarlierMessages}
 							disabled={loadingMore}
-							class="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:opacity-50"
+							class="flex items-center gap-2 rounded-lg border border-border bg-translucent backdrop-blur-md px-4 py-2 text-xs text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:opacity-50"
+							style="--translucent-base: 1;"
 						>
 							{#if loadingMore}
 								<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"></div>
@@ -3062,7 +3063,8 @@
 					<p class="text-xs text-muted-foreground/70">Send a message to start a new branch, or return to an existing one.</p>
 					<button
 						onclick={undoBranch}
-						class="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-all hover:bg-accent active:scale-95"
+						class="flex items-center gap-1.5 rounded-lg border border-border bg-translucent backdrop-blur-md px-3 py-1.5 text-xs text-foreground transition-all hover:bg-accent active:scale-95"
+						style="--translucent-base: 1;"
 					>
 						<Undo2 class="h-3.5 w-3.5" />
 						Return to existing branch
@@ -3083,8 +3085,8 @@
 	{#if showScrollButton}
 		<button
 			onclick={() => { scrollButtonAttention = false; scrollToBottom(true); }}
-			style="bottom: calc({composeRowHeight}px + 0.5rem);"
-			class="scroll-btn-enter absolute right-4 z-[3] flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-all hover:bg-accent hover:shadow-xl hover:scale-110 active:scale-95 md:left-1/2 md:right-auto md:-translate-x-1/2 {scrollButtonAttention ? 'scroll-btn-attention' : ''}"
+			style="--translucent-base: 1; bottom: calc({composeRowHeight}px + 0.5rem);"
+			class="scroll-btn-enter absolute right-4 z-[3] flex h-10 w-10 items-center justify-center rounded-full border border-border bg-translucent backdrop-blur-md shadow-lg transition-all hover:bg-accent hover:shadow-xl hover:scale-110 active:scale-95 md:left-1/2 md:right-auto md:-translate-x-1/2 {scrollButtonAttention ? 'scroll-btn-attention' : ''}"
 		>
 			<ArrowDown class="h-4 w-4 text-foreground" />
 			{#if scrollButtonAttention}

@@ -85,7 +85,7 @@
 		aria-modal="true"
 		aria-label="Locked"
 	>
-		<div class="w-full max-w-sm space-y-5 rounded-2xl border border-border bg-card p-6 shadow-2xl">
+		<div class="w-full max-w-sm space-y-5 rounded-2xl border border-border bg-translucent backdrop-blur-md p-6 shadow-2xl" style="--translucent-base: 1;">
 			<div class="flex flex-col items-center gap-2 text-center">
 				<div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
 					<KeyRound class="h-6 w-6" />

@@ -669,11 +669,11 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={onclose}></div>
 		<div
-			class="relative z-10 flex h-[90dvh] w-full max-w-5xl flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
+			class="relative z-10 flex h-[90dvh] w-full max-w-5xl flex-col rounded-t-2xl border border-border bg-translucent backdrop-blur-md pb-safe shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
 			ontouchend={gestures.handlers.onTouchEnd}
-			style={gestures.panelStyle}
+			style={`--translucent-base: 1; ${gestures.panelStyle}`}
 		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-border px-5 py-3 sm:px-6 sm:py-4">
@@ -883,11 +883,11 @@
 			>
 				<div class="absolute inset-0" onclick={closePreview}></div>
 				<div
-					class="relative z-10 flex h-[90dvh] w-full max-w-3xl flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:pb-0 {previewModal.closing ? 'modal-exit' : 'modal-enter'}"
+					class="relative z-10 flex h-[90dvh] w-full max-w-3xl flex-col rounded-t-2xl border border-border bg-translucent backdrop-blur-md pb-safe shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:pb-0 {previewModal.closing ? 'modal-exit' : 'modal-enter'}"
 					ontouchstart={previewGestures.handlers.onTouchStart}
 					ontouchmove={previewGestures.handlers.onTouchMove}
 					ontouchend={previewGestures.handlers.onTouchEnd}
-					style={previewGestures.panelStyle}
+					style={`--translucent-base: 1; ${previewGestures.panelStyle}`}
 				>
 					<div class="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
 						<button
@@ -1078,7 +1078,7 @@
 				onclick={() => (filtersOpen = false)}
 			>
 				<div
-					class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-xl sm:rounded-xl"
+					class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-border bg-translucent backdrop-blur-md shadow-xl sm:rounded-xl"
 					style="max-height: min(90vh, 720px);"
 					onclick={(e) => e.stopPropagation()}
 				>
@@ -1260,7 +1260,7 @@
 				onclick={() => closeLinkPicker()}
 			>
 				<div
-					class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-xl sm:rounded-xl"
+					class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-border bg-translucent backdrop-blur-md shadow-xl sm:rounded-xl"
 					style="max-height: min(85vh, 640px);"
 					onclick={(e) => e.stopPropagation()}
 				>
@@ -1354,7 +1354,7 @@
 				onclick={() => (dupConfirm = null)}
 			>
 				<div
-					class="relative w-full max-w-md rounded-t-2xl border border-border bg-card p-5 shadow-xl sm:rounded-xl"
+					class="relative w-full max-w-md rounded-t-2xl border border-border bg-translucent backdrop-blur-md p-5 shadow-xl sm:rounded-xl"
 					onclick={(e) => e.stopPropagation()}
 				>
 					<h3 class="mb-1 text-base font-semibold">

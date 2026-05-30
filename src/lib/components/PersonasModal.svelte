@@ -204,11 +204,11 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={onclose}></div>
 		<div
-			class="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-xl sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
+			class="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-2xl border border-border bg-translucent backdrop-blur-md pb-safe shadow-xl sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
 			ontouchend={gestures.handlers.onTouchEnd}
-			style={gestures.panelStyle}
+			style={`--translucent-base: 1; ${gestures.panelStyle}`}
 		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-border px-6 py-4">

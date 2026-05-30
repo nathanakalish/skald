@@ -114,10 +114,10 @@
 	const swipeOpacity = $derived(Math.max(0, 1 - Math.max(0, dx) / 240));
 	const cardStyle = $derived(
 		dragging
-			? `transform: translateX(${dx}px); transition: none; opacity: ${swipeOpacity}`
+			? `--translucent-base: 1; transform: translateX(${dx}px); transition: none; opacity: ${swipeOpacity}`
 			: settling
-			? `transform: translateX(${dx}px); transition: transform 200ms ease-out, opacity 200ms ease-out; opacity: ${swipeOpacity}`
-			: ''
+			? `--translucent-base: 1; transform: translateX(${dx}px); transition: transform 200ms ease-out, opacity 200ms ease-out; opacity: ${swipeOpacity}`
+			: '--translucent-base: 1;'
 	);
 
 	function handleCardClick() {
@@ -131,7 +131,7 @@
 </script>
 
 <div
-	class="notif-enter pointer-events-auto relative flex w-max min-w-[16rem] max-w-sm items-stretch gap-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg backdrop-blur-md"
+	class="notif-enter pointer-events-auto relative flex w-max min-w-[16rem] max-w-sm items-stretch gap-0 overflow-hidden rounded-xl border border-border bg-translucent shadow-lg backdrop-blur-md"
 	style={cardStyle}
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}

@@ -237,11 +237,11 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={close}></div>
 		<div
-			class="relative z-10 flex max-h-[85vh] w-full max-w-4xl flex-col rounded-t-2xl border border-border bg-card shadow-xl sm:rounded-xl {modal.closing ? 'modal-exit' : 'modal-enter'}"
+			class="relative z-10 flex max-h-[85vh] w-full max-w-4xl flex-col rounded-t-2xl border border-border bg-translucent backdrop-blur-md shadow-xl sm:rounded-xl {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
 			ontouchend={gestures.handlers.onTouchEnd}
-			style={gestures.panelStyle}
+			style={`--translucent-base: 1; ${gestures.panelStyle}`}
 		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-border px-6 py-4">

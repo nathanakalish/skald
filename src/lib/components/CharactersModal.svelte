@@ -760,11 +760,11 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={onclose}></div>
 		<div
-			class="relative z-10 flex max-h-[85vh] w-full max-w-5xl flex-col rounded-t-2xl border border-border bg-card pb-safe shadow-xl sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
+			class="relative z-10 flex max-h-[85vh] w-full max-w-5xl flex-col rounded-t-2xl border border-border bg-translucent backdrop-blur-md pb-safe shadow-xl sm:rounded-xl sm:pb-0 {modal.closing ? 'modal-exit' : 'modal-enter'}"
 			ontouchstart={gestures.handlers.onTouchStart}
 			ontouchmove={gestures.handlers.onTouchMove}
 			ontouchend={gestures.handlers.onTouchEnd}
-			style={gestures.panelStyle}
+			style={`--translucent-base: 1; ${gestures.panelStyle}`}
 		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-border px-6 py-4">
@@ -1196,7 +1196,7 @@
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={() => { themePromptCharId = null; }}></div>
-		<div class="relative z-10 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
+		<div class="relative z-10 w-full max-w-sm rounded-xl border border-border bg-translucent backdrop-blur-md p-6 shadow-xl" style="--translucent-base: 1;">
 			<h3 class="mb-2 text-base font-semibold">Character Theme</h3>
 			<p class="mb-3 text-sm text-muted-foreground">
 				<span class="font-medium text-foreground">{themePromptName}</span> has a custom theme. Apply it to this chat?

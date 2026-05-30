@@ -158,7 +158,7 @@
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div class="absolute inset-0" onclick={onclose}></div>
-		<div class="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-card shadow-xl {modal.closing ? 'modal-exit' : 'modal-enter'}">
+		<div class="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-translucent backdrop-blur-md shadow-xl {modal.closing ? 'modal-exit' : 'modal-enter'}" style="--translucent-base: 1;">
 			<div class="flex items-center justify-between border-b border-border px-5 py-3">
 				<h3 class="text-base font-semibold">
 					{#if mode === 'create'}New theme{:else if isBuiltin}{name} (built-in){:else}Edit {name}{/if}
