@@ -1334,6 +1334,43 @@
 		isReordering: () => reorder.touchDragChatId !== null
 	});
 
+	// === Unified drawer model ===
+	// All three modes (mobile, narrow desktop, wide desktop) share one
+	// `position: fixed` drawer that animates via `transform: translateX(...)`.
+	// What differs between modes is (a) where the drawer rests when open,
+	// (b) whether main content gets pushed by it. The rail stays anchored in
+	// the flex layout with a higher z-index so the drawer visibly slides out
+	// from under it.
+	//
+	// Coordinate notes (desktop): outer container has `md:p-2` (8px padding)
+	// and `md:gap-2` (8px between flex children). The rail is `md:w-14`
+	// (56px). So in viewport coords the rail spans 8..64, the gap is 64..72,
+	// and the drawer's open position starts at x=72. That's why the open
+	// transform is `translateX(72px)` on desktop — it matches the same
+	// position the drawer used to occupy when it was a flex sibling.
+	// Declared after `sidebarGestures` so the derived expressions below can
+	// reference both it and `mobileOpen` without forward-reference errors.
+	const RAIL_OPEN_OFFSET = 72;
+	let drawerOpen = $derived(
+		isMobile ? mobileOpen : narrowDesktop ? sidebarOverlay : !sidebarCollapsed
+	);
+	let drawerTransform = $derived.by(() => {
+		if (isMobile && sidebarGestures.dragging && sidebarGestures.touchX !== null) {
+			return `translateX(${sidebarGestures.touchX}px)`;
+		}
+		if (!drawerOpen) return 'translateX(-100%)';
+		return isMobile ? 'translateX(0)' : `translateX(${RAIL_OPEN_OFFSET}px)`;
+	});
+	// Main-content push: wide desktop is the only mode where opening the
+	// drawer slides the chat over. The amount equals the drawer's width plus
+	// the 8px gap on its right that the wide-desktop flex layout used to
+	// reveal (so the chat continues to start flush with the drawer's right
+	// shadow line). Narrow + mobile leave main untouched — the drawer overlays.
+	let mainContentMargin = $derived.by(() => {
+		if (isMobile || narrowDesktop) return 0;
+		return drawerOpen ? sidebarWidth + 8 : 0;
+	});
+
 	// Modal states
 	let showCharacters = $state(initialUiState.panel === 'characters');
 
@@ -2074,11 +2111,24 @@
 			onclick={() => (sidebarOverlay = false)}
 		></div>
 	{/if}
-	<!-- Rail-colored frame around drawer (above backdrop, below drawer). Always rendered in hybrid mode so its opacity can transition with the drawer; left corners are square so it merges with the rail without leaving triangular gaps. -->
-	{#if narrowDesktop}
+	<!-- Sidebar-colored frame painted behind the drawer (z-29 < drawer z-30).
+	     Produces the darker rim around the drawer in the two overlaid modes
+	     (mobile + narrow desktop). Wide desktop gets the same effect for free
+	     from the outer container's md:p-2 + md:gap-2, so we skip it there.
+	     The frame is offset 8px to the left of the drawer and 8px wider on
+	     each side, then shares the drawer's transform so the rim slides in
+	     and out in lockstep. Square left corners so it merges with the rail
+	     in narrow mode without leaving a triangular seam. -->
+	{#if isMobile || narrowDesktop}
 		<div
-			class="pointer-events-none fixed z-[29] hidden md:block transition-[width,opacity] duration-300 ease-out"
-			style="left: 64px; top: 0; bottom: 0; width: {displayCollapsed ? 0 : sidebarWidth + 16}px; background: var(--sidebar); border-radius: 0 24px 24px 0; opacity: {displayCollapsed ? 0 : 1};"
+			class="pointer-events-none fixed inset-y-0 z-[29] bg-sidebar {!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out'}"
+			style="
+				left: -8px;
+				width: {isMobile ? 'calc(90vw + 16px)' : `${sidebarWidth + 16}px`};
+				max-width: {isMobile ? 'calc(28rem + 16px)' : 'none'};
+				border-radius: 0 24px 24px 0;
+				transform: {drawerTransform};
+			"
 		></div>
 	{/if}
 
@@ -2095,8 +2145,10 @@
 		</div>
 	{/if}
 
-	<!-- Permanent desktop rail (Messenger-style narrow nav column) -->
-	<aside data-desktop-rail class="flex w-0 shrink-0 -translate-x-full flex-col items-center overflow-hidden bg-sidebar opacity-0 {hydrated ? 'transition-[width,transform,opacity] duration-300 ease-out' : ''} md:w-14 md:translate-x-0 md:opacity-100">
+	<!-- Permanent desktop rail (Messenger-style narrow nav column).
+	     `md:relative md:z-40` stacks it above the fixed drawer (z-30) so the
+	     drawer visibly slides out from under it instead of in front of it. -->
+	<aside data-desktop-rail class="flex w-0 shrink-0 -translate-x-full flex-col items-center overflow-hidden bg-sidebar opacity-0 {hydrated ? 'transition-[width,transform,opacity] duration-300 ease-out' : ''} md:relative md:z-40 md:w-14 md:translate-x-0 md:opacity-100">
 		<!-- Top: app icon -->
 		<div class="flex h-14 w-full shrink-0 items-center justify-center">
 			<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/30">
@@ -2186,17 +2238,25 @@
 		</div>
 	</aside>
 
-	<!-- Sidebar -->
+	<!-- Sidebar drawer (unified across all three modes).
+	     Single position:fixed element that animates via translateX. Mode
+	     differences:
+	       • Mobile: rests at translateX(0), fills 90vw, no top/bottom inset.
+	       • Narrow desktop: rests at translateX(72px), inset-y-2, overlays
+	         the chat. Backdrop dims the chat.
+	       • Wide desktop: rests at translateX(72px), inset-y-2, and the
+	         main content is pushed right by margin-left (see <main>).
+	     The rail (z-40) paints above us (z-30), so the drawer visibly slides
+	     out from under the rail. --translucent-base: 1.2 gives the same
+	     glassy effect everywhere; in wide mode the chat is pushed so what
+	     shows through is just the page bg-sidebar. -->
 		<aside
 			data-mobile-sidebar
 			data-ssr={hydrated ? undefined : ''}
-			class="bg-translucent backdrop-blur-md text-sidebar-foreground
-				{mobileOpen || sidebarGestures.dragging ? 'fixed inset-y-0 left-0 z-50 flex flex-col w-[90vw] max-w-md rounded-r-2xl shadow-2xl' : isMobile ? 'fixed inset-y-0 left-0 z-50 flex flex-col w-[90vw] max-w-md rounded-r-2xl shadow-2xl pointer-events-none' : ''}
-				md:flex md:flex-col md:max-w-none md:pointer-events-auto md:rounded-2xl md:overflow-hidden md:bg-translucent
-				{narrowDesktop ? 'md:fixed md:inset-y-2 md:left-[72px] md:z-30 md:shadow-2xl md:w-auto' : 'md:relative md:z-auto md:shadow-none md:w-auto'}
-				{!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out md:transition-[width,min-width,opacity] md:duration-300'}
-				{displayCollapsed && !isMobile ? 'md:overflow-hidden' : ''}"
-			style="--translucent-base: {isMobile || narrowDesktop || mobileOpen ? 1.2 : 1000}; {isMobile ? (sidebarGestures.dragging && sidebarGestures.touchX !== null ? `transform: translateX(${sidebarGestures.touchX}px)` : mobileOpen ? 'transform: translateX(0)' : 'transform: translateX(-100%)') : `width: ${displayCollapsed ? 0 : sidebarWidth}px; min-width: ${displayCollapsed ? 0 : sidebarWidth}px; opacity: ${displayCollapsed ? 0 : 1}`}"
+			class="bg-translucent backdrop-blur-md text-sidebar-foreground fixed left-0 z-30 flex flex-col inset-y-0 w-[90vw] max-w-md rounded-r-2xl shadow-2xl overflow-hidden md:inset-y-2 md:max-w-none md:rounded-2xl
+				{!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out'}
+				{drawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}"
+			style="--translucent-base: 1.2; {!isMobile ? `width: ${sidebarWidth}px;` : ''} transform: {drawerTransform};"
 		>
 			<!-- The drawer extends edge-to-edge so the bg-card colour fills the safe area;
 			     each top-of-drawer header row applies its own safe-area-top padding
@@ -2674,7 +2734,19 @@
 		</aside>
 
 	<!-- Main content -->
-	<main id="main-content" class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:gap-2 md:overflow-visible md:bg-transparent">
+	<!-- Main content. In wide desktop the drawer is position:fixed and not a
+	     flex sibling, so we push the chat over via margin-left when the drawer
+	     is open. The margin-left transition runs in lockstep with the drawer's
+	     transform so the slide and push appear as a single coordinated motion.
+	     Transitions are suppressed during a desktop resize-drag because
+	     sidebarWidth (and therefore mainContentMargin) changes every frame —
+	     a 300ms tween there would make the handle feel laggy. -->
+	<main
+		id="main-content"
+		class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:gap-2 md:overflow-visible md:bg-transparent
+			{!hydrated || sidebarGestures.dragging || isResizing ? '' : 'md:transition-[margin-left] md:duration-300 md:ease-out'}"
+		style="margin-left: {mainContentMargin}px;"
+	>
 		<!-- Notification permission banner. Show whenever push is NOT subscribed for this device (covers fresh sign-in, after "Disable notifications" from the Signed-in-devices list, and the original "permission not yet granted" case). Hidden on insecure (non-HTTPS) origins because Web Push won't work there anyway, or when the API isn't supported at all. -->
 		{#if notif.pushSubscriptionReady && notif.secureContext && notif.permission !== 'unsupported' && !notif.pushSubscribed && !notif.bannerDismissed}
 			<div class="flex shrink-0 flex-col gap-1 border-b border-border/50 bg-accent/30 px-4 py-2 md:rounded-2xl md:border-b-0">
