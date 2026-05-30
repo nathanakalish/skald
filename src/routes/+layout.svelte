@@ -60,7 +60,7 @@
 	import ChatListItem from '$lib/components/ChatListItem.svelte';
 	import { confirm as confirmDialog } from '$lib/dialog.svelte.js';
 	import { tooltip } from '$lib/tooltip.js';
-	import ChatView from '$lib/components/ChatView.svelte';
+	import ChatView from '$lib/components/chat-view/ChatView.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import PinLockOverlay from '$lib/components/PinLockOverlay.svelte';
 	import DisconnectOverlay from '$lib/components/DisconnectOverlay.svelte';
