@@ -290,7 +290,7 @@
 						<MoreHorizontal class="h-4 w-4" />
 					</button>
 					{#if menuOpen}
-						<div class="popup-menu absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border bg-popover py-1 shadow-2xl">
+						<div class="popup-menu absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md">
 							{#if persona && !persona.isDefault}
 								<button
 									onclick={() => { menuOpen = false; setDefault(); }}

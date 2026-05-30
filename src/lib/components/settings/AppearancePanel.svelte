@@ -204,6 +204,12 @@
 				checked={s.dismissKeyboardOnScroll}
 				onchange={() => toggle('dismissKeyboardOnScroll')}
 			/>
+			<ToggleSwitch
+				label="Context usage ring"
+				description="Show a ring around the chat header pill indicating how much of the model's context window is in use. Individual chats can override this in their settings."
+				checked={s.showTokenRing}
+				onchange={() => toggle('showTokenRing')}
+			/>
 		</div>
 	</div>
 

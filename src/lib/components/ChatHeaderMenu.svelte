@@ -43,7 +43,7 @@
 		<MoreHorizontal class="h-5 w-5" />
 	</button>
 	{#if open}
-		<div class="popup-menu absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-border bg-popover py-1 shadow-2xl" style="--popup-origin: top right; max-height: calc(100dvh - 80px); overflow-y: auto;">
+		<div class="popup-menu absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md" style="--popup-origin: top right; max-height: calc(100dvh - 80px); overflow-y: auto;">
 			<button onclick={() => { onClose(); onCharacterInfo(); }} class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-foreground hover:bg-accent">
 				<Info class="h-4 w-4 shrink-0" /> Character info
 			</button>

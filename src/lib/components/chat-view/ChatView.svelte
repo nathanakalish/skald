@@ -17,7 +17,6 @@
 	import GuideModal from '$lib/components/chat-view/GuideModal.svelte';
 	import ImpersonateButtonMenu from '$lib/components/chat-view/ImpersonateButtonMenu.svelte';
 	import SendButtonMenu from '$lib/components/chat-view/SendButtonMenu.svelte';
-	import MessageSearchBar from '$lib/components/chat-view/Search.svelte';
 	import MessageContextMenu from '$lib/components/chat-view/MessageContextMenu.svelte';
 	import MessageRow from '$lib/components/chat-view/MessageRow.svelte';
 	import type { MessageRowActions } from '$lib/components/chat-view/MessageRow.svelte';
@@ -39,7 +38,7 @@
 	import { playMessageBeep } from '$lib/utils/notificationSound.js';
 	import { FIELD_LIMITS } from '$lib/fieldLimits.js';
 
-	let { chat, character, initialMessages, initialMessageImages = {}, initialPendingImageGens = [], messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, dismissKeyboardOnScroll = true, connectionState = 'connected' }: {
+	let { chat, character, initialMessages, initialMessageImages = {}, initialPendingImageGens = [], messageSiblingsData, hiddenBranchData, totalMessageCount = 0, providers, personas, allLorebooks = [], onrefresh, streamEvent, ontogglemobile, totalUnread = 0, sendWithEnterDesktop = true, sendWithEnterMobile = true, autoScrollThreshold = 'normal', confirmDeletions = true, messageTimestamps = 'relative', showReasoning = false, chatPageSize = 50, renderMode = 'roleplay', reduceMotion = false, blockExternalContent = false, nestedEmphasisInSpeech = true, dismissKeyboardOnScroll = true, showTokenRing = true, connectionState = 'connected' }: {
 		chat: any;
 		character: any;
 		initialMessages: any[];
@@ -67,6 +66,7 @@
 		blockExternalContent?: boolean;
 		nestedEmphasisInSpeech?: boolean;
 		dismissKeyboardOnScroll?: boolean;
+		showTokenRing?: boolean;
 		connectionState?: 'connecting' | 'connected' | 'reconnecting' | 'failed';
 	} = $props();
 
@@ -2920,17 +2920,22 @@
 		{character}
 		{isTexting}
 		{lastTokenStats}
+		showTokenRing={chat.overrideShowTokenRing ?? showTokenRing}
 		{totalUnread}
 		{showHeaderMenu}
 		{hasOverrides}
 		hasCompactionSummary={!!chat.compactionSummary}
 		{compactingNow}
+		searchOpen={messageSearchOpen}
+		bind:searchQuery={messageSearchQuery}
+		searchMatchCount={messageSearchMatches.size}
 		{ontogglemobile}
 		onAvatarClick={() => { enlargedImage = character.avatarPath?.replace('/avatars/', '/avatars/original/') ?? null; }}
 		onToggleHeaderMenu={(e) => { e.stopPropagation(); showHeaderMenu = !showHeaderMenu; }}
 		onCloseHeaderMenu={closeHeaderMenu}
 		onCharacterInfo={() => { showCharacterInfo = true; }}
 		onSearchMessages={toggleMessageSearch}
+		onSearchClose={toggleMessageSearch}
 		onLorebooks={() => { showCharacterLorebooks = true; }}
 		onCompactNow={runManualCompaction}
 		onViewCompaction={openCompactionEditor}
@@ -2949,11 +2954,8 @@
 	></div>
 
 	{#if messageSearchOpen}
-		<MessageSearchBar
-			bind:query={messageSearchQuery}
-			matchCount={messageSearchMatches.size}
-			onClose={toggleMessageSearch}
-		/>
+		<!-- Search UI is rendered inline inside <Header> (above) so it can
+		     wrap underneath the avatar/name pill on narrow viewports. -->
 	{/if}
 
 	<!-- Messages -->

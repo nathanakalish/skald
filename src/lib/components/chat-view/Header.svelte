@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ChevronLeft, Smartphone, BookOpen } from 'lucide-svelte';
+	import { ChevronLeft, Smartphone, BookOpen, Search, X } from 'lucide-svelte';
+	import { tick } from 'svelte';
 	import ChatHeaderMenu from '$lib/components/ChatHeaderMenu.svelte';
 
 	// Pure presentational header. No store access — the orchestrator passes
@@ -10,17 +11,22 @@
 		character,
 		isTexting,
 		lastTokenStats = null,
+		showTokenRing = true,
 		totalUnread = 0,
 		showHeaderMenu,
 		hasOverrides,
 		hasCompactionSummary,
 		compactingNow,
+		searchOpen = false,
+		searchQuery = $bindable(''),
+		searchMatchCount = 0,
 		ontogglemobile,
 		onAvatarClick,
 		onToggleHeaderMenu,
 		onCloseHeaderMenu,
 		onCharacterInfo,
 		onSearchMessages,
+		onSearchClose,
 		onLorebooks,
 		onCompactNow,
 		onViewCompaction,
@@ -29,33 +35,49 @@
 		character: { name: string; avatarPath: string | null };
 		isTexting: boolean;
 		lastTokenStats?: { promptTokens: number; availableForPrompt: number } | null;
+		showTokenRing?: boolean;
 		totalUnread?: number;
 		showHeaderMenu: boolean;
 		hasOverrides: boolean;
 		hasCompactionSummary: boolean;
 		compactingNow: boolean;
+		searchOpen?: boolean;
+		searchQuery?: string;
+		searchMatchCount?: number;
 		ontogglemobile?: () => void;
 		onAvatarClick: () => void;
 		onToggleHeaderMenu: (e: MouseEvent) => void;
 		onCloseHeaderMenu: () => void;
 		onCharacterInfo: () => void;
 		onSearchMessages: () => void;
+		onSearchClose: () => void;
 		onLorebooks: () => void;
 		onCompactNow: () => void;
 		onViewCompaction: () => void;
 		onChatSettings: () => void;
 	} = $props();
 
-	// Ring geometry constants — kept inline because they're tied to the SVG
-	// viewBox + the r=22 circle below; pulling them out would just be noise.
-	const RING_CIRCUMFERENCE = 2 * Math.PI * 22;
+	// Ring around the avatar+name pill. pathLength=100 lets us use the
+	// percentage value directly as stroke-dasharray without having to know
+	// the actual perimeter of the rounded-rect. We bind the pill's rendered
+	// size so the SVG always tracks it (handles long names, font scaling,
+	// flex wrap). rx=height/2 gives true pill rounding.
+	let pillW = $state(0);
+	let pillH = $state(0);
+	let ringVisible = $derived(showTokenRing && !!lastTokenStats);
 
 	let ringPct = $derived(
 		lastTokenStats
 			? Math.min(Math.round((lastTokenStats.promptTokens / lastTokenStats.availableForPrompt) * 100), 100)
 			: 0
 	);
-	let ringOffset = $derived(RING_CIRCUMFERENCE - (ringPct / 100) * RING_CIRCUMFERENCE);
+
+	// Auto-focus the search input on open. Tick() lets the DOM paint the
+	// pill before we grab focus — matches MessageSearchBar's old behaviour.
+	let searchInputEl: HTMLInputElement | undefined = $state();
+	$effect(() => {
+		if (searchOpen) void tick().then(() => searchInputEl?.focus());
+	});
 </script>
 
 <!-- Fullscreen-mobile layout: the chat header floats over the messages
@@ -64,7 +86,7 @@
      against the status bar. Safe-area insets evaluate to 0 on desktop,
      so the header looks identical there. -->
 <header
-	class="pointer-events-none absolute left-0 right-0 top-0 z-[3] flex min-h-16 items-center gap-2 md:gap-3"
+	class="pointer-events-none absolute left-0 right-0 top-0 z-[3] flex min-h-16 flex-wrap items-center gap-2 md:gap-3"
 	style="padding-top: max(0.5rem, var(--safe-area-top)); padding-bottom: 0.5rem; padding-left: max(0.75rem, var(--safe-area-left)); padding-right: max(0.75rem, var(--safe-area-right));"
 >
 	<!-- Back button only appears in the mobile layout (under md, where the
@@ -87,33 +109,44 @@
 	<!-- Avatar + name pill. Mirrors the compose row's translucent slab so
 	     the two anchors visually balance, top and bottom. Picks up
 	     --background / --card from the active character theme so themed
-	     chats get a tinted pill automatically. -->
-	<div class="pointer-events-auto mr-auto flex min-w-0 max-w-full items-center gap-2.5 rounded-full border border-border/40 bg-card/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4">
+	     chats get a tinted pill automatically.
+	     `shrink-0` keeps the avatar/name from ever truncating — when the
+	     search pill won't fit alongside, it wraps to a new row instead. -->
+	<div
+		bind:clientWidth={pillW}
+		bind:clientHeight={pillH}
+		class="pointer-events-auto relative flex shrink-0 items-center gap-2.5 rounded-full border border-border/40 bg-card/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4"
+	>
+		{#if ringVisible && pillW > 0 && pillH > 0}
+			<!-- Context-usage ring around the entire pill. pathLength=100
+			     lets us treat the ring as a percentage track regardless of
+			     the actual perimeter, so we don't need to recompute as the
+			     pill resizes. Rx = half the pill height for true pill
+			     rounding. Strokes are slightly inset (x/y = 1) so the ring
+			     doesn't clip against the SVG bounding box. -->
+			<svg
+				class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+				role="img"
+				aria-label="Context: {lastTokenStats?.promptTokens.toLocaleString()} / {lastTokenStats?.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
+			>
+				<title>Context: {lastTokenStats?.promptTokens.toLocaleString()} / {lastTokenStats?.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
+				<rect
+					x="1"
+					y="1"
+					width={pillW - 2}
+					height={pillH - 2}
+					rx={(pillH - 2) / 2}
+					fill="none"
+					stroke-width="2"
+					class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
+					stroke="currentColor"
+					pathLength="100"
+					stroke-dasharray="{ringPct} 100"
+					stroke-linecap="round"
+				/>
+			</svg>
+		{/if}
 		<div class="pointer-events-auto relative h-12 w-12 shrink-0">
-			{#if lastTokenStats}
-				<svg
-					class="pointer-events-none absolute inset-0 h-full w-full"
-					viewBox="0 0 48 48"
-					role="img"
-					aria-label="Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)"
-				>
-					<title>Context: {lastTokenStats.promptTokens.toLocaleString()} / {lastTokenStats.availableForPrompt.toLocaleString()} tokens ({ringPct}%)</title>
-					<circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2" class="text-muted/40" />
-					<circle
-						cx="24"
-						cy="24"
-						r="22"
-						fill="none"
-						stroke-width="2"
-						class="{ringPct > 90 ? 'text-destructive' : ringPct > 70 ? 'text-warning' : 'text-primary/70'} transition-all duration-500"
-						stroke="currentColor"
-						stroke-dasharray={RING_CIRCUMFERENCE}
-						stroke-dashoffset={ringOffset}
-						stroke-linecap="round"
-						transform="rotate(-90 24 24)"
-					/>
-				</svg>
-			{/if}
 			{#if character.avatarPath}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -141,10 +174,43 @@
 			</span>
 		</div>
 
-		<h2 class="min-w-0 flex-1 truncate text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
+		<h2 class="whitespace-nowrap text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
 	</div>
 
-	<div class="pointer-events-auto flex shrink-0 items-center">
+	<!-- Inline search pill. Greedy width but capped at max-w-md; min-width
+	     forces a wrap onto the next row when the viewport (or a long
+	     character name) doesn't leave enough horizontal room. -->
+	{#if searchOpen}
+		<div class="pointer-events-auto order-3 flex h-11 min-w-[14rem] max-w-md flex-1 basis-full items-center gap-2 rounded-full border border-border/40 bg-card/70 px-4 shadow-sm backdrop-blur-md sm:basis-0">
+			<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+			<input
+				bind:this={searchInputEl}
+				bind:value={searchQuery}
+				placeholder="Search in conversation…"
+				class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+				onkeydown={(e) => { if (e.key === 'Escape') onSearchClose(); }}
+			/>
+			{#if searchQuery.trim()}
+				<span class="shrink-0 text-xs text-muted-foreground">
+					{searchMatchCount}
+					{searchMatchCount === 1 ? 'match' : 'matches'}
+				</span>
+			{/if}
+			<button
+				onclick={onSearchClose}
+				class="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+				aria-label="Close search"
+			>
+				<X class="h-3.5 w-3.5" />
+			</button>
+		</div>
+	{:else}
+		<!-- Spacer pushes the menu button to the far right when the search
+		     pill isn't open. -->
+		<div class="flex-1"></div>
+	{/if}
+
+	<div class="pointer-events-auto order-2 flex shrink-0 items-center sm:order-none">
 		<ChatHeaderMenu
 			open={showHeaderMenu}
 			{hasOverrides}

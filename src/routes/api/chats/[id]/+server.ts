@@ -94,6 +94,7 @@ export const PATCH: RequestHandler = async (event) => {
 	if ('overrideIncludeReasoning' in body) updates.overrideIncludeReasoning = body.overrideIncludeReasoning ?? null;
 	if ('overrideReasoningEffort' in body) updates.overrideReasoningEffort = body.overrideReasoningEffort ?? null;
 	if ('overrideRenderMode' in body) updates.overrideRenderMode = body.overrideRenderMode ?? null;
+	if ('overrideShowTokenRing' in body) updates.overrideShowTokenRing = body.overrideShowTokenRing ?? null;
 	if ('overrideCompactionEnabled' in body) updates.overrideCompactionEnabled = body.overrideCompactionEnabled ?? null;
 	if ('overrideCompactionThreshold' in body) updates.overrideCompactionThreshold = body.overrideCompactionThreshold ?? null;
 	if ('overrideCompactionMode' in body) updates.overrideCompactionMode = body.overrideCompactionMode ?? null;

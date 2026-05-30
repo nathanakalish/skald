@@ -1,2 +1,0 @@
-{"ts":"2026-05-18T18:13:03.193Z","level":"info","msg":"metrics: snapshot","test.ms":{"count":100,"min":1,"max":100,"avg":50.5,"p50":51,"p95":96,"p99":100},"other.count":{"count":1,"min":5,"max":5,"avg":5,"p50":5,"p95":5,"p99":5}}
-{"ts":"2026-05-18T18:22:05.910Z","level":"info","msg":"metrics: snapshot","test.ms":{"count":100,"min":1,"max":100,"avg":50.5,"p50":51,"p95":96,"p99":100},"other.count":{"count":1,"min":5,"max":5,"avg":5,"p50":5,"p95":5,"p99":5}}

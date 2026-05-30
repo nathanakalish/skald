@@ -438,6 +438,9 @@ export function runBaselineMigrations(sqlite: Database.Database): void {
 		if (!cols.some(c => c.name === 'override_render_mode')) {
 			sqlite.exec('ALTER TABLE chats ADD COLUMN override_render_mode TEXT');
 		}
+		if (!cols.some(c => c.name === 'override_show_token_ring')) {
+			sqlite.exec('ALTER TABLE chats ADD COLUMN override_show_token_ring INTEGER');
+		}
 	}
 
 	// Compaction columns on chats (idempotent)

@@ -400,6 +400,7 @@
 			imageIncludeCharacterDesc: dx.imageIncludeCharacterDesc ?? false,
 			imageIncludePersonaDesc: dx.imageIncludePersonaDesc ?? false,
 			dismissKeyboardOnScroll: dx.dismissKeyboardOnScroll ?? true,
+			showTokenRing: dx.showTokenRing ?? true,
 			systemDarkThemeId: dx.systemDarkThemeId ?? null,
 			systemLightThemeId: dx.systemLightThemeId ?? null,
 		};
@@ -2874,6 +2875,7 @@
 					blockExternalContent={!(settings.allowExternalCreatorNotes ?? false)}
 					nestedEmphasisInSpeech={settings.nestedEmphasisInSpeech ?? true}
 					dismissKeyboardOnScroll={settings.dismissKeyboardOnScroll ?? true}
+					showTokenRing={settings.showTokenRing ?? true}
 					connectionState={realtime.connectionState}
 				/>
 			{/key}
@@ -2919,7 +2921,7 @@
 		{@const menuIsPinned = !!isPinned}
 		<div
 			data-chat-menu
-			class="popup-menu fixed z-[60] w-48 rounded-xl border border-border bg-popover py-1 shadow-2xl"
+			class="popup-menu fixed z-[60] w-48 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md"
 			style="--popup-origin: {chatMenu.position.flipUp ? 'bottom' : 'top'} left; left: {chatMenu.position.x}px; {chatMenu.position.flipUp ? 'bottom' : 'top'}: {chatMenu.position.flipUp ? (window.innerHeight - chatMenu.position.y) + 'px' : chatMenu.position.y + 'px'}"
 		>
 			<button

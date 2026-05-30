@@ -89,6 +89,9 @@ export interface Settings {
 	/** Mobile: blur the textarea (dismissing the soft keyboard) when the user
 	 * scrolls the message list. iOS-style. Default on. */
 	dismissKeyboardOnScroll: boolean;
+	/** Show a ring around the chat header pill indicating context-window
+	 * usage. Per-chat override lives on chats.overrideShowTokenRing. */
+	showTokenRing: boolean;
 	[k: string]: unknown;
 }
 
@@ -155,7 +158,8 @@ const defaults: Settings = {
 	imageIncludeAvatar: false,
 	imageIncludeCharacterDesc: false,
 	imageIncludePersonaDesc: false,
-	dismissKeyboardOnScroll: true
+	dismissKeyboardOnScroll: true,
+	showTokenRing: true
 };
 
 let _settings = $state<Settings>({ ...defaults });

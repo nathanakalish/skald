@@ -84,6 +84,9 @@ export const chats = sqliteTable('chats', {
 	overrideIncludeReasoning: integer('override_include_reasoning', { mode: 'boolean' }),
 	overrideReasoningEffort: text('override_reasoning_effort'),
 	overrideRenderMode: text('override_render_mode'),
+	// Tri-state per-chat override for the context-usage ring around the
+	// header pill. null = inherit global setting; true/false = force on/off.
+	overrideShowTokenRing: integer('override_show_token_ring', { mode: 'boolean' }),
 	// Compaction state + per-chat overrides (null override = use global default)
 	compactionSummary: text('compaction_summary'),
 	compactedUpToMessageId: integer('compacted_up_to_message_id').references((): AnySQLiteColumn => messages.id, { onDelete: 'set null' }),

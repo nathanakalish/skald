@@ -26,6 +26,7 @@
 			overrideIncludeReasoning: boolean | null;
 			overrideReasoningEffort: string | null;
 			overrideRenderMode: string | null;
+			overrideShowTokenRing: boolean | null;
 			useCharacterTheme: boolean;
 			allowExternalResources: boolean | null;
 			replyGuidance?: string | null;
@@ -66,6 +67,7 @@
 	let includeReasoning = $state<boolean | null>(null);
 	let reasoningEffort = $state<string | null>(null);
 	let renderModeOverride = $state<string | null>(null);
+	let showTokenRingOverride = $state<boolean | null>(null);
 	let useCharacterTheme = $state(true);
 	let allowExternalResources = $state<boolean | null>(null);
 	let compactionEnabledOverride = $state<boolean | null>(null);
@@ -125,6 +127,7 @@
 				includeReasoning = chat.overrideIncludeReasoning ?? null;
 				reasoningEffort = chat.overrideReasoningEffort ?? null;
 				renderModeOverride = chat.overrideRenderMode ?? null;
+				showTokenRingOverride = chat.overrideShowTokenRing ?? null;
 				useCharacterTheme = chat.useCharacterTheme ?? true;
 				allowExternalResources = chat.allowExternalResources ?? null;
 				compactionEnabledOverride = chat.overrideCompactionEnabled ?? null;
@@ -273,6 +276,7 @@
 			overrideIncludeReasoning: includeReasoning,
 			overrideReasoningEffort: reasoningEffort,
 			overrideRenderMode: renderModeOverride,
+			overrideShowTokenRing: showTokenRingOverride,
 			useCharacterTheme,
 			allowExternalResources,
 			overrideCompactionEnabled: compactionEnabledOverride,
@@ -320,6 +324,7 @@
 		if (field === 'includeReasoning') includeReasoning = null;
 		if (field === 'reasoningEffort') reasoningEffort = null;
 		if (field === 'renderMode') renderModeOverride = null;
+		if (field === 'showTokenRing') showTokenRingOverride = null;
 		if (field === 'customPrompt') customPrompt = '';
 		if (field === 'replyGuidance') replyGuidance = '';
 		if (field === 'imageProvider') { imageProviderIdOverride = null; imageModelOverride = null; imageModelList = []; }
@@ -433,6 +438,23 @@
 									{/each}
 								</div>
 								<p class="text-xs text-muted-foreground">The AI will be told which formatting to use</p>
+							</SettingRow>
+
+							<SettingRow label="Context usage ring">
+								{#snippet action()}
+									{#if showTokenRingOverride !== null}{@render resetLink(() => resetField('showTokenRing'), 'Use global')}{/if}
+								{/snippet}
+								<div class="flex gap-2">
+									{#each [{ value: null, label: 'Global default' }, { value: true, label: 'Show' }, { value: false, label: 'Hide' }] as opt}
+										<button
+											onclick={() => { showTokenRingOverride = opt.value; }}
+											class="flex-1 rounded-lg border px-3 py-1.5 text-sm {showTokenRingOverride === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}"
+										>
+											{opt.label}
+										</button>
+									{/each}
+								</div>
+								<p class="text-xs text-muted-foreground">Ring around the header pill showing context-window usage.</p>
 							</SettingRow>
 
 							{#if characterHasTheme}
