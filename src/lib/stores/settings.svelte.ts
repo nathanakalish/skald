@@ -92,6 +92,10 @@ export interface Settings {
 	/** Show a ring around the chat header pill indicating context-window
 	 * usage. Per-chat override lives on chats.overrideShowTokenRing. */
 	showTokenRing: boolean;
+	/** Global translucency level (0–100) for header pills, popup menus,
+	 * and other surfaces using the .bg-translucent utility. Drives the
+	 * --translucency CSS variable on :root. */
+	translucencyOpacity: number;
 	[k: string]: unknown;
 }
 
@@ -159,7 +163,8 @@ const defaults: Settings = {
 	imageIncludeCharacterDesc: false,
 	imageIncludePersonaDesc: false,
 	dismissKeyboardOnScroll: true,
-	showTokenRing: true
+	showTokenRing: true,
+	translucencyOpacity: 70
 };
 
 let _settings = $state<Settings>({ ...defaults });

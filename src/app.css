@@ -35,6 +35,12 @@
 
 	--speech: oklch(0.8 0.12 200);
 
+	/* Global translucency for header pills, compose pill, and popup menus.
+	   0 = fully transparent, 1 = fully opaque. Bound to the `translucencyOpacity`
+	   user setting via +layout.svelte. Default 0.7 matches the previous
+	   hard-coded /70 Tailwind opacity. */
+	--translucency: 0.7;
+
 	/* Derived bubble colors — auto-detect light vs dark text based on bg.
 	   Uses a clamp() step-function: if bg lightness > threshold, use dark text;
 	   otherwise use light text.  Keeps hue, crushes chroma for neutral tones. */
@@ -80,6 +86,24 @@
 
 * {
 	border-color: var(--border);
+}
+
+/* Global translucent surface used by header pills, compose pill, popup
+   menus, and any other element that should follow the user-controlled
+   `translucencyOpacity` slider. Uses color-mix because Tailwind's static
+   `bg-card/70` alpha can't be driven by a runtime CSS variable.
+
+   Each element can also set its own `--translucent-base` (default 1.0)
+   to scale the effective opacity proportionally — e.g. a popup with
+   `--translucent-base: 0.8` is 80% as opaque as the global setting.
+   The product is clamped to [0, 1] so out-of-range multipliers stay
+   well-defined. */
+.bg-translucent {
+	background-color: color-mix(
+		in oklab,
+		var(--card),
+		transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
+	);
 }
 
 html, body {

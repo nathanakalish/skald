@@ -112,8 +112,8 @@
 {#if idx !== null && position && menuMsg}
 	<div
 		data-msg-menu
-		class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md"
-		style="--popup-origin: {position.flipUp ? 'bottom' : 'top'} left; left: {position.x}px; {position.flipUp ? 'bottom' : 'top'}: {position.flipUp ? (position.viewportH - position.y) + 'px' : position.y + 'px'}"
+		class="popup-menu fixed z-[60] w-[200px] rounded-xl border border-border/40 bg-translucent py-1 shadow-2xl backdrop-blur-md"
+		style="--translucent-base: 1; --popup-origin: {position.flipUp ? 'bottom' : 'top'} left; left: {position.x}px; {position.flipUp ? 'bottom' : 'top'}: {position.flipUp ? (position.viewportH - position.y) + 'px' : position.y + 'px'}"
 	>
 		{#if menuMsg.swipes.length > 1 && !pinnedActions.has('swipes') && !menuGreetingLocked}
 			<div class="flex items-center justify-center gap-1 px-3 py-1.5">

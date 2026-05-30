@@ -213,6 +213,35 @@
 		</div>
 	</div>
 
+	<SettingRow
+		label="Surface translucency"
+		description="Controls the opacity of header pills, popup menus, and other translucent surfaces. Lower values look more glassy; higher values are more opaque."
+	>
+		<div class="flex items-center gap-3">
+			<input
+				type="range"
+				min="20"
+				max="100"
+				step="5"
+				value={s.translucencyOpacity ?? 70}
+				oninput={(e) => {
+					// Live preview \u2014 patch the store immediately so the $effect in
+					// +layout.svelte updates --translucency as the user drags. The
+					// PATCH only fires on release (onchange) to avoid hammering the
+					// server.
+					const v = Number((e.currentTarget as HTMLInputElement).value);
+					settingsStore.patch({ translucencyOpacity: v });
+				}}
+				onchange={(e) => {
+					const v = Number((e.currentTarget as HTMLInputElement).value);
+					void save('translucencyOpacity', v);
+				}}
+				class="flex-1 accent-primary"
+			/>
+			<span class="w-10 text-right text-sm tabular-nums text-muted-foreground">{s.translucencyOpacity ?? 70}%</span>
+		</div>
+	</SettingRow>
+
 	<!-- Theme Selection -->
 	<div class="space-y-3">
 		<!-- Color mode selector -->

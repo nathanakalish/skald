@@ -19,8 +19,8 @@
 {#if open && position}
 	<div
 		data-send-menu
-		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md"
-		style="--popup-origin: {position.flipUp ? 'bottom' : 'top'} left; left: {position.x}px; {position.flipUp ? 'bottom' : 'top'}: {position.flipUp ? (position.viewportH - position.y) + 'px' : position.y + 'px'}"
+		class="popup-menu fixed z-[60] w-[220px] rounded-xl border border-border/40 bg-translucent py-1 shadow-2xl backdrop-blur-md"
+		style="--translucent-base: 1; --popup-origin: {position.flipUp ? 'bottom' : 'top'} left; left: {position.x}px; {position.flipUp ? 'bottom' : 'top'}: {position.flipUp ? (position.viewportH - position.y) + 'px' : position.y + 'px'}"
 	>
 		<button
 			type="button"

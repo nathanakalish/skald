@@ -997,7 +997,7 @@
 							<MoreHorizontal class="h-4 w-4" />
 						</button>
 						{#if menuOpen}
-							<div class="popup-menu absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md">
+							<div class="popup-menu absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border/40 bg-translucent py-1 shadow-2xl backdrop-blur-md" style="--translucent-base: 1;">
 								<button
 									onclick={() => { menuOpen = false; exportCharacter('png'); }}
 									class="flex w-full items-center gap-3 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
@@ -1132,7 +1132,7 @@
 								<MoreHorizontal class="h-4 w-4" />
 							</button>
 							{#if menuOpen}
-								<div class="popup-menu absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md">
+								<div class="popup-menu absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border/40 bg-translucent py-1 shadow-2xl backdrop-blur-md" style="--translucent-base: 1;">
 									<button
 										onclick={() => { menuOpen = false; exportCharacter('png'); }}
 										class="flex w-full items-center gap-3 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"

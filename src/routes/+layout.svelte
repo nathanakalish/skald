@@ -401,6 +401,7 @@
 			imageIncludePersonaDesc: dx.imageIncludePersonaDesc ?? false,
 			dismissKeyboardOnScroll: dx.dismissKeyboardOnScroll ?? true,
 			showTokenRing: dx.showTokenRing ?? true,
+			translucencyOpacity: dx.translucencyOpacity ?? 70,
 			systemDarkThemeId: dx.systemDarkThemeId ?? null,
 			systemLightThemeId: dx.systemLightThemeId ?? null,
 		};
@@ -445,6 +446,17 @@
 		void lorebooksStore.load();
 		void personasStore.load();
 		void themesStore.load();
+	});
+
+	// Mirror the user-controlled translucency slider into the global
+	// --translucency CSS variable used by .bg-translucent. Done in an
+	// $effect (not a static CSS rule) so changing the slider in settings
+	// is reflected live across every popup, pill, and menu.
+	$effect(() => {
+		const raw = settingsStore.settings.translucencyOpacity;
+		const pct = typeof raw === 'number' ? raw : 70;
+		const clamped = Math.max(0, Math.min(100, pct));
+		document.documentElement.style.setProperty('--translucency', String(clamped / 100));
 	});
 
 	// Chat data is fetched client-side via /api/chats/:id/data after mount.
@@ -2921,8 +2933,8 @@
 		{@const menuIsPinned = !!isPinned}
 		<div
 			data-chat-menu
-			class="popup-menu fixed z-[60] w-48 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md"
-			style="--popup-origin: {chatMenu.position.flipUp ? 'bottom' : 'top'} left; left: {chatMenu.position.x}px; {chatMenu.position.flipUp ? 'bottom' : 'top'}: {chatMenu.position.flipUp ? (window.innerHeight - chatMenu.position.y) + 'px' : chatMenu.position.y + 'px'}"
+			class="popup-menu fixed z-[60] w-48 rounded-xl border border-border/40 bg-translucent py-1 shadow-2xl backdrop-blur-md"
+			style="--translucent-base: 1; --popup-origin: {chatMenu.position.flipUp ? 'bottom' : 'top'} left; left: {chatMenu.position.x}px; {chatMenu.position.flipUp ? 'bottom' : 'top'}: {chatMenu.position.flipUp ? (window.innerHeight - chatMenu.position.y) + 'px' : chatMenu.position.y + 'px'}"
 		>
 			<button
 				type="button"

@@ -96,7 +96,8 @@
 	{#if ontogglemobile}
 		<button
 			onclick={ontogglemobile}
-			class="pointer-events-auto relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/40 bg-card/70 text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground active:scale-90 md:hidden [@media(hover:none)]:hidden"
+			class="pointer-events-auto relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/40 bg-translucent text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground active:scale-90 md:hidden [@media(hover:none)]:hidden"
+			style="--translucent-base: 1;"
 			aria-label="Back to chats"
 		>
 			<ChevronLeft class="h-5 w-5" />
@@ -115,7 +116,8 @@
 	<div
 		bind:clientWidth={pillW}
 		bind:clientHeight={pillH}
-		class="pointer-events-auto relative flex shrink-0 items-center gap-2.5 rounded-full border border-border/40 bg-card/70 py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4"
+		class="pointer-events-auto relative flex shrink-0 items-center gap-2.5 rounded-full border border-border/40 bg-translucent py-1 pl-1 pr-3 shadow-sm backdrop-blur-md md:gap-3 md:pr-4"
+		style="--translucent-base: 1;"
 	>
 		{#if ringVisible && pillW > 0 && pillH > 0}
 			<!-- Context-usage ring around the entire pill. pathLength=100
@@ -179,10 +181,10 @@
 
 	<!-- Menu button. DOM-positioned BEFORE the search pill so that when the
 	     row overflows, it's the search pill (last in DOM) that wraps to
-	     line 2, not the menu. `order-3` keeps the menu visually anchored to
-	     the right; `ml-auto` claims any leftover row space when the search
-	     pill isn't open so the menu still hugs the right edge in that case. -->
-	<div class="pointer-events-auto order-3 ml-auto flex shrink-0 items-center">
+	     line 2, not the menu. `order-3` keeps the menu visually anchored
+	     to the right of the first row regardless of the search pill's
+	     wrap state. -->
+	<div class="pointer-events-auto order-3 flex shrink-0 items-center">
 		<ChatHeaderMenu
 			open={showHeaderMenu}
 			{hasOverrides}
@@ -199,12 +201,12 @@
 		/>
 	</div>
 
-	<!-- Inline search pill. Visually between the name pill and the menu
-	     (order-2); DOM-last so it's the one the browser wraps to line 2
-	     when there isn't enough room. `min-w-[14rem]` triggers the wrap;
-	     `flex-1` fills the available row-1 space when it does fit. -->
+	<!-- Inline search pill, or a flex-1 spacer when closed. Either way it
+	     sits visually (order-2) between the name pill and the menu while
+	     being DOM-last so it's the one that wraps to line 2 when the row
+	     runs out of room. -->
 	{#if searchOpen}
-		<div class="pointer-events-auto order-2 flex h-11 min-w-[14rem] max-w-md flex-1 items-center gap-2 rounded-full border border-border/40 bg-card/70 px-4 shadow-sm backdrop-blur-md">
+		<div class="pointer-events-auto order-2 flex h-11 min-w-[14rem] max-w-md flex-1 items-center gap-2 rounded-full border border-border/40 bg-translucent px-4 shadow-sm backdrop-blur-md" style="--translucent-base: 1;">
 			<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 			<input
 				bind:this={searchInputEl}
@@ -227,5 +229,7 @@
 				<X class="h-3.5 w-3.5" />
 			</button>
 		</div>
+	{:else}
+		<div class="order-2 flex-1"></div>
 	{/if}
 </header>

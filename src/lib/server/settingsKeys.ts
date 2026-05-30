@@ -33,4 +33,8 @@ export const ALLOWED_SETTING_KEYS = [
 	'nestedEmphasisInSpeech',
 	'pinnedMessageActions',
 	'imagePromptTemplate',
+	'imageIncludeAvatar', 'imageIncludeCharacterDesc', 'imageIncludePersonaDesc',
+	'dismissKeyboardOnScroll',
+	'showTokenRing',
+	'translucencyOpacity',
 ];

@@ -1213,7 +1213,7 @@
 {#if ctxMenuCharId !== null && ctxMenuPos}
 	{@const menuChar = characters.find((c: any) => c.id === ctxMenuCharId)}
 	{#if menuChar}
-		<div data-char-menu class="popup-menu fixed z-[100] w-48 rounded-xl border border-border/40 bg-card/70 py-1 shadow-2xl backdrop-blur-md" style="--popup-origin: {ctxMenuPos.flipUp ? 'bottom' : 'top'} center; left: {ctxMenuPos.x}px; {ctxMenuPos.flipUp ? `bottom: ${window.innerHeight - ctxMenuPos.y}px` : `top: ${ctxMenuPos.y}px`}">
+		<div data-char-menu class="popup-menu fixed z-[100] w-48 rounded-xl border border-border/40 bg-translucent py-1 shadow-2xl backdrop-blur-md" style="--translucent-base: 1; --popup-origin: {ctxMenuPos.flipUp ? 'bottom' : 'top'} center; left: {ctxMenuPos.x}px; {ctxMenuPos.flipUp ? `bottom: ${window.innerHeight - ctxMenuPos.y}px` : `top: ${ctxMenuPos.y}px`}">
 			<button
 				onclick={() => { const id = ctxMenuCharId!; closeCharMenu(); requestStartChat(id, 'story'); }}
 				class="flex w-full items-center gap-3 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
