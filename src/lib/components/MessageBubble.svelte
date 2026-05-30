@@ -151,10 +151,17 @@
 		{/if}
 	</div>
 
-	<!-- Message bubble (iMessage style: blue user / gray assistant) -->
+	<!-- Message bubble (iMessage style: blue user / gray assistant).
+	     `bg-translucent-{primary,muted}` + `backdrop-blur-md` give the bubble
+	     the same glassy treatment as the drawer/compose pill while still
+	     pulling its tint from `--primary` / `--muted` — character themes
+	     override those vars, so the glassy effect adopts the character's
+	     colors automatically. --translucent-base: 1 keeps each bubble at the
+	     user's chosen translucency without further dampening. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="chat-bubble relative select-none px-3.5 py-2 shadow-sm shadow-black/5 {isEditing ? 'w-full rounded-2xl' : 'max-w-[88%] md:max-w-[70%]'} {message.role === 'user' ? 'bg-primary text-bubble-user-fg' : 'bg-muted text-bubble-assistant-fg'} {message.role === 'user'
+		style="--translucent-base: 1;"
+		class="chat-bubble relative select-none px-3.5 py-2 shadow-sm shadow-black/5 backdrop-blur-md {isEditing ? 'w-full rounded-2xl' : 'max-w-[88%] md:max-w-[70%]'} {message.role === 'user' ? 'bg-translucent-primary text-bubble-user-fg' : 'bg-translucent-muted text-bubble-assistant-fg'} {message.role === 'user'
 			? (consecutive && !groupEnd ? 'rounded-2xl rounded-br-md' : consecutive && groupEnd ? 'rounded-2xl rounded-tr-md' : groupEnd ? 'rounded-2xl' : 'rounded-2xl rounded-br-md')
 			: (consecutive && !groupEnd ? 'rounded-2xl rounded-bl-md' : consecutive && groupEnd ? 'rounded-2xl rounded-tl-md' : groupEnd ? 'rounded-2xl' : 'rounded-2xl rounded-bl-md')}"
 		oncontextmenu={(e) => { if (!isEditing) onopenMenu(e); }}

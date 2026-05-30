@@ -2090,13 +2090,19 @@
 		--rp-narration-style: {settings.narrationItalic ? 'italic' : 'normal'};
 	"
 >
+	<!-- Backdrops dim the chat *outside* the drawer's bounds. Crucially they
+	     must NOT overlap the drawer itself, otherwise the drawer's translucent
+	     bg would composite over the dark backdrop and look dark+opaque instead
+	     of revealing the chat. So each backdrop's left edge sits at the
+	     drawer's open right-edge. Mobile is also at z-20 (below the drawer's
+	     z-30) so the drawer captures clicks rather than the backdrop. -->
 	<!-- Mobile backdrop -->
 	{#if mobileOpen || sidebarGestures.dragging}
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="fixed inset-0 z-40 md:hidden {sidebarGestures.dragging ? '' : 'transition-opacity duration-300'}"
-			style="background: rgba(0,0,0,{sidebarGestures.dragging && sidebarGestures.touchX !== null ? Math.max(0, 0.6 * (1 + sidebarGestures.touchX / 320)) : mobileOpen ? 0.6 : 0})"
+			class="fixed inset-y-0 right-0 z-20 md:hidden {sidebarGestures.dragging ? '' : 'transition-opacity duration-300'}"
+			style="left: min(90vw, 28rem); background: rgba(0,0,0,{sidebarGestures.dragging && sidebarGestures.touchX !== null ? Math.max(0, 0.6 * (1 + sidebarGestures.touchX / 320)) : mobileOpen ? 0.6 : 0})"
 			onclick={() => (mobileOpen = false)}
 		></div>
 	{/if}
@@ -2107,28 +2113,8 @@
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="fixed inset-y-0 right-0 z-20 hidden bg-black/45 backdrop-blur-[1px] md:block"
-			style="left: 72px"
+			style="left: {RAIL_OPEN_OFFSET + sidebarWidth}px"
 			onclick={() => (sidebarOverlay = false)}
-		></div>
-	{/if}
-	<!-- Sidebar-colored frame painted behind the drawer (z-29 < drawer z-30).
-	     Produces the darker rim around the drawer in the two overlaid modes
-	     (mobile + narrow desktop). Wide desktop gets the same effect for free
-	     from the outer container's md:p-2 + md:gap-2, so we skip it there.
-	     The frame is offset 8px to the left of the drawer and 8px wider on
-	     each side, then shares the drawer's transform so the rim slides in
-	     and out in lockstep. Square left corners so it merges with the rail
-	     in narrow mode without leaving a triangular seam. -->
-	{#if isMobile || narrowDesktop}
-		<div
-			class="pointer-events-none fixed inset-y-0 z-[29] bg-sidebar {!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out'}"
-			style="
-				left: -8px;
-				width: {isMobile ? 'calc(90vw + 16px)' : `${sidebarWidth + 16}px`};
-				max-width: {isMobile ? 'calc(28rem + 16px)' : 'none'};
-				border-radius: 0 24px 24px 0;
-				transform: {drawerTransform};
-			"
 		></div>
 	{/if}
 
@@ -2147,8 +2133,16 @@
 
 	<!-- Permanent desktop rail (Messenger-style narrow nav column).
 	     `md:relative md:z-40` stacks it above the fixed drawer (z-30) so the
-	     drawer visibly slides out from under it instead of in front of it. -->
-	<aside data-desktop-rail class="flex w-0 shrink-0 -translate-x-full flex-col items-center overflow-hidden bg-sidebar opacity-0 {hydrated ? 'transition-[width,transform,opacity] duration-300 ease-out' : ''} md:relative md:z-40 md:w-14 md:translate-x-0 md:opacity-100">
+	     drawer visibly slides out from under it instead of in front of it.
+	     The negative-x box-shadow extends bg-sidebar 8px to the left of the
+	     rail so the outer container's `md:p-2` padding strip (viewport x=0..8)
+	     doesn't reveal the drawer mid-slide. Invisible on mobile where the
+	     rail itself is `w-0 opacity-0`. -->
+	<aside
+		data-desktop-rail
+		class="flex w-0 shrink-0 -translate-x-full flex-col items-center overflow-hidden bg-sidebar opacity-0 {hydrated ? 'transition-[width,transform,opacity] duration-300 ease-out' : ''} md:relative md:z-40 md:w-14 md:translate-x-0 md:opacity-100"
+		style="box-shadow: -8px 0 0 var(--sidebar);"
+	>
 		<!-- Top: app icon -->
 		<div class="flex h-14 w-full shrink-0 items-center justify-center">
 			<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/30">
@@ -2253,10 +2247,10 @@
 		<aside
 			data-mobile-sidebar
 			data-ssr={hydrated ? undefined : ''}
-			class="bg-translucent backdrop-blur-md text-sidebar-foreground fixed left-0 z-30 flex flex-col inset-y-0 w-[90vw] max-w-md rounded-r-2xl shadow-2xl overflow-hidden md:inset-y-2 md:max-w-none md:rounded-2xl
+			class="bg-translucent backdrop-blur-md text-sidebar-foreground fixed left-0 z-30 flex flex-col inset-y-0 w-[90vw] max-w-md rounded-r-2xl overflow-hidden md:inset-y-2 md:max-w-none md:rounded-2xl
 				{!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out'}
 				{drawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}"
-			style="--translucent-base: 1.2; {!isMobile ? `width: ${sidebarWidth}px;` : ''} transform: {drawerTransform};"
+			style="--translucent-base: 1.2; {!isMobile ? `width: ${sidebarWidth}px;` : ''} transform: {drawerTransform}; box-shadow: 0 0 0 8px var(--sidebar), 0 25px 50px -12px rgba(0, 0, 0, 0.25);"
 		>
 			<!-- The drawer extends edge-to-edge so the bg-card colour fills the safe area;
 			     each top-of-drawer header row applies its own safe-area-top padding

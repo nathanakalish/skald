@@ -119,6 +119,15 @@
 			transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
 		);
 	}
+
+	/* Same mechanic but tinted with --muted, for assistant message bubbles. */
+	.bg-translucent-muted {
+		background-color: color-mix(
+			in oklab,
+			var(--muted),
+			transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
+		);
+	}
 }
 
 html, body {
