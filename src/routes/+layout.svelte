@@ -2196,7 +2196,7 @@
 				{narrowDesktop ? 'md:fixed md:inset-y-2 md:left-[72px] md:z-30 md:shadow-2xl md:w-auto' : 'md:relative md:z-auto md:shadow-none md:w-auto'}
 				{!hydrated || sidebarGestures.dragging ? '' : 'transition-transform duration-300 ease-out md:transition-[width,min-width,opacity] md:duration-300'}
 				{displayCollapsed && !isMobile ? 'md:overflow-hidden' : ''}"
-			style="--translucent-base: 1; {isMobile ? (sidebarGestures.dragging && sidebarGestures.touchX !== null ? `transform: translateX(${sidebarGestures.touchX}px)` : mobileOpen ? 'transform: translateX(0)' : 'transform: translateX(-100%)') : `width: ${displayCollapsed ? 0 : sidebarWidth}px; min-width: ${displayCollapsed ? 0 : sidebarWidth}px; opacity: ${displayCollapsed ? 0 : 1}`}"
+			style="--translucent-base: {isMobile || narrowDesktop || mobileOpen ? 1.4 : 1000}; {isMobile ? (sidebarGestures.dragging && sidebarGestures.touchX !== null ? `transform: translateX(${sidebarGestures.touchX}px)` : mobileOpen ? 'transform: translateX(0)' : 'transform: translateX(-100%)') : `width: ${displayCollapsed ? 0 : sidebarWidth}px; min-width: ${displayCollapsed ? 0 : sidebarWidth}px; opacity: ${displayCollapsed ? 0 : 1}`}"
 		>
 			<!-- The drawer extends edge-to-edge so the bg-card colour fills the safe area;
 			     each top-of-drawer header row applies its own safe-area-top padding

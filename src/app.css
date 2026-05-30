@@ -98,22 +98,27 @@
    `--translucent-base: 0.8` is 80% as opaque as the global setting.
    The product is clamped to [0, 1] so out-of-range multipliers stay
    well-defined. */
-.bg-translucent {
-	background-color: color-mix(
-		in oklab,
-		var(--card),
-		transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
-	);
-}
+/* Wrapped in @layer utilities so Tailwind's state utilities
+   (hover:bg-accent, etc.) can still win at runtime — without the layer
+   these rules would have higher specificity and never get overridden. */
+@layer utilities {
+	.bg-translucent {
+		background-color: color-mix(
+			in oklab,
+			var(--card),
+			transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
+		);
+	}
 
-/* Same mechanic but tinted with --primary, for accent buttons like the
-   compose Send button. */
-.bg-translucent-primary {
-	background-color: color-mix(
-		in oklab,
-		var(--primary),
-		transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
-	);
+	/* Same mechanic but tinted with --primary, for accent buttons like the
+	   compose Send button. */
+	.bg-translucent-primary {
+		background-color: color-mix(
+			in oklab,
+			var(--primary),
+			transparent calc((1 - clamp(0, var(--translucency) * var(--translucent-base, 1), 1)) * 100%)
+		);
+	}
 }
 
 html, body {
