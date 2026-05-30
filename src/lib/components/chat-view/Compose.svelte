@@ -71,7 +71,8 @@
 			placeholder={isImpersonating ? '' : 'Reply'}
 			rows={1}
 			limit={FIELD_LIMITS.messageContent}
-			class="block w-full resize-none rounded-3xl border border-input bg-card px-4 py-2.5 text-sm leading-normal placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+			class="block w-full resize-none rounded-3xl border border-input bg-translucent backdrop-blur-md px-4 py-2.5 text-sm leading-normal placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+			style="--translucent-base: 1;"
 		/>
 		{#if isImpersonating && !input}
 			{#if isReasoning}
@@ -110,7 +111,8 @@
 		onpointercancel={impHandlers.onpointercancel}
 		oncontextmenu={impHandlers.oncontextmenu}
 		disabled={isStreaming && !isImpersonating}
-		class="flex w-11 shrink-0 items-center justify-center rounded-full border border-input bg-card text-muted-foreground shadow-sm shadow-black/10 transition-all hover:bg-accent hover:text-foreground active:scale-90 disabled:opacity-50"
+		class="flex w-11 shrink-0 items-center justify-center rounded-full border border-input bg-translucent backdrop-blur-md text-muted-foreground shadow-sm shadow-black/10 transition-all hover:bg-accent hover:text-foreground active:scale-90 disabled:opacity-50"
+		style="--translucent-base: 1;"
 		use:tooltip={'Impersonate (long-press for options)'}
 		aria-label="Impersonate"
 	>
@@ -142,7 +144,8 @@
 			onpointercancel={sendHandlers.onpointercancel}
 			oncontextmenu={sendHandlers.oncontextmenu}
 			disabled={!input.trim()}
-			class="flex w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-all hover:scale-105 hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 active:scale-90 disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100 disabled:active:scale-100"
+			class="flex w-11 shrink-0 items-center justify-center rounded-full bg-translucent-primary backdrop-blur-md text-primary-foreground shadow-md shadow-primary/30 transition-all hover:scale-105 hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 active:scale-90 disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100 disabled:active:scale-100"
+			style="--translucent-base: 1;"
 			aria-label="Send message (long-press for guided reply)"
 		>
 			<Send class="h-4 w-4" />
