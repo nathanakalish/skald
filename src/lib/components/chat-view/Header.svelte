@@ -177,11 +177,34 @@
 		<h2 class="whitespace-nowrap text-[15px] font-semibold leading-tight md:text-base">{character.name}</h2>
 	</div>
 
-	<!-- Inline search pill. Greedy width but capped at max-w-md; min-width
-	     forces a wrap onto the next row when the viewport (or a long
-	     character name) doesn't leave enough horizontal room. -->
+	<!-- Menu button. DOM-positioned BEFORE the search pill so that when the
+	     row overflows, it's the search pill (last in DOM) that wraps to
+	     line 2, not the menu. `order-3` keeps the menu visually anchored to
+	     the right; `ml-auto` claims any leftover row space when the search
+	     pill isn't open so the menu still hugs the right edge in that case. -->
+	<div class="pointer-events-auto order-3 ml-auto flex shrink-0 items-center">
+		<ChatHeaderMenu
+			open={showHeaderMenu}
+			{hasOverrides}
+			{hasCompactionSummary}
+			{compactingNow}
+			onToggle={onToggleHeaderMenu}
+			onClose={onCloseHeaderMenu}
+			onCharacterInfo={onCharacterInfo}
+			onSearchMessages={onSearchMessages}
+			onLorebooks={onLorebooks}
+			onCompactNow={onCompactNow}
+			onViewCompaction={onViewCompaction}
+			onChatSettings={onChatSettings}
+		/>
+	</div>
+
+	<!-- Inline search pill. Visually between the name pill and the menu
+	     (order-2); DOM-last so it's the one the browser wraps to line 2
+	     when there isn't enough room. `min-w-[14rem]` triggers the wrap;
+	     `flex-1` fills the available row-1 space when it does fit. -->
 	{#if searchOpen}
-		<div class="pointer-events-auto order-3 flex h-11 min-w-[14rem] max-w-md flex-1 basis-full items-center gap-2 rounded-full border border-border/40 bg-card/70 px-4 shadow-sm backdrop-blur-md sm:basis-0">
+		<div class="pointer-events-auto order-2 flex h-11 min-w-[14rem] max-w-md flex-1 items-center gap-2 rounded-full border border-border/40 bg-card/70 px-4 shadow-sm backdrop-blur-md">
 			<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 			<input
 				bind:this={searchInputEl}
@@ -204,26 +227,5 @@
 				<X class="h-3.5 w-3.5" />
 			</button>
 		</div>
-	{:else}
-		<!-- Spacer pushes the menu button to the far right when the search
-		     pill isn't open. -->
-		<div class="flex-1"></div>
 	{/if}
-
-	<div class="pointer-events-auto order-2 flex shrink-0 items-center sm:order-none">
-		<ChatHeaderMenu
-			open={showHeaderMenu}
-			{hasOverrides}
-			{hasCompactionSummary}
-			{compactingNow}
-			onToggle={onToggleHeaderMenu}
-			onClose={onCloseHeaderMenu}
-			onCharacterInfo={onCharacterInfo}
-			onSearchMessages={onSearchMessages}
-			onLorebooks={onLorebooks}
-			onCompactNow={onCompactNow}
-			onViewCompaction={onViewCompaction}
-			onChatSettings={onChatSettings}
-		/>
-	</div>
 </header>

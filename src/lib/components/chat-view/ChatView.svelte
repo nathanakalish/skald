@@ -3233,6 +3233,13 @@
 />
 
 <!-- Message context menu (right-click / long-press) -->
+<!-- The three popup menus below sit outside the main themed chat
+     container in the DOM, so they don't inherit --card / --border /
+     etc. from the character theme automatically. We wrap them in a
+     display:contents div with characterThemeStyle applied so the CSS
+     variables cascade to the popups while the wrapper itself has no
+     layout effect. -->
+<div style="display: contents; {characterThemeStyle}">
 <MessageContextMenu
 	idx={msgMenuIdx}
 	position={msgMenuPosition}
@@ -3298,6 +3305,7 @@
 	onClose={() => { showSendMenu = false; }}
 	onOpenGuide={(target, prefill) => openGuideModal(target, prefill)}
 />
+</div>
 
 <!-- Guide modal (shared by impersonate / send / message-edit flows) -->
 <GuideModal
