@@ -1358,7 +1358,12 @@
 		if (isMobile && sidebarGestures.dragging && sidebarGestures.touchX !== null) {
 			return `translateX(${sidebarGestures.touchX}px)`;
 		}
-		if (!drawerOpen) return 'translateX(-100%)';
+		// At rest closed we need to translate 16px PAST the wrapper's own width
+		// so the drawer's 8px box-shadow halo (the dark border) clears the
+		// viewport edge instead of peeking through at x=0..8. 8 of those 16
+		// pixels are the halo width; the other 8 give the drop-shadow blur
+		// room to fade fully off-screen too.
+		if (!drawerOpen) return 'translateX(calc(-100% - 16px))';
 		return isMobile ? 'translateX(0)' : `translateX(${RAIL_OPEN_OFFSET}px)`;
 	});
 	// Main-content push: wide desktop is the only mode where opening the
