@@ -33,15 +33,15 @@
 		"vitest": "^4.1.9"
 	},
 	"dependencies": {
-		"better-sqlite3": "^12.10.0",
+		"better-sqlite3": "^12.11.1",
 		"drizzle-orm": "^0.45.2",
-		"isomorphic-dompurify": "^3.17.0",
+		"isomorphic-dompurify": "^3.18.0",
 		"jose": "^6.2.3",
 		"js-tiktoken": "^1.0.21",
 		"jszip": "^3.10.1",
 		"lucide-svelte": "^1.0.1",
 		"marked": "^18.0.5",
-		"sharp": "^0.35.1",
+		"sharp": "^0.35.2",
 		"web-push": "^3.6.7"
 	}
 }
